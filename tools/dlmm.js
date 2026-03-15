@@ -261,14 +261,14 @@ export async function getPositionPnl({ pool_address, position_address }) {
     const p = byAddress[position_address];
     if (!p) return { error: "Position not found in PnL API" };
 
-    const unclaimedUsd    = parseFloat(p.unrealizedPnl?.unclaimedFeeTokenX || 0) + parseFloat(p.unrealizedPnl?.unclaimedFeeTokenY || 0);
+    const unclaimedUsd    = parseFloat(p.unrealizedPnl?.unclaimedFeeTokenX?.usd || 0) + parseFloat(p.unrealizedPnl?.unclaimedFeeTokenY?.usd || 0);
     const currentValueUsd = parseFloat(p.unrealizedPnl?.balances || 0);
     return {
       pnl_usd:           Math.round((p.pnlUsd ?? 0) * 100) / 100,
       pnl_pct:           Math.round((p.pnlPctChange ?? 0) * 100) / 100,
       current_value_usd: Math.round(currentValueUsd * 100) / 100,
       unclaimed_fee_usd: Math.round(unclaimedUsd * 100) / 100,
-      all_time_fees_usd: Math.round((parseFloat(p.allTimeFees?.amountUsd || p.allTimeFees || 0)) * 100) / 100,
+      all_time_fees_usd: Math.round(parseFloat(p.allTimeFees?.total?.usd || 0) * 100) / 100,
       in_range:    !p.isOutOfRange,
       lower_bin:   p.lowerBinId      ?? null,
       upper_bin:   p.upperBinId      ?? null,
@@ -343,9 +343,9 @@ export async function getMyPositions({ force = false } = {}) {
       const upperBin  = p?.upperBinId      ?? r.upper_bin;
       const activeBin = p?.poolActiveBinId ?? null;
 
-      const unclaimedFees = p ? (parseFloat(p.unrealizedPnl?.unclaimedFeeTokenX || 0) + parseFloat(p.unrealizedPnl?.unclaimedFeeTokenY || 0)) : 0;
+      const unclaimedFees = p ? (parseFloat(p.unrealizedPnl?.unclaimedFeeTokenX?.usd || 0) + parseFloat(p.unrealizedPnl?.unclaimedFeeTokenY?.usd || 0)) : 0;
       const totalValue    = p ? parseFloat(p.unrealizedPnl?.balances || 0) : 0;
-      const collectedFees = p ? parseFloat(p.allTimeFees?.amountUsd || p.allTimeFees || 0) : 0;
+      const collectedFees = p ? parseFloat(p.allTimeFees?.total?.usd || 0) : 0;
       const pnlUsd        = p?.pnlUsd       ?? 0;
       const pnlPct        = p?.pnlPctChange ?? 0;
 
@@ -426,7 +426,7 @@ export async function getWalletPositions({ wallet_address }) {
         upper_bin:          p?.upperBinId      ?? null,
         active_bin:         p?.poolActiveBinId ?? null,
         in_range:           p ? !p.isOutOfRange : null,
-        unclaimed_fees_usd: Math.round((p ? (parseFloat(p.unrealizedPnl?.unclaimedFeeTokenX || 0) + parseFloat(p.unrealizedPnl?.unclaimedFeeTokenY || 0)) : 0) * 100) / 100,
+        unclaimed_fees_usd: Math.round((p ? (parseFloat(p.unrealizedPnl?.unclaimedFeeTokenX?.usd || 0) + parseFloat(p.unrealizedPnl?.unclaimedFeeTokenY?.usd || 0)) : 0) * 100) / 100,
         total_value_usd:    Math.round((p ? parseFloat(p.unrealizedPnl?.balances || 0) : 0) * 100) / 100,
         pnl_usd:            Math.round((p?.pnlUsd ?? 0) * 100) / 100,
         pnl_pct:            Math.round((p?.pnlPctChange ?? 0) * 100) / 100,
