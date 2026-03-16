@@ -81,10 +81,10 @@ export async function getTokenHolders({ mint, limit = 20 }) {
       sol_balance: h.solBalanceDisplay ?? h.solBalance,
       tags: tags.length ? tags : undefined,
       is_pool: isPool || undefined,
-      funding: h.fundingAddress ? {
-        address: h.fundingAddress,
-        amount: h.fundingAmount,
-        slot: h.fundingSlot,
+      funding: h.addressInfo?.fundingAddress ? {
+        address: h.addressInfo.fundingAddress,
+        amount: h.addressInfo.fundingAmount,
+        slot: h.addressInfo.fundingSlot,
       } : undefined,
     };
   });
@@ -146,47 +146,32 @@ export async function getTokenHolders({ mint, limit = 20 }) {
   const totalBundlersPct = bundlers.reduce((s, b) => s + (Number(b.percentage) || 0), 0);
 
   // ─── Smart Wallet / KOL Cross-reference ──────────────────────
-  // Query ALL tracked smart wallets via PnL API — not just top 100 holders
-  // This catches KOLs even if they hold a small amount outside the top 100
+  // Use targeted holders endpoint — only returns matching wallets, no noise
   const { listSmartWallets } = await import("../smart-wallets.js");
   const { wallets: smartWallets } = listSmartWallets();
   let smartWalletsHolding = [];
 
   if (smartWallets.length > 0) {
     const addresses = smartWallets.map((w) => w.address).join(",");
-    const pnlRes = await fetch(
-      `${DATAPI_BASE}/pnl?addresses=${addresses}&includeClosed=false`
+    const kwRes = await fetch(
+      `${DATAPI_BASE}/holders/${mint}?addresses=${addresses}`
     ).catch(() => null);
-    const pnlData = pnlRes?.ok ? await pnlRes.json() : null;
+    const kwData = kwRes?.ok ? await kwRes.json() : null;
+    const kwHolders = Array.isArray(kwData) ? kwData : (kwData?.holders || kwData?.data || []);
 
-    // Response shape: { walletAddress: { tokenMint: { balance, price, pnl } } }
-    for (const wallet of smartWallets) {
-      const walletData = pnlData?.[wallet.address];
-      if (!walletData) continue;
-      const tokenData = walletData[mint];
-      if (!tokenData) continue;
-
-      const holderEntry = mapped.find((h) => h.address === wallet.address);
+    const smartWalletMap = new Map(smartWallets.map((w) => [w.address, w]));
+    for (const h of kwHolders) {
+      const addr = h.address || h.wallet;
+      const wallet = smartWalletMap.get(addr);
+      if (!wallet) continue;
+      const pct = totalSupply ? parseFloat(((Number(h.amount) / totalSupply) * 100).toFixed(4)) : null;
       smartWalletsHolding.push({
         name: wallet.name,
         category: wallet.category,
-        address: wallet.address,
-        in_top_100: !!holderEntry,
-        amount: holderEntry?.amount ?? tokenData.balance?.balance,
-        pct: holderEntry?.pct ?? null,
-        balance: tokenData.balance ?? null,
-        price: tokenData.price ?? null,
-        pnl: tokenData.pnl ? {
-          realized_pnl: tokenData.pnl.realizedPnl,
-          unrealized_pnl: tokenData.pnl.unrealizedPnl,
-          total_pnl: tokenData.pnl.totalPnl,
-          total_pnl_pct: tokenData.pnl.totalPnlPercentage,
-          bought_value: tokenData.pnl.boughtValue,
-          sold_value: tokenData.pnl.soldValue,
-          size: tokenData.pnl.size,
-          first_active: tokenData.pnl.firstActiveTime,
-          last_active: tokenData.pnl.lastActiveTime,
-        } : null,
+        address: addr,
+        amount: h.amount,
+        pct,
+        sol_balance: h.solBalanceDisplay ?? h.solBalance,
       });
     }
   }
