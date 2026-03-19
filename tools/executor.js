@@ -364,11 +364,12 @@ async function runSafetyChecks(name, args) {
 
       // Check SOL balance — must have enough to deploy + gas reserve
       const balance = await getWalletBalances();
-      const minRequired = amountY + 0.05; // 0.05 SOL gas reserve
+      const gasReserve = config.management.gasReserve;
+      const minRequired = amountY + gasReserve;
       if (balance.sol < minRequired) {
         return {
           pass: false,
-          reason: `Insufficient SOL: have ${balance.sol} SOL, need ${minRequired} SOL (${amountY} deploy + 0.05 gas).`,
+          reason: `Insufficient SOL: have ${balance.sol} SOL, need ${minRequired} SOL (${amountY} deploy + ${gasReserve} gas reserve).`,
         };
       }
 
