@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  agent:
+    build: .
+    environment:
+      - WALLET_PRIVATE_KEY=${WALLET_PRIVATE_KEY}
+      - RPC_URL=${RPC_URL}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - DRY_RUN=${DRY_RUN:-false}
+    volumes:
+      - ./state.json:/app/state.json
+      - ./lessons.json:/app/lessons.json
+      - ./user-config.json:/app/user-config.json
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./state.json:/app/../state.json
+      - ./lessons.json:/app/../lessons.json
+      - ./user-config.json:/app/../user-config.json
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - agent
+    restart: unless-stopped

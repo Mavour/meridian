@@ -11,6 +11,10 @@
     "setup": "node setup.js",
     "start": "node index.js",
     "dev": "DRY_RUN=true node index.js",
+    "dashboard": "node dashboard/server.js",
+    "dashboard:local": "node dashboard/server-local.js",
+    "dashboard:build": "node dashboard/build.js",
+    "start:all": "node index.js & node dashboard/server.js",
     "test:screen": "node test/test-screening.js",
     "test:agent": "DRY_RUN=true node test/test-agent.js",
     "postinstall": "node scripts/patch-anchor.js"
@@ -21,7 +25,9 @@
     "@solana/web3.js": "^1.95.0",
     "bn.js": "^5.2.1",
     "bs58": "^5.0.0",
+    "cors": "^2.8.5",
     "dotenv": "^17.3.1",
+    "express": "^4.18.2",
     "node-cron": "^3.0.3",
     "openai": "^4.73.0"
   },
