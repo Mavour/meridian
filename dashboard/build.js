@@ -4,7 +4,7 @@ import { dirname, join } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(__dirname);
-const distDir = join(srcDir, 'dist');
+const distDir = join(srcDir, '..', 'docs');
 
 // Read current data files with fallback
 function readJson(filepath, fallback) {
@@ -49,11 +49,10 @@ window.API_CONFIG = {
 };
 `);
 
-console.log('Dashboard built to ./dashboard/dist');
+console.log('Dashboard built to ./docs');
 console.log('');
 console.log('For GitHub Pages:');
 console.log('1. Push to GitHub');
-console.log('2. Enable GitHub Pages in repo Settings');
-console.log('3. Select "gh-pages" branch');
+console.log('2. Enable GitHub Pages in repo Settings → Source: GitHub Actions');
 console.log('');
 console.log('For live data, deploy API server separately and update config.js');
