@@ -12,7 +12,7 @@ function sleep(ms) {
 }
 
 async function paceGmgnRequest() {
-  const delayMs = Math.max(0, Number(config.gmgn?.requestDelayMs ?? 350));
+  const delayMs = Math.max(0, Number(config.gmgn?.requestDelayMs ?? 2500));
   if (!delayMs) return;
   const elapsed = Date.now() - lastGmgnRequestAt;
   if (elapsed < delayMs) await sleep(delayMs - elapsed);
@@ -78,7 +78,9 @@ async function gmgnFetch(pathname, { method = "GET", params = {}, body = null } 
       const retryAfter = Number(res.headers.get("retry-after"));
       const backoffMs = Number.isFinite(retryAfter)
         ? retryAfter * 1000
-        : Math.min(15000, 1500 * Math.pow(2, attempt));
+        : /temporarily banned/i.test(String(message))
+          ? 60000
+          : Math.min(30000, 3000 * Math.pow(2, attempt));
       await sleep(backoffMs);
       continue;
     }
