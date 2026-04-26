@@ -19,7 +19,12 @@
       "wins": 7,
       "lastWinAt": "2026-04-26T00:25:31.912Z",
       "symbol": "LASTMAN-SOL"
+    },
+    "WIZ-SOL": {
+      "wins": 1,
+      "lastWinAt": "2026-04-26T01:41:26.159Z",
+      "symbol": "WIZ-SOL"
     }
   },
-  "lastUpdated": "2026-04-26T00:25:31.912Z"
+  "lastUpdated": "2026-04-26T01:41:26.159Z"
 }

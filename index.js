@@ -483,10 +483,11 @@ export async function runScreeningCycle({ silent = false } = {}) {
     const allCandidates = [];
     for (const pool of candidates) {
       const mint = pool.base?.mint;
-      const [smartWallets, narrative, tokenInfo] = await Promise.allSettled([
+      const [smartWallets, narrative, tokenInfo, xSentiment] = await Promise.allSettled([
         checkSmartWalletsOnPool({ pool_address: pool.pool }),
         mint ? getTokenNarrative({ mint }) : Promise.resolve(null),
         mint ? getTokenInfo({ query: mint }) : Promise.resolve(null),
+        (config.xSentiment?.enabled && mint && !isCookieExpired()) ? analyzeSentiment({ mint }) : Promise.resolve(null),
       ]);
       allCandidates.push({
         pool,
@@ -494,6 +495,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
         n: narrative.status === "fulfilled" ? narrative.value : null,
         ti: tokenInfo.status === "fulfilled" ? tokenInfo.value?.results?.[0] : null,
         mem: recallForPool(pool.pool),
+        xs: xSentiment.status === "fulfilled" ? xSentiment.value : null,
       });
       await new Promise(r => setTimeout(r, 150)); // avoid 429s
     }
@@ -598,6 +600,10 @@ export async function runScreeningCycle({ silent = false } = {}) {
           activeBin != null ? `  active_bin: ${activeBin}` : null,
           n?.narrative ? `  narrative_untrusted: ${sanitizeUntrustedPromptText(n.narrative, 500)}` : `  narrative_untrusted: none`,
           mem ? `  memory_untrusted: ${sanitizeUntrustedPromptText(mem, 500)}` : null,
+          // X Sentiment
+          p.xs && p.xs.sentiment !== "DISABLED" && p.xs.sentiment !== "COOKIE_EXPIRED" && p.xs.sentiment !== "NO_ACCOUNTS" 
+            ? `  Sentiment: ${p.xs.sentiment} — ${p.xs.post_count} post${p.xs.post_count !== 1 ? "s" : ""} (${p.xs.positive_count} pos, ${p.xs.negative_count} neg)` 
+            : null,
         ].filter(Boolean).join("\n");
       } else {
         const gmgnPriceLine = pool.gmgn_price_action
@@ -612,6 +618,10 @@ export async function runScreeningCycle({ silent = false } = {}) {
           okxParts ? `  okx: ${okxParts}` : okxUnavailable ? `  okx: unavailable` : null,
           okxTags  ? `  tags: ${okxTags}` : null,
           pool.price_vs_ath_pct != null ? `  ath: price_vs_ath=${pool.price_vs_ath_pct}%${pool.top_cluster_trend ? `, top_cluster=${pool.top_cluster_trend}` : ""}` : null,
+          // X Sentiment
+          p.xs && p.xs.sentiment !== "DISABLED" && p.xs.sentiment !== "COOKIE_EXPIRED" && p.xs.sentiment !== "NO_ACCOUNTS" 
+            ? `  Sentiment: ${p.xs.sentiment} — ${p.xs.post_count} post${p.xs.post_count !== 1 ? "s" : ""} (${p.xs.positive_count} pos, ${p.xs.negative_count} neg)` 
+            : null,
           `  smart_wallets: ${sw?.in_pool?.length ?? 0} present${sw?.in_pool?.length ? ` → CONFIDENCE BOOST (${sw.in_pool.map(w => w.name).join(", ")})` : ""}`,
           activeBin != null ? `  active_bin: ${activeBin}` : null,
           priceChange != null ? `  1h: price${priceChange >= 0 ? "+" : ""}${priceChange}%, net_buyers=${netBuyers ?? "?"}` : null,
