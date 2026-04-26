@@ -425,22 +425,47 @@ export async function notifyClose({ pair, pnlUsd, pnlPct, reason, feeUsd, deploy
   const sign = pnlUsd >= 0 ? "+" : "";
   const useSol = config.management.solMode;
 
+  // Always calculate SOL values from USD if not provided or if solMode is true
+  let pnlSolVal = pnlSol;
+  let feesSolVal = feesSol;
+
+  if ((pnlSolVal == null || useSol) && pnlUsd != null && pnlUsd != 0) {
+    try {
+      const res = await fetch("https://api.jup.ag/price/v2?ids=SOL");
+      const data = await res.json();
+      const solPrice = parseFloat(data?.data?.SOL?.price ?? 0);
+      if (solPrice > 0) {
+        pnlSolVal = pnlUsd / solPrice;
+        if (feesSolVal == null && feeUsd != null && feeUsd > 0) {
+          feesSolVal = feeUsd / solPrice;
+        }
+      }
+    } catch (e) { /* ignore */ }
+  } else if (feesSolVal == null && feeUsd != null && feeUsd > 0) {
+    try {
+      const res = await fetch("https://api.jup.ag/price/v2?ids=SOL");
+      const data = await res.json();
+      const solPrice = parseFloat(data?.data?.SOL?.price ?? 0);
+      if (solPrice > 0) {
+        feesSolVal = feeUsd / solPrice;
+      }
+    } catch (e) { /* ignore */ }
+  }
+
   let message = `🟢 <b>Position Closed</b> — ${pair}\n`;
 
   // PnL: solMode=true → ◎4 decimals, solMode=false → $2 decimals
-  if (useSol && pnlSol != null) {
-    message += `💵 PnL: ${sign}◎${(pnlSol ?? 0).toFixed(4)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)\n`;
+  if (useSol) {
+    message += `💵 PnL: ${sign}◎${(pnlSolVal ?? 0).toFixed(4)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)\n`;
   } else {
     message += `💵 PnL: ${sign}${(pnlUsd ?? 0).toFixed(2)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)\n`;
   }
 
   // Fees: solMode=true → ◎ first, solMode=false → $ first
-  if (useSol && feesSol != null) {
-    message += `💰 Fees earned: ◎${(feesSol ?? 0).toFixed(4)} ($${(feeUsd ?? 0).toFixed(2)})\n`;
-  } else if (!useSol && feesSol != null) {
-    message += `💰 Fees earned: $${(feeUsd ?? 0).toFixed(2)} (◎${(feesSol ?? 0).toFixed(4)})\n`;
+  if (useSol) {
+    message += `💰 Fees earned: ◎${(feesSolVal ?? 0).toFixed(4)} ($${(feeUsd ?? 0).toFixed(2)})\n`;
   } else {
-    message += `💰 Fees earned: $${(feeUsd ?? 0).toFixed(2)}\n`;
+    message += `💰 Fees earned: $${(feeUsd ?? 0).toFixed(2)} (◎${(feesSolVal ?? 0).toFixed(4)})\n`;
   }
 
   if (deployedSol) {
@@ -458,7 +483,6 @@ export async function notifyClose({ pair, pnlUsd, pnlPct, reason, feeUsd, deploy
 
   if (peakPct != null && currentPct != null && reason?.toLowerCase().includes("trailing")) {
     const dropped = (peakPct - currentPct).toFixed(2);
-    const threshold = config.management?.trailingDropPct ?? 0.3;
     message += `📋 Reason: Trailing TP: peak ${peakPct.toFixed(2)}% → current ${currentPct.toFixed(2)}% (dropped ${dropped}%)\n`;
   } else if (reason) {
     message += `📋 Reason: ${escapeHtml(reason)}\n`;
