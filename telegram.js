@@ -425,13 +425,22 @@ export async function notifyClose({ pair, pnlUsd, pnlPct, reason, feeUsd, deploy
   const sign = pnlUsd >= 0 ? "+" : "";
   const useSol = config.management.solMode;
 
-  let message = `🟢 <b>Position Closed</b> — ${pair}\n\n`;
+let message = `🟢 <b>Position Closed</b> — ${pair}\n\n`;
 
-  // PnL: solMode=true → ◎ first with () for USD, else just USD
+  // PnL: solMode=true → ◎ with 4 decimals, () for USD; else just $ with 2 decimals
   if (useSol && pnlSol != null) {
-    message += `💵 PnL: ${sign}◎${(pnlSol ?? 0).toFixed(2)} (${sign}$${(pnlUsd ?? 0).toFixed(2)})\n`;
+    message += `💵 PnL: ${sign}◎${(pnlSol ?? 0).toFixed(4)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)\n`;
   } else {
-    message += `💵 PnL: ${sign}$${(pnlUsd ?? 0).toFixed(2)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)\n`;
+    message += `💵 PnL: ${sign}${(pnlUsd ?? 0).toFixed(2)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)\n`;
+  }
+
+  // Fees: solMode=true → ◎ first with USD in (); solMode=false → $ first with SOL in ()
+  if (useSol && feesSol != null) {
+    message += `💰 Fees earned: ◎${(feesSol ?? 0).toFixed(4)} (${(feeUsd ?? 0).toFixed(2)})\n`;
+  } else if (!useSol && feesSol != null) {
+    message += `💰 Fees earned: $${(feeUsd ?? 0).toFixed(2)} (◎${(feesSol ?? 0).toFixed(4)})\n`;
+  } else {
+    message += `💰 Fees earned: $${(feeUsd ?? 0).toFixed(2)}\n`;
   }
 
   // Fees: solMode=true → ◎ first with () for USD, else just USD
