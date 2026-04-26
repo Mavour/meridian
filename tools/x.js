@@ -267,8 +267,12 @@ const POSITIVE_KEYWORDS = [
   "growth", "growing", "trending", "popular",
 ];
 
+function stripUnicodeVariants(text) {
+  return text.normalize("NFKC").replace(/[\u{1D400}-\u{1D7FF}]/gu, "");
+}
+
 function scorePost(text) {
-  const lower = text.toLowerCase();
+  const lower = stripUnicodeVariants(text).toLowerCase();
   let negHits = 0;
   let posHits = 0;
 
