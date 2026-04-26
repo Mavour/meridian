@@ -12,7 +12,7 @@ import {
 import { getWalletBalances, swapToken } from "./wallet.js";
 import { studyTopLPers } from "./study.js";
 import { addLesson, clearAllLessons, clearPerformance, removeLessonsByKeyword, getPerformanceHistory, pinLesson, unpinLesson, listLessons } from "../lessons.js";
-import { setPositionInstruction } from "../state.js";
+import { setPositionInstruction, getTrackedPosition } from "../state.js";
 import { analyzeSentiment, addXAccount, removeXAccount, listXAccounts, checkCookieHealth, clearSentimentCache, isCookieExpired, resetCookieState } from "./x.js";
 
 import { getPoolMemory, addPoolNote } from "../pool-memory.js";
@@ -483,20 +483,30 @@ export async function executeTool(name, args) {
       } else if (name === "deploy_position") {
         notifyDeploy({ pair: result.pool_name || args.pool_name || args.pool_address?.slice(0, 8), amountSol: args.amount_y ?? args.amount_sol ?? 0, position: result.position, tx: result.txs?.[0] ?? result.tx, priceRange: result.price_range, rangeCoverage: result.range_coverage, binStep: result.bin_step, baseFee: result.base_fee }).catch(() => {});
       } else if (name === "close_position") {
+        // Get tracked position for additional data
+        const tracked = getTrackedPosition(args.position_address);
+        
         // Calculate SOL values from USD if not provided
         let pnlSol = result.pnl_sol ?? null;
         let feesSolVal = result.fees_sol ?? null;
-        if ((pnlSol == null && result.pnl_usd != null) || (feesSolVal == null && result.fees_usd != null)) {
+        if ((pnlSol == null && result.pnl_usd != null && result.pnl_usd != 0) || (feesSolVal == null && result.fees_usd != null && result.fees_usd != 0)) {
           try {
             const res = await fetch("https://api.jup.ag/price/v2?ids=SOL");
             const data = await res.json();
             const solPrice = parseFloat(data?.data?.SOL?.price ?? 0);
             if (solPrice > 0) {
-              if (pnlSol == null && result.pnl_usd != null) pnlSol = result.pnl_usd / solPrice;
-              if (feesSolVal == null && result.fees_usd != null) feesSolVal = result.fees_usd / solPrice;
+              if (pnlSol == null && result.pnl_usd != null && result.pnl_usd != 0) pnlSol = result.pnl_usd / solPrice;
+              if (feesSolVal == null && result.fees_usd != null && result.fees_usd != 0) feesSolVal = result.fees_usd / solPrice;
             }
           } catch (e) { /* ignore */ }
         }
+        
+        // Calculate hold time from tracked position
+        let holdTimeMins = result.hold_time_minutes ?? null;
+        if (holdTimeMins == null && tracked?.deployed_at) {
+          holdTimeMins = Math.floor((Date.now() - new Date(tracked.deployed_at).getTime()) / 60000);
+        }
+        
         notifyClose({ 
         pair: result.pool_name || args.position_address?.slice(0, 8), 
         pnlUsd: result.pnl_usd ?? 0, 
@@ -504,9 +514,9 @@ export async function executeTool(name, args) {
         pnlSol: pnlSol,
         feesSol: feesSolVal,
         feeUsd: result.fees_usd ?? 0,
-        deployedSol: args.amount_sol ?? args.amount_y ?? 0,
-        strategy: result.strategy ?? null,
-        holdTimeMinutes: result.hold_time_minutes ?? null,
+        deployedSol: tracked?.amount_sol ?? args.amount_sol ?? args.amount_y ?? 0,
+        strategy: tracked?.strategy ?? result.strategy ?? null,
+        holdTimeMinutes: holdTimeMins,
         peakPct: result.peak_pnl_pct ?? null,
         currentPct: result.current_pnl_pct ?? null,
         reason: args.reason ?? null
