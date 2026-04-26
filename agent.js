@@ -4,8 +4,8 @@ import { buildSystemPrompt } from "./prompt.js";
 import { executeTool } from "./tools/executor.js";
 import { tools } from "./tools/definitions.js";
 
-const MANAGER_TOOLS  = new Set(["close_position", "claim_fees", "swap_token", "get_position_pnl", "get_my_positions", "get_wallet_balance"]);
-const SCREENER_TOOLS = new Set(["deploy_position", "get_active_bin", "get_top_candidates", "check_smart_wallets_on_pool", "get_token_holders", "get_token_narrative", "get_token_info", "search_pools", "get_pool_memory", "get_wallet_balance", "get_my_positions"]);
+const MANAGER_TOOLS  = new Set(["close_position", "claim_fees", "swap_token", "get_position_pnl", "get_my_positions", "get_wallet_balance", "get_x_sentiment"]);
+const SCREENER_TOOLS = new Set(["deploy_position", "get_active_bin", "get_top_candidates", "check_smart_wallets_on_pool", "get_token_holders", "get_token_narrative", "get_token_info", "search_pools", "get_pool_memory", "get_wallet_balance", "get_my_positions", "get_x_sentiment", "list_x_accounts", "add_x_account", "remove_x_account"]);
 const GENERAL_INTENT_ONLY_TOOLS = new Set([
   "self_update",
   "update_config",
@@ -24,6 +24,12 @@ const GENERAL_INTENT_ONLY_TOOLS = new Set([
   "add_strategy",
   "remove_strategy",
   "set_active_strategy",
+  "add_x_account",
+  "remove_x_account",
+  "list_x_accounts",
+  "check_x_cookie_health",
+  "reset_x_cookie_state",
+  "clear_x_sentiment_cache",
 ]);
 
 // Intent → tool subsets for GENERAL role

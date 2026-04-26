@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { log } from "./logger.js";
+import { config } from "./config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const USER_CONFIG_PATH = path.join(__dirname, "user-config.json");
@@ -419,13 +420,41 @@ export async function notifyDeploy({ pair, amountSol, position, tx, priceRange, 
   );
 }
 
-export async function notifyClose({ pair, pnlUsd, pnlPct }) {
+export async function notifyClose({ pair, pnlUsd, pnlPct, reason, feeUsd, deployedSol, strategy, holdTimeMinutes, peakPct, currentPct, feesSol }) {
   if (hasActiveLiveMessage()) return;
   const sign = pnlUsd >= 0 ? "+" : "";
-  await sendHTML(
-    `🔒 <b>Closed</b> ${pair}\n` +
-    `PnL: ${sign}$${(pnlUsd ?? 0).toFixed(2)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)`
-  );
+  const cur = "$";
+
+  let message = `🟢 <b>Position Closed</b> — ${pair}\n\n`;
+  message += `💵 PnL: ${sign}${cur}${(pnlUsd ?? 0).toFixed(2)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)\n`;
+
+  if (config.management.solMode && feesSol != null) {
+    message += `💰 Fees earned: $${(feesSol ?? 0).toFixed(4)} (≈◎${(feesSol ?? 0).toFixed(4)})\n`;
+  } else {
+    message += `💰 Fees earned: ${cur}${(feeUsd ?? 0).toFixed(2)}\n`;
+  }
+
+  if (deployedSol) {
+    message += `🏦 Deployed: ${deployedSol} SOL\n`;
+  }
+  if (strategy) {
+    message += `📐 Strategy: ${strategy}\n`;
+  }
+  if (holdTimeMinutes) {
+    const hours = Math.floor(holdTimeMinutes / 60);
+    const mins = holdTimeMinutes % 60;
+    const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    message += `⏱️ Hold time: ${timeStr}\n`;
+  }
+
+  if (peakPct != null && currentPct != null && reason?.toLowerCase().includes("trailing")) {
+    const dropped = (peakPct - currentPct).toFixed(2);
+    message += `📋 Reason: Trailing TP: peak ${peakPct.toFixed(2)}% → current ${currentPct.toFixed(2)}% (dropped ${dropped}%)\n`;
+  } else if (reason) {
+    message += `📋 Reason: ${escapeHtml(reason)}\n`;
+  }
+
+  await sendHTML(message.trim());
 }
 
 export async function notifySwap({ inputSymbol, outputSymbol, amountIn, amountOut, tx }) {
@@ -443,6 +472,24 @@ export async function notifyOutOfRange({ pair, minutesOOR }) {
     `⚠️ <b>Out of Range</b> ${pair}\n` +
     `Been OOR for ${minutesOOR} minutes`
   );
+}
+
+export async function notifyCookieExpired(reason) {
+  await sendHTML(
+    `⚠️ <b>X cookies expired</b> — sentiment analysis disabled.\n` +
+    `Refresh auth_token and ct0 in .env, then restart.\n` +
+    (reason ? `Error: ${String(reason).slice(0, 200)}` : "")
+  );
+}
+
+function escapeHtml(text) {
+  if (!text) return "";
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function sleep(ms) {

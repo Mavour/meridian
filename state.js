@@ -12,9 +12,11 @@ import fs from "fs";
 import { log } from "./logger.js";
 
 const STATE_FILE = "./state.json";
+const WAVE_FILE = "./wave-history.json";
 
 const MAX_RECENT_EVENTS = 20;
 const MAX_INSTRUCTION_LENGTH = 280;
+const MAX_WAVES_BEFORE_BLOCK = 3; // max wins before token is blocked from re-entry
 
 function sanitizeStoredText(text, maxLen = MAX_INSTRUCTION_LENGTH) {
   if (text == null) return null;
@@ -46,6 +48,67 @@ function save(state) {
   } catch (err) {
     log("state_error", `Failed to write state.json: ${err.message}`);
   }
+}
+
+function loadWaves() {
+  if (!fs.existsSync(WAVE_FILE)) {
+    return { waves: {}, lastUpdated: null };
+  }
+  try {
+    return JSON.parse(fs.readFileSync(WAVE_FILE, "utf8"));
+  } catch (err) {
+    log("wave_error", `Failed to read wave-history.json: ${err.message}`);
+    return { waves: {}, lastUpdated: null };
+  }
+}
+
+function saveWaves(state) {
+  try {
+    state.lastUpdated = new Date().toISOString();
+    fs.writeFileSync(WAVE_FILE, JSON.stringify(state, null, 2));
+  } catch (err) {
+    log("wave_error", `Failed to write wave-history.json: ${err.message}`);
+  }
+}
+
+// ─── Wave History Functions ─────────────────────────────────────
+
+/**
+ * Get wave history for the last 24 hours.
+ * Blocks tokens that have reached MAX_WAVES_BEFORE_BLOCK wins.
+ */
+export function getWaveHistory(maxWaves = MAX_WAVES_BEFORE_BLOCK) {
+  const waveState = loadWaves();
+  if (!waveState.waves || Object.keys(waveState.waves).length === 0) {
+    return { blocked: [], history: {} };
+  }
+
+  const now = Date.now();
+  const blocked = [];
+  const history = {};
+
+  for (const [mintOrKey, data] of Object.entries(waveState.waves)) {
+    if (!data.lastWinAt) continue;
+    const hoursAgo = (now - new Date(data.lastWinAt).getTime()) / 3_600_000;
+    if (hoursAgo >= 24) continue;
+
+    history[mintOrKey] = {
+      symbol: data.symbol || mintOrKey,
+      wins: data.wins,
+      hours_ago: Math.round(hoursAgo * 10) / 10,
+    };
+    if (data.wins >= maxWaves) blocked.push(mintOrKey);
+  }
+
+  return { blocked, history };
+}
+
+/**
+ * Quick check — is a specific token mint currently blocked from re-entry?
+ */
+export function isTokenWaveBlocked(tokenMint, maxWaves = MAX_WAVES_BEFORE_BLOCK) {
+  const { blocked } = getWaveHistory(maxWaves);
+  return blocked.includes(tokenMint);
 }
 
 // ─── Position Registry ─────────────────────────────────────────
@@ -177,7 +240,7 @@ function pushEvent(state, event) {
 /**
  * Mark a position as closed.
  */
-export function recordClose(position_address, reason) {
+export function recordClose(position_address, reason, pnl_pct = null) {
   const state = load();
   const pos = state.positions[position_address];
   if (!pos) return;
@@ -185,6 +248,35 @@ export function recordClose(position_address, reason) {
   pos.closed_at = new Date().toISOString();
   pos.notes.push(`Closed at ${pos.closed_at}: ${reason}`);
   pushEvent(state, { action: "close", position: position_address, pool_name: pos.pool_name || pos.pool, reason });
+
+  // Wave tracking: record win if profitable close
+  const isProfitClose = (pnl_pct != null && pnl_pct > 0) ||
+    /trailing.?tp|take.?profit|fee.?target|profit.?target|\btp\b/i.test(reason || "");
+
+  if (isProfitClose) {
+    const waveState = loadWaves();
+
+    const tokenKey = pos.token_mint
+      || (pos.pool_name ? pos.pool_name.split("/")[0].trim().toUpperCase() : null)
+      || pos.pool;
+
+    const tokenSymbol = pos.pool_name
+      ? pos.pool_name.split("/")[0].trim().toUpperCase()
+      : tokenKey;
+
+    if (tokenKey) {
+      if (!waveState.waves[tokenKey]) {
+        waveState.waves[tokenKey] = { wins: 0, lastWinAt: null, symbol: tokenSymbol };
+      }
+
+      waveState.waves[tokenKey].wins += 1;
+      waveState.waves[tokenKey].lastWinAt = new Date().toISOString();
+      waveState.waves[tokenKey].symbol = tokenSymbol;
+      saveWaves(waveState);
+      log("state", `Wave #${waveState.waves[tokenKey].wins} recorded for ${tokenSymbol} (${tokenKey}) in wave-history.json`);
+    }
+  }
+
   save(state);
   log("state", `Position ${position_address} marked closed: ${reason}`);
 }

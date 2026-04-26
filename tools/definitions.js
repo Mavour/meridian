@@ -1111,4 +1111,67 @@ Blacklisted tokens are filtered BEFORE the LLM even sees pool candidates.`,
       }
     }
   },
+  // ═══════════════════════════════════════════
+  //  X / TWITTER SENTIMENT TOOLS
+  // ═══════════════════════════════════════════
+  {
+    type: "function",
+    function: {
+      name: "get_x_sentiment",
+      description: `Analyze X/Twitter sentiment for a token from trusted alpha accounts.
+Scans recent posts mentioning the token contract address from your trusted account list.
+Returns sentiment score (-100 to +100), post breakdown (positive/negative/neutral).
+This helps detect scam warnings, rug pull signals, or bullish alpha before deploying.
+
+Requires X_AUTH_TOKEN and X_CT0 in .env (X cookies).`,
+      parameters: {
+        type: "object",
+        properties: {
+          mint: { type: "string", description: "Token contract address to analyze" },
+          lookbackDays: { type: "number", description: "Days to look back. Default 7, max 7 for free/basic accounts." }
+        },
+        required: ["mint"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "add_x_account",
+      description: "Add a trusted X/Twitter account to the sentiment filter list.",
+      parameters: {
+        type: "object",
+        properties: {
+          handle: { type: "string", description: "X handle (with or without @)" },
+          category: { type: "string", enum: ["alpha", "trader", "developer", "community"], description: "Account category. Default: alpha" }
+        },
+        required: ["handle"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "remove_x_account",
+      description: "Remove a trusted X/Twitter account from the sentiment filter list.",
+      parameters: {
+        type: "object",
+        properties: {
+          handle: { type: "string", description: "X handle to remove (with or without @)" }
+        },
+        required: ["handle"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_x_accounts",
+      description: "List all trusted X/Twitter accounts configured for sentiment analysis.",
+      parameters: {
+        type: "object",
+        properties: {}
+      }
+    }
+  },
 ];
