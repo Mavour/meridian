@@ -434,18 +434,11 @@ let message = `🟢 <b>Position Closed</b> — ${pair}\n\n`;
     message += `💵 PnL: ${sign}${(pnlUsd ?? 0).toFixed(2)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)\n`;
   }
 
-  // Fees: solMode=true → ◎ first with USD in (); solMode=false → $ first with SOL in ()
+// Fees: solMode=true → ◎ first with USD in (); solMode=false → $ first with SOL in ()
   if (useSol && feesSol != null) {
     message += `💰 Fees earned: ◎${(feesSol ?? 0).toFixed(4)} (${(feeUsd ?? 0).toFixed(2)})\n`;
   } else if (!useSol && feesSol != null) {
     message += `💰 Fees earned: $${(feeUsd ?? 0).toFixed(2)} (◎${(feesSol ?? 0).toFixed(4)})\n`;
-  } else {
-    message += `💰 Fees earned: $${(feeUsd ?? 0).toFixed(2)}\n`;
-  }
-
-  // Fees: solMode=true → ◎ first with () for USD, else just USD
-  if (useSol && feesSol != null) {
-    message += `💰 Fees earned: ◎${(feesSol ?? 0).toFixed(4)} (${(feeUsd ?? 0).toFixed(2)})\n`;
   } else {
     message += `💰 Fees earned: $${(feeUsd ?? 0).toFixed(2)}\n`;
   }
