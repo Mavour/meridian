@@ -559,7 +559,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
     );
 
     // Build compact candidate blocks
-    const candidateBlocks = passing.map(({ pool, sw, n, ti, mem }, i) => {
+    const candidateBlocks = passing.map(({ pool, sw, n, ti, mem, xs }, i) => {
       const botPct = ti?.audit?.bot_holders_pct ?? "?";
       const top10Pct = ti?.audit?.top_holders_pct ?? "?";
       const feesSol = ti?.global_fees_sol ?? "?";
@@ -601,8 +601,8 @@ export async function runScreeningCycle({ silent = false } = {}) {
           n?.narrative ? `  narrative_untrusted: ${sanitizeUntrustedPromptText(n.narrative, 500)}` : `  narrative_untrusted: none`,
           mem ? `  memory_untrusted: ${sanitizeUntrustedPromptText(mem, 500)}` : null,
           // X Sentiment
-          p.xs && p.xs.sentiment !== "DISABLED" && p.xs.sentiment !== "COOKIE_EXPIRED" && p.xs.sentiment !== "NO_ACCOUNTS" 
-            ? `  Sentiment: ${p.xs.sentiment} — ${p.xs.post_count} post${p.xs.post_count !== 1 ? "s" : ""} (${p.xs.positive_count} pos, ${p.xs.negative_count} neg)` 
+          xs && xs.sentiment !== "DISABLED" && xs.sentiment !== "COOKIE_EXPIRED" && xs.sentiment !== "NO_ACCOUNTS" 
+            ? `  Sentiment: ${xs.sentiment} — ${xs.post_count} post${xs.post_count !== 1 ? "s" : ""} (${xs.positive_count} pos, ${xs.negative_count} neg)` 
             : null,
         ].filter(Boolean).join("\n");
       } else {
@@ -661,7 +661,7 @@ STEPS:
 1. Pick the best candidate based on narrative quality, smart wallets, and pool metrics.
 2. Call deploy_position (active_bin is pre-fetched above — no need to call get_active_bin).
    strategy = ${config.strategy.strategy} (always use this, never change it).
-   bins_below = round(${config.strategy.minBinsBelow} + (volatility/5)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}].
+   bins_below = round(${config.strategy.minBinsBelow} + (volatility/4)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}].
    bins_above = 0. Single-side SOL only: set amount_y, keep amount_x = 0.
 3. Report in this exact format (no tables, no extra sections):
    🚀 DEPLOYED
