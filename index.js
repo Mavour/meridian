@@ -231,6 +231,26 @@ export async function runManagementCycle({ silent = false } = {}) {
       return { ...p, recall: recallForPool(p.pool) };
     });
 
+    // ── X Sentiment check for each position ────────────────────────
+    const sentimentByPosition = new Map();
+    if (config.xSentiment?.enabled && !isCookieExpired()) {
+      const sentimentResults = await Promise.allSettled(
+        positionData.filter(p => p.base_mint).map(async (p) => {
+          const xs = await analyzeSentiment({ mint: p.base_mint });
+          return { position: p.position, xs };
+        })
+      );
+      for (const r of sentimentResults) {
+        if (r.status === "fulfilled" && r.value?.xs) {
+          sentimentByPosition.set(r.value.position, r.value.xs);
+          // Check if negative sentiment - warn
+          if (r.value.xs.sentiment === "NEGATIVE" && r.value.xs.score < (config.xSentiment.minScore ?? -30)) {
+            log("x_sentiment", `⚠️ Negative sentiment for ${p.pair}: ${r.value.xs.sentiment} (${r.value.xs.score})`);
+          }
+        }
+      }
+    }
+
     // JS trailing TP check
     const exitMap = new Map();
     for (const p of positionData) {
@@ -294,6 +314,11 @@ export async function runManagementCycle({ silent = false } = {}) {
       const statusLabel = act.action === "INSTRUCTION" ? "HOLD (instruction)" : act.action;
       let line = `**${p.pair}** | Age: ${p.age_minutes ?? "?"}m | Val: ${val} | Unclaimed: ${unclaimed} | PnL: ${p.pnl_pct ?? "?"}% | Yield: ${p.fee_per_tvl_24h ?? "?"}% | ${inRange} | ${statusLabel}`;
       if (p.instruction) line += `\nNote: "${p.instruction}"`;
+      // Add X sentiment warning if negative
+      const xs = sentimentByPosition.get(p.position);
+      if (xs && xs.sentiment !== "DISABLED" && xs.sentiment !== "COOKIE_EXPIRED" && xs.sentiment !== "NO_ACCOUNTS") {
+        line += `\n⚠️ X: ${xs.sentiment} (${xs.score}) | ${xs.post_count} posts`;
+      }
       if (act.action === "CLOSE" && act.rule === "exit") line += `\n⚡ Trailing TP: ${act.reason}`;
       if (act.action === "CLOSE" && act.rule && act.rule !== "exit") line += `\nRule ${act.rule}: ${act.reason}`;
       if (act.action === "CLAIM") line += `\n→ Claiming fees`;
