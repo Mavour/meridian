@@ -420,20 +420,25 @@ export async function notifyDeploy({ pair, amountSol, position, tx, priceRange, 
   );
 }
 
-export async function notifyClose({ pair, pnlUsd, pnlPct, reason, feeUsd, deployedSol, strategy, holdTimeMinutes, peakPct, currentPct, feesSol }) {
+export async function notifyClose({ pair, pnlUsd, pnlPct, reason, feeUsd, deployedSol, strategy, holdTimeMinutes, peakPct, currentPct, feesSol, pnlSol }) {
   if (hasActiveLiveMessage()) return;
   const sign = pnlUsd >= 0 ? "+" : "";
   const useSol = config.management.solMode;
-  const cur = useSol ? "◎" : "$";
-  const curFee = (useSol && feesSol != null) ? "◎" : cur;
 
   let message = `🟢 <b>Position Closed</b> — ${pair}\n\n`;
-  message += `💵 PnL: ${sign}${cur}${(pnlUsd ?? 0).toFixed(2)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)\n`;
 
-  if (useSol && feesSol != null) {
-    message += `💰 Fees earned: ${curFee}${(feesSol ?? 0).toFixed(4)}\n`;
+  // PnL: solMode=true → ◎ first with () for USD, else just USD
+  if (useSol && pnlSol != null) {
+    message += `💵 PnL: ${sign}◎${(pnlSol ?? 0).toFixed(2)} (${sign}$${(pnlUsd ?? 0).toFixed(2)})\n`;
   } else {
-    message += `💰 Fees earned: ${curFee}${(feeUsd ?? 0).toFixed(2)}\n`;
+    message += `💵 PnL: ${sign}$${(pnlUsd ?? 0).toFixed(2)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)\n`;
+  }
+
+  // Fees: solMode=true → ◎ first with () for USD, else just USD
+  if (useSol && feesSol != null) {
+    message += `💰 Fees earned: ◎${(feesSol ?? 0).toFixed(4)} (${(feeUsd ?? 0).toFixed(2)})\n`;
+  } else {
+    message += `💰 Fees earned: $${(feeUsd ?? 0).toFixed(2)}\n`;
   }
 
   if (deployedSol) {
