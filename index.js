@@ -10,6 +10,7 @@ import { formatGmgnCandidateForPrompt } from "./tools/gmgn.js";
 import { config, reloadScreeningThresholds, computeDeployAmount } from "./config.js";
 import { evolveThresholds, getPerformanceSummary } from "./lessons.js";
 import { executeTool, registerCronRestarter } from "./tools/executor.js";
+import { checkCookieHealth, analyzeSentiment, isCookieExpired } from "./tools/x.js";
 import {
   startPolling,
   stopPolling,
@@ -40,6 +41,18 @@ log("startup", `Model: ${process.env.LLM_MODEL || "hermes-3-405b"}`);
 ensureAgentId();
 bootstrapHiveMind().catch((error) => log("hivemind_warn", `Bootstrap failed: ${error.message}`));
 startHiveMindBackgroundSync();
+
+// Check X sentiment on startup
+if (config.xSentiment?.enabled) {
+  log("startup", "Checking X sentiment cookies...");
+  checkCookieHealth().then((r) => {
+    if (r.healthy) {
+      log("startup", "X sentiment: ready");
+    } else {
+      log("startup", `X sentiment: ${r.reason}`);
+    }
+  }).catch((e) => log("x_sentiment_error", `Health check failed: ${e.message}`));
+}
 
 const TP_PCT = config.management.takeProfitPct;
 const DEPLOY = config.management.deployAmountSol;

@@ -13,6 +13,7 @@ import { getWalletBalances, swapToken } from "./wallet.js";
 import { studyTopLPers } from "./study.js";
 import { addLesson, clearAllLessons, clearPerformance, removeLessonsByKeyword, getPerformanceHistory, pinLesson, unpinLesson, listLessons } from "../lessons.js";
 import { setPositionInstruction } from "../state.js";
+import { analyzeSentiment, addXAccount, removeXAccount, listXAccounts, checkCookieHealth, clearSentimentCache, isCookieExpired, resetCookieState } from "./x.js";
 
 import { getPoolMemory, addPoolNote } from "../pool-memory.js";
 import { addStrategy, listStrategies, getStrategy, setActiveStrategy, removeStrategy } from "../strategy-library.js";
@@ -119,6 +120,23 @@ const toolMap = {
   block_deployer: blockDev,
   unblock_deployer: unblockDev,
   list_blocked_deployers: listBlockedDevs,
+  // X / Twitter Sentiment
+  get_x_sentiment: async ({ mint, lookbackDays }) => {
+    if (!config.xSentiment?.enabled) {
+      return { error: "X sentiment is disabled. Enable via xSentimentEnabled in config." };
+    }
+    const cookieExpired = isCookieExpired();
+    if (cookieExpired) {
+      return { error: "X cookies expired. Refresh X_AUTH_TOKEN and X_CT0 in .env, then restart." };
+    }
+    return analyzeSentiment({ mint, lookbackDays });
+  },
+  add_x_account: addXAccount,
+  remove_x_account: removeXAccount,
+  list_x_accounts: listXAccounts,
+  check_x_cookie_health: checkCookieHealth,
+  reset_x_cookie_state: resetCookieState,
+  clear_x_sentiment_cache: clearSentimentCache,
   add_lesson: ({ rule, tags, pinned, role }) => {
     addLesson(rule, tags || [], { pinned: !!pinned, role: role || null });
     return { saved: true, rule, pinned: !!pinned, role: role || "all" };
@@ -289,6 +307,12 @@ const toolMap = {
       rsiOversold: ["indicators", "rsiOversold", ["chartIndicators", "rsiOversold"]],
       rsiOverbought: ["indicators", "rsiOverbought", ["chartIndicators", "rsiOverbought"]],
       requireAllIntervals: ["indicators", "requireAllIntervals", ["chartIndicators", "requireAllIntervals"]],
+      // x sentiment
+      xSentimentEnabled: ["xSentiment", "enabled"],
+      xSentimentLookbackDays: ["xSentiment", "lookbackDays"],
+      xSentimentMinScore: ["xSentiment", "minScore"],
+      // screening extended
+      maxVolatility: ["screening", "maxVolatility"],
     };
 
     const applied = {};

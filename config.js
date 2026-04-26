@@ -90,6 +90,7 @@ export const config = {
     minTokenAgeHours:   u.minTokenAgeHours   ?? null, // null = no minimum
     maxTokenAgeHours:   u.maxTokenAgeHours   ?? null, // null = no maximum
     athFilterPct:       u.athFilterPct       ?? null, // e.g. -20 = only deploy if price is >= 20% below ATH
+    maxVolatility:       u.maxVolatility       ?? 7,   // max pool volatility (filters high-vol pools)
   },
 
   gmgn: {
@@ -258,6 +259,13 @@ export const config = {
     rsiOverbought: indicatorUserConfig.rsiOverbought ?? 80,
     requireAllIntervals: indicatorUserConfig.requireAllIntervals ?? false,
   },
+
+  // ─── X / Twitter Sentiment ────────────────
+  xSentiment: {
+    enabled: u.xSentimentEnabled ?? true,
+    lookbackDays: u.xSentimentLookbackDays ?? 7,
+    minScore: u.xSentimentMinScore ?? -30,
+  },
 };
 
 /**
@@ -318,6 +326,7 @@ export function reloadScreeningThresholds() {
     if (fresh.maxBotHoldersPct  != null) s.maxBotHoldersPct = fresh.maxBotHoldersPct;
     if (fresh.allowedLaunchpads !== undefined) s.allowedLaunchpads = fresh.allowedLaunchpads;
     if (fresh.blockedLaunchpads !== undefined) s.blockedLaunchpads = fresh.blockedLaunchpads;
+    if (fresh.maxVolatility !== undefined) s.maxVolatility = fresh.maxVolatility;
   } catch { /* ignore */ }
   try {
     const freshGmgn = readJsonIfExists(GMGN_CONFIG_PATH);

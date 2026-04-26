@@ -1,0 +1,25 @@
+{
+  "waves": {
+    "发财-SOL": {
+      "wins": 3,
+      "lastWinAt": "2026-04-23T05:54:03.156Z",
+      "symbol": "发财-SOL"
+    },
+    "CATCOIN-SOL": {
+      "wins": 1,
+      "lastWinAt": "2026-04-24T10:06:29.760Z",
+      "symbol": "CATCOIN-SOL"
+    },
+    "SAM-SOL": {
+      "wins": 3,
+      "lastWinAt": "2026-04-25T05:10:39.421Z",
+      "symbol": "SAM-SOL"
+    },
+    "LASTMAN-SOL": {
+      "wins": 7,
+      "lastWinAt": "2026-04-26T00:25:31.912Z",
+      "symbol": "LASTMAN-SOL"
+    }
+  },
+  "lastUpdated": "2026-04-26T00:25:31.912Z"
+}

@@ -89,3 +89,17 @@ export function logSnapshot(snapshot) {
   const snapshotFile = path.join(LOG_DIR, `snapshots-${dateStr}.jsonl`);
   fs.appendFileSync(snapshotFile, JSON.stringify(entry) + "\n");
 }
+
+/**
+ * Log a sentiment check (for tracking X sentiment performance).
+ */
+export function logSentiment(entry) {
+  const timestamp = new Date().toISOString();
+  const dateStr = timestamp.split("T")[0];
+  const logFile = path.join(LOG_DIR, `sentiment-${dateStr}.jsonl`);
+  fs.appendFileSync(logFile, JSON.stringify({ timestamp, ...entry }) + "\n");
+
+  // Also log to console
+  const msg = JSON.stringify(entry);
+  console.log(`[SENTIMENT] ${msg}`);
+}
