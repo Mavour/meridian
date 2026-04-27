@@ -525,8 +525,16 @@ export async function runScreeningCycle({ silent = false } = {}) {
     // Hard filters after token recon — block launchpads and excessive Jupiter bot holders
     // Skipped for GMGN: platforms already filtered upstream; bundler/bot data from GMGN pipeline
     const filteredOut = [];
-    const passing = allCandidates.filter(({ pool, ti }) => {
+    const passing = allCandidates.filter(({ pool, ti, xs }) => {
       if (pool.gmgn) return true;
+      
+      // X Sentiment hard filter - reject if negative
+      if (config.xSentiment?.enabled && xs?.score != null && xs.score < config.xSentiment.minScore) {
+        log("screening", `Skipping ${pool.name} — negative X sentiment (${xs.score})`);
+        filteredOut.push({ name: pool.name, reason: `negative X sentiment (${xs.score})` });
+        return false;
+      }
+      
       const launchpad = ti?.launchpad ?? null;
       if (launchpad && config.screening.allowedLaunchpads?.length > 0 && !config.screening.allowedLaunchpads.includes(launchpad)) {
         log("screening", `Skipping ${pool.name} — launchpad ${launchpad} not in allow-list`);
