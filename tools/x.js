@@ -342,9 +342,12 @@ export async function analyzeSentiment({ mint, lookbackDays = null }) {
   const avgScore = totalScore / posts.length;
   const normalizedScore = Math.round(avgScore * 100);
 
+  const negThreshold = config.xSentiment?.minScore ?? -30;
+  const posThreshold = Math.abs(negThreshold);
+  
   let sentiment;
-  if (normalizedScore <= -15) sentiment = "NEGATIVE";
-  else if (normalizedScore >= 15) sentiment = "POSITIVE";
+  if (normalizedScore <= negThreshold) sentiment = "NEGATIVE";
+  else if (normalizedScore >= posThreshold) sentiment = "POSITIVE";
   else sentiment = "NEUTRAL";
 
   const topPosts = [...posts]

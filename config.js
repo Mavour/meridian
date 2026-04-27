@@ -263,8 +263,8 @@ export const config = {
   // ─── X / Twitter Sentiment ────────────────
   xSentiment: {
     enabled: u.xSentimentEnabled ?? true,
-    lookbackDays: u.xSentimentLookbackDays ?? 7,
-    minScore: u.xSentimentMinScore ?? -30,
+    lookbackDays: u.xLookbackDays ?? 7,
+    minScore: u.minSentimentScore ?? -30,
   },
 };
 
