@@ -250,7 +250,7 @@ const NEGATIVE_KEYWORDS = [
   "manipulated", "manipulation", "wash trade", "wash trading",
   "suspicious", "sketchy", "red flag", "red flags",
   "getting dumped", "about to dump", "will dump",
-  "paper handed", "paper hands", "rotted", "cabal", "shit", "negative", "exit", "stay away"
+  "paper handed", "paper hands", "rotted", "cabal", "shit", "negative", "exit", "stay away", "scam alert"
 ];
 
 const POSITIVE_KEYWORDS = [
@@ -267,12 +267,8 @@ const POSITIVE_KEYWORDS = [
   "growth", "growing", "trending", "popular",
 ];
 
-function stripUnicodeVariants(text) {
-  return text.normalize("NFKC").replace(/[\u{1D400}-\u{1D7FF}]/gu, "");
-}
-
 function scorePost(text) {
-  const lower = stripUnicodeVariants(text).toLowerCase();
+  const lower = text.toLowerCase();
   let negHits = 0;
   let posHits = 0;
 

@@ -1858,6 +1858,22 @@ export async function closePosition({ position_address, reason }) {
       let finalValueUsd = 0;
       let initialUsd = 0;
       let feesUsd = tracked.total_fees_claimed_usd || 0;
+      let feesSol = null;
+      let pnlSol = null;
+      let solPrice = 0;
+
+      // Get SOL price for SOL value calculations
+      try {
+        const priceRes = await fetch("https://api.jup.ag/price/v2?ids=SOL");
+        const priceData = await priceRes.json();
+        solPrice = parseFloat(priceData?.data?.SOL?.price ?? 0);
+        if (solPrice > 0 && feesUsd > 0) {
+          feesSol = feesUsd / solPrice;
+        }
+      } catch (e) {
+        log("close_warn", `Failed to get SOL price: ${e.message}`);
+      }
+
       try {
         const closedUrl = `https://dlmm.datapi.meteora.ag/positions/${poolAddress}/pnl?user=${wallet.publicKey.toString()}&status=closed&pageSize=50&page=1`;
         for (let attempt = 0; attempt < 6; attempt++) {
@@ -1880,6 +1896,11 @@ export async function closePosition({ position_address, reason }) {
                 finalValueUsd = nextFinalValueUsd;
                 initialUsd    = nextInitialUsd;
                 feesUsd       = nextFeesUsd;
+                // Recalculate SOL values with updated USD values
+                if (solPrice > 0) {
+                  if (feesUsd > 0) feesSol = feesUsd / solPrice;
+                  if (pnlUsd !== 0) pnlSol = pnlUsd / solPrice;
+                }
                 log("close", `Closed PnL from API: pnl=${pnlUsd.toFixed(2)} USD (${pnlPct.toFixed(2)}%), withdrawn=${finalValueUsd.toFixed(2)}, deposited=${initialUsd.toFixed(2)}`);
                 break;
               }
@@ -1907,6 +1928,11 @@ export async function closePosition({ position_address, reason }) {
           } else {
             finalValueUsd = cachedPos.total_value_true_usd ?? cachedPos.total_value_usd ?? 0;
             initialUsd = Math.max(0, finalValueUsd + feesUsd - pnlUsd);
+          }
+          // Calculate SOL values from fallback USD values
+          if (solPrice > 0) {
+            if (feesUsd > 0) feesSol = feesUsd / solPrice;
+            if (pnlUsd !== 0) pnlSol = pnlUsd / solPrice;
           }
           log("close_warn", `Using cached pnl fallback because closed API has not settled yet`);
         }
@@ -1962,8 +1988,11 @@ export async function closePosition({ position_address, reason }) {
         txs: txHashes,
         pnl_usd: pnlUsd,
         pnl_pct: pnlPct,
+        pnl_sol: pnlSol,
         fees_usd: feesUsd,
+        fees_sol: feesSol,
         base_mint: pool.lbPair.tokenXMint.toString(),
+        hold_time_minutes: minutesHeld,
       };
     }
 

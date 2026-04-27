@@ -422,32 +422,38 @@ export async function notifyDeploy({ pair, amountSol, position, tx, priceRange, 
 
 export async function notifyClose({ pair, pnlUsd, pnlPct, reason, feeUsd, deployedSol, strategy, holdTimeMinutes, peakPct, currentPct, feesSol, pnlSol }) {
   if (hasActiveLiveMessage()) return;
-  const sign = pnlUsd >= 0 ? "+" : "";
+  
+  // Convert to numbers to avoid string concatenation issues
+  const pnlUsdNum = Number(pnlUsd) || 0;
+  const feeUsdNum = Number(feeUsd) || 0;
+  const pnlPctNum = Number(pnlPct) || 0;
+  
+  const sign = pnlUsdNum >= 0 ? "+" : "";
   const useSol = config.management.solMode;
 
   // Always calculate SOL values from USD if not provided or if solMode is true
-  let pnlSolVal = pnlSol;
-  let feesSolVal = feesSol;
+  let pnlSolVal = Number(pnlSol) || null;
+  let feesSolVal = Number(feesSol) || null;
 
-  if ((pnlSolVal == null || useSol) && pnlUsd != null && pnlUsd != 0) {
+  if ((pnlSolVal == null || useSol) && pnlUsdNum != null && pnlUsdNum != 0) {
     try {
       const res = await fetch("https://api.jup.ag/price/v2?ids=SOL");
       const data = await res.json();
       const solPrice = parseFloat(data?.data?.SOL?.price ?? 0);
       if (solPrice > 0) {
-        pnlSolVal = pnlUsd / solPrice;
-        if (feesSolVal == null && feeUsd != null && feeUsd > 0) {
-          feesSolVal = feeUsd / solPrice;
+        pnlSolVal = pnlUsdNum / solPrice;
+        if (feesSolVal == null && feeUsdNum != null && feeUsdNum > 0) {
+          feesSolVal = feeUsdNum / solPrice;
         }
       }
     } catch (e) { /* ignore */ }
-  } else if (feesSolVal == null && feeUsd != null && feeUsd > 0) {
+  } else if (feesSolVal == null && feeUsdNum != null && feeUsdNum > 0) {
     try {
       const res = await fetch("https://api.jup.ag/price/v2?ids=SOL");
       const data = await res.json();
       const solPrice = parseFloat(data?.data?.SOL?.price ?? 0);
       if (solPrice > 0) {
-        feesSolVal = feeUsd / solPrice;
+        feesSolVal = feeUsdNum / solPrice;
       }
     } catch (e) { /* ignore */ }
   }
@@ -456,16 +462,16 @@ export async function notifyClose({ pair, pnlUsd, pnlPct, reason, feeUsd, deploy
 
   // PnL: solMode=true → ◎4 decimals, solMode=false → $2 decimals
   if (useSol) {
-    message += `💵 PnL: ${sign}◎${(pnlSolVal ?? 0).toFixed(4)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)\n`;
+    message += `💵 PnL: ${sign}◎${(pnlSolVal ?? 0).toFixed(4)} (${sign}${pnlPctNum.toFixed(2)}%)\n`;
   } else {
-    message += `💵 PnL: ${sign}${(pnlUsd ?? 0).toFixed(2)} (${sign}${(pnlPct ?? 0).toFixed(2)}%)\n`;
+    message += `💵 PnL: ${sign}${pnlUsdNum.toFixed(2)} (${sign}${pnlPctNum.toFixed(2)}%)\n`;
   }
 
   // Fees: solMode=true → ◎ first, solMode=false → $ first
   if (useSol) {
-    message += `💰 Fees earned: ◎${(feesSolVal ?? 0).toFixed(4)} ($${(feeUsd ?? 0).toFixed(2)})\n`;
+    message += `💰 Fees earned: ◎${(feesSolVal ?? 0).toFixed(4)} ($${feeUsdNum.toFixed(2)})\n`;
   } else {
-    message += `💰 Fees earned: $${(feeUsd ?? 0).toFixed(2)} (◎${(feesSolVal ?? 0).toFixed(4)})\n`;
+    message += `💰 Fees earned: $${feeUsdNum.toFixed(2)} (◎${(feesSolVal ?? 0).toFixed(4)})\n`;
   }
 
   if (deployedSol) {
