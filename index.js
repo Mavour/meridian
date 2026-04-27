@@ -243,9 +243,10 @@ export async function runManagementCycle({ silent = false } = {}) {
       for (const r of sentimentResults) {
         if (r.status === "fulfilled" && r.value?.xs) {
           sentimentByPosition.set(r.value.position, r.value.xs);
-          // Check if negative sentiment - warn
+          // Get position name for logging
+          const pos = positionData.find(p => p.position === r.value.position);
           if (r.value.xs.sentiment === "NEGATIVE" && r.value.xs.score < (config.xSentiment.minScore ?? -30)) {
-            log("x_sentiment", `⚠️ Negative sentiment for ${p.pair}: ${r.value.xs.sentiment} (${r.value.xs.score})`);
+            log("x_sentiment", `⚠️ Negative sentiment for ${pos?.pair}: ${r.value.xs.sentiment} (${r.value.xs.score})`);
           }
         }
       }
@@ -294,6 +295,27 @@ export async function runManagementCycle({ silent = false } = {}) {
         actionMap.set(p.position, closeRule);
         continue;
       }
+
+      // 6. Negative X sentiment from trusted accounts (fetch once, show warning every cycle)
+      const tracked = getTrackedPosition(p.position);
+      let xs = sentimentByPosition.get(p.position);
+      let xsWarning = null;
+
+      if (config.xSentiment.enabled && !isCookieExpired() && p.base_mint) {
+        if (tracked?.x_sentiment_result) {
+          // Already checked before - use cached result
+          xs = tracked.x_sentiment_result;
+        } else if (xs && xs.score != null && xs.score < config.xSentiment.minSentimentScore) {
+          // First time negative - save to state
+          saveXSentimentResult(p.position, xs);
+        }
+      }
+
+      // Add warning to report if negative sentiment (from cache or fresh)
+      if (xs && xs.score != null && xs.score < config.xSentiment.minSentimentScore) {
+        xsWarning = `⚠️ X Sentiment: ${xs.sentiment} (${xs.score}) — ${xs.post_count} posts`;
+      }
+
       // Claim rule
       if ((p.unclaimed_fees_usd ?? 0) >= config.management.minClaimAmount) {
         actionMap.set(p.position, { action: "CLAIM" });
@@ -317,7 +339,7 @@ export async function runManagementCycle({ silent = false } = {}) {
       // Add X sentiment warning if negative
       const xs = sentimentByPosition.get(p.position);
       if (xs && xs.sentiment !== "DISABLED" && xs.sentiment !== "COOKIE_EXPIRED" && xs.sentiment !== "NO_ACCOUNTS") {
-        line += `\n⚠️ X: ${xs.sentiment} (${xs.score}) | ${xs.post_count} posts`;
+        line += `\n⚠️ X Sentiment: ${xs.sentiment} (${xs.score}) | ${xs.post_count} posts`;
       }
       if (act.action === "CLOSE" && act.rule === "exit") line += `\n⚡ Trailing TP: ${act.reason}`;
       if (act.action === "CLOSE" && act.rule && act.rule !== "exit") line += `\nRule ${act.rule}: ${act.reason}`;
@@ -619,8 +641,8 @@ export async function runScreeningCycle({ silent = false } = {}) {
           okxTags  ? `  tags: ${okxTags}` : null,
           pool.price_vs_ath_pct != null ? `  ath: price_vs_ath=${pool.price_vs_ath_pct}%${pool.top_cluster_trend ? `, top_cluster=${pool.top_cluster_trend}` : ""}` : null,
           // X Sentiment
-          p.xs && p.xs.sentiment !== "DISABLED" && p.xs.sentiment !== "COOKIE_EXPIRED" && p.xs.sentiment !== "NO_ACCOUNTS" 
-            ? `  Sentiment: ${p.xs.sentiment} — ${p.xs.post_count} post${p.xs.post_count !== 1 ? "s" : ""} (${p.xs.positive_count} pos, ${p.xs.negative_count} neg)` 
+          xs && xs.sentiment !== "DISABLED" && xs.sentiment !== "COOKIE_EXPIRED" && xs.sentiment !== "NO_ACCOUNTS" 
+            ? `  Sentiment: ${xs.sentiment} — ${xs.post_count} post${xs.post_count !== 1 ? "s" : ""} (${xs.positive_count} pos, ${xs.negative_count} neg)` 
             : null,
           `  smart_wallets: ${sw?.in_pool?.length ?? 0} present${sw?.in_pool?.length ? ` → CONFIDENCE BOOST (${sw.in_pool.map(w => w.name).join(", ")})` : ""}`,
           activeBin != null ? `  active_bin: ${activeBin}` : null,
@@ -699,6 +721,8 @@ STEPS:
    <If OKX advanced/risk data exists, list only the fields that actually exist: Risk level, Bundle, Sniper, Suspicious, ATH distance, Rugpull, Wash.>
    <If only rugpull/wash exist, list just those.>
    <If OKX enrichment is missing, write exactly: OKX: unavailable>
+   Sentiment: <one sentence>
+
 
    WHY THIS WON
    <2-4 concise sentences on why this pool won, key risks, and why it still beat the alternatives>
