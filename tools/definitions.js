@@ -539,6 +539,7 @@ is_pool=true means it's a liquidity pool address, not a real holder — filter t
 
 Also returns global_fees_sol — total priority/jito tips paid by ALL traders on this token (NOT Meteora LP fees).
 This is a key signal: low global_fees_sol means transactions are bundled or the token is a scam.
+MIN_TOKEN_FEES_SOL filter is HARDFILTERED in code during screening — tokens below 30 SOL are removed BEFORE the candidate list reaches you.
 
 NOTE: Requires mint address. If you only have a symbol/name, call get_token_info first to resolve the mint.`,
       parameters: {
