@@ -22,6 +22,7 @@ decision-log.json
 hivemind-cache.json
 signal-weights.json
 wave-history.json
+x-accounts.json
 
 # Logs
 logs/

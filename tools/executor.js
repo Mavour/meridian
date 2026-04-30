@@ -577,6 +577,9 @@ export async function executeTool(name, args) {
       } else if (name === "deploy_position") {
         notifyDeploy({ pair: result.pool_name || args.pool_name || args.pool_address?.slice(0, 8), amountSol: args.amount_y ?? args.amount_sol ?? 0, position: result.position, tx: result.txs?.[0] ?? result.tx, priceRange: result.price_range, rangeCoverage: result.range_coverage, binStep: result.bin_step, baseFee: result.base_fee }).catch(() => {});
       } else if (name === "close_position") {
+        // Log full raw result for debugging PnL/fee issues
+        log("close_debug", `RAW_CLOSE_RESULT: ${JSON.stringify(result)}`);
+        
         // Get tracked position for additional data
         const tracked = getTrackedPosition(args.position_address);
         

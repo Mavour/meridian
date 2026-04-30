@@ -1616,10 +1616,12 @@ export async function closePosition({ position_address, reason }) {
           let feesUsd = tracked.total_fees_claimed_usd || 0;
           try {
             const closedUrl = `https://dlmm.datapi.meteora.ag/positions/${poolAddress}/pnl?user=${wallet.publicKey.toString()}&status=closed&pageSize=50&page=1`;
+            log("close_debug", `Fetching PnL from: ${closedUrl}`);
             for (let attempt = 0; attempt < 6; attempt++) {
               const res = await fetch(closedUrl);
               if (res.ok) {
                 const data = await res.json();
+                log("close_debug", `METEORA_PNL_API_RESPONSE: ${JSON.stringify(data)}`);
                 const posEntry = (data.positions || []).find((entry) => entry.positionAddress === position_address);
                 if (posEntry) {
                   pnlUsd = parseFloat(posEntry.pnlUsd || 0);
