@@ -142,6 +142,28 @@ async function validateDeployPoolThresholds(args) {
     };
   }
 
+  // ── HARD GUARD: fees_paid_sol ──────────────────────────────────────────────
+  // This enforces minTokenFeesSol from user-config.json at the code level.
+  // The LLM MUST pass fees_paid_sol when calling deploy_position.
+  // Without this check, the LLM can rationalize past the threshold in its prompt.
+  const minFeesSol = numberOrNull(config.screening.minTokenFeesSol);
+  if (minFeesSol != null && minFeesSol > 0) {
+    const feesPaid = numberOrNull(args.fees_paid_sol);
+    if (feesPaid == null) {
+      return {
+        pass: false,
+        reason: `deploy_position requires fees_paid_sol to enforce the minTokenFeesSol=${minFeesSol} SOL hard rule. Re-fetch token audit data and pass fees_paid_sol explicitly.`,
+      };
+    }
+    if (feesPaid < minFeesSol) {
+      return {
+        pass: false,
+        reason: `HARD RULE VIOLATION: fees_paid_sol ${feesPaid} SOL is below minTokenFeesSol ${minFeesSol} SOL. Deploy blocked — no exceptions regardless of other metrics.`,
+      };
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   return { pass: true };
 }
 
