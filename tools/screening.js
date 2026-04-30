@@ -485,6 +485,7 @@ export async function getTopCandidates({ limit = 10 } = {}) {
         eligible[i].dev_sold_all    = adv.dev_sold_all;
         eligible[i].dex_boost       = adv.dex_boost;
         eligible[i].dex_screener_paid = adv.dex_screener_paid;
+        eligible[i].global_fees_sol = adv.total_fee_sol ?? null; // Map OKX total_fee_sol to global_fees_sol for hard filter
         if (adv.creator && !eligible[i].dev) eligible[i].dev = adv.creator;
       }
       if (risk) {
@@ -511,6 +512,23 @@ export async function getTopCandidates({ limit = 10 } = {}) {
       }
       return true;
     }));
+
+    // Min token fees SOL filter (hard gate - cannot be overridden)
+    // Must be AFTER OKX enrichment where global_fees_sol is populated
+    const minFeesSol = config.screening.minTokenFeesSol;
+    if (minFeesSol) {
+      const before = eligible.length;
+      eligible.splice(0, eligible.length, ...eligible.filter((p) => {
+        const poolGlobalFeesSol = p.global_fees_sol ?? p.gmgn_total_fee_sol ?? null;
+        if (poolGlobalFeesSol != null && poolGlobalFeesSol < minFeesSol) {
+          log("screening", `Filtered low fees ${p.name}: ${poolGlobalFeesSol} SOL < ${minFeesSol} SOL`);
+          pushFilteredReason(filteredOut, p, `fees ${poolGlobalFeesSol} SOL < min ${minFeesSol} SOL`);
+          return false;
+        }
+        return true;
+      }));
+      if (eligible.length < before) log("screening", `Min fees filter removed ${before - eligible.length} pool(s)`);
+    }
 
     // ATH filter — drop pools where price is too close to ATH
     const athFilter = config.screening.athFilterPct;
