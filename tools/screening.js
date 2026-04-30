@@ -3,6 +3,7 @@ import { isBlacklisted } from "../token-blacklist.js";
 import { isDevBlocked, getBlockedDevs } from "../dev-blocklist.js";
 import { log } from "../logger.js";
 import { isBaseMintOnCooldown, isPoolOnCooldown } from "../pool-memory.js";
+import { isTokenWaveBlocked } from "../state.js";
 import { confirmIndicatorPreset } from "./chart-indicators.js";
 import { discoverGmgnPools } from "./gmgn.js";
 
@@ -418,6 +419,11 @@ export async function getTopCandidates({ limit = 10 } = {}) {
       if (isBaseMintOnCooldown(p.base?.mint)) {
         log("screening", `Filtered cooldown token ${p.base?.symbol} (${p.base?.mint?.slice(0, 8)})`);
         pushFilteredReason(filteredOut, p, "token cooldown active");
+        return false;
+      }
+      if (isTokenWaveBlocked(p.base?.mint)) {
+        log("screening", `Filtered wave-blocked token ${p.base?.symbol} (${p.base?.mint?.slice(0, 8)})`);
+        pushFilteredReason(filteredOut, p, "wave blocked (max profitable exits in 24h)");
         return false;
       }
       // Max volatility filter

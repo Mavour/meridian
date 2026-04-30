@@ -10,13 +10,14 @@
 
 import fs from "fs";
 import { log } from "./logger.js";
+import { config } from "./config.js";
 
 const STATE_FILE = "./state.json";
 const WAVE_FILE = "./wave-history.json";
 
 const MAX_RECENT_EVENTS = 20;
 const MAX_INSTRUCTION_LENGTH = 280;
-const MAX_WAVES_BEFORE_BLOCK = 3; // max wins before token is blocked from re-entry
+const MAX_WAVES_BEFORE_BLOCK = () => config?.screening?.maxWavesPerToken ?? 2;
 
 function sanitizeStoredText(text, maxLen = MAX_INSTRUCTION_LENGTH) {
   if (text == null) return null;
@@ -77,7 +78,8 @@ function saveWaves(state) {
  * Get wave history for the last 24 hours.
  * Blocks tokens that have reached MAX_WAVES_BEFORE_BLOCK wins.
  */
-export function getWaveHistory(maxWaves = MAX_WAVES_BEFORE_BLOCK) {
+export function getWaveHistory(maxWaves = null) {
+  const effectiveMax = maxWaves ?? MAX_WAVES_BEFORE_BLOCK();
   const waveState = loadWaves();
   if (!waveState.waves || Object.keys(waveState.waves).length === 0) {
     return { blocked: [], history: {} };
@@ -97,7 +99,7 @@ export function getWaveHistory(maxWaves = MAX_WAVES_BEFORE_BLOCK) {
       wins: data.wins,
       hours_ago: Math.round(hoursAgo * 10) / 10,
     };
-    if (data.wins >= maxWaves) blocked.push(mintOrKey);
+    if (data.wins >= effectiveMax) blocked.push(mintOrKey);
   }
 
   return { blocked, history };
@@ -106,7 +108,7 @@ export function getWaveHistory(maxWaves = MAX_WAVES_BEFORE_BLOCK) {
 /**
  * Quick check — is a specific token mint currently blocked from re-entry?
  */
-export function isTokenWaveBlocked(tokenMint, maxWaves = MAX_WAVES_BEFORE_BLOCK) {
+export function isTokenWaveBlocked(tokenMint, maxWaves = null) {
   const { blocked } = getWaveHistory(maxWaves);
   return blocked.includes(tokenMint);
 }
