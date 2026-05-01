@@ -423,55 +423,37 @@ export async function notifyDeploy({ pair, amountSol, position, tx, priceRange, 
 export async function notifyClose({ pair, pnlUsd, pnlPct, reason, feeUsd, deployedSol, strategy, holdTimeMinutes, peakPct, currentPct, feesSol, pnlSol }) {
   if (hasActiveLiveMessage()) return;
   
-  // Convert to numbers to avoid string concatenation issues
-  const pnlUsdNum = Number(pnlUsd) || 0;
-  const feeUsdNum = Number(feeUsd) || 0;
-  const pnlPctNum = Number(pnlPct) || 0;
-  
-  const sign = pnlUsdNum >= 0 ? "+" : "";
-  const useSol = config.management.solMode;
+  // Convert to numbers — isFinite distinguishes null/missing from genuine zero
+  const pnlUsdNum  = Number.isFinite(Number(pnlUsd))  ? Number(pnlUsd)  : null;
+  const feeUsdNum  = Number.isFinite(Number(feeUsd)) && Number(feeUsd) > 0 ? Number(feeUsd) : null;
+  const pnlPctNum  = Number.isFinite(Number(pnlPct))  ? Number(pnlPct)  : 0;
+  const pnlSolVal  = Number.isFinite(Number(pnlSol))  ? Number(pnlSol)  : null;
+  const feesSolVal = Number.isFinite(Number(feesSol)) && Number(feesSol) > 0 ? Number(feesSol) : null;
 
-  // Always calculate SOL values from USD if not provided or if solMode is true
-  let pnlSolVal = Number(pnlSol) || null;
-  let feesSolVal = Number(feesSol) || null;
-
-  if ((pnlSolVal == null || useSol) && pnlUsdNum != null && pnlUsdNum != 0) {
-    try {
-      const res = await fetch("https://api.jup.ag/price/v2?ids=SOL");
-      const data = await res.json();
-      const solPrice = parseFloat(data?.data?.SOL?.price ?? 0);
-      if (solPrice > 0) {
-        pnlSolVal = pnlUsdNum / solPrice;
-        if (feesSolVal == null && feeUsdNum != null && feeUsdNum > 0) {
-          feesSolVal = feeUsdNum / solPrice;
-        }
-      }
-    } catch (e) { /* ignore */ }
-  } else if (feesSolVal == null && feeUsdNum != null && feeUsdNum > 0) {
-    try {
-      const res = await fetch("https://api.jup.ag/price/v2?ids=SOL");
-      const data = await res.json();
-      const solPrice = parseFloat(data?.data?.SOL?.price ?? 0);
-      if (solPrice > 0) {
-        feesSolVal = feeUsdNum / solPrice;
-      }
-    } catch (e) { /* ignore */ }
-  }
+  // Use pnlPct for sign — avoids wrong sign when pnlUsd rounds to 0
+  const sign   = pnlPctNum >= 0 ? "+" : "";
+  const useSol = config.management?.solMode ?? false;
 
   let message = `🟢 <b>Position Closed</b> — ${pair}\n`;
 
   // PnL: solMode=true → ◎4 decimals, solMode=false → $2 decimals
   if (useSol) {
-    message += `💵 PnL: ${sign}◎${(pnlSolVal ?? 0).toFixed(4)} (${sign}${pnlPctNum.toFixed(2)}%)\n`;
+    const pnlStr = pnlSolVal != null ? `${sign}◎${pnlSolVal.toFixed(4)}` : `${sign}◎?`;
+    message += `💵 PnL: ${pnlStr} (${sign}${pnlPctNum.toFixed(2)}%)\n`;
   } else {
-    message += `💵 PnL: ${sign}${pnlUsdNum.toFixed(2)} (${sign}${pnlPctNum.toFixed(2)}%)\n`;
+    const pnlStr = pnlUsdNum != null ? `${sign}$${pnlUsdNum.toFixed(2)}` : `${sign}$?`;
+    message += `💵 PnL: ${pnlStr} (${sign}${pnlPctNum.toFixed(2)}%)\n`;
   }
 
   // Fees: solMode=true → ◎ first, solMode=false → $ first
   if (useSol) {
-    message += `💰 Fees earned: ◎${(feesSolVal ?? 0).toFixed(4)} ($${feeUsdNum.toFixed(2)})\n`;
+    const feeSolStr = feesSolVal != null ? `◎${feesSolVal.toFixed(4)}` : "◎?";
+    const feeUsdStr = feeUsdNum  != null ? `$${feeUsdNum.toFixed(2)}`  : "$?";
+    message += `💰 Fees earned: ${feeSolStr} (${feeUsdStr})\n`;
   } else {
-    message += `💰 Fees earned: $${feeUsdNum.toFixed(2)} (◎${(feesSolVal ?? 0).toFixed(4)})\n`;
+    const feeUsdStr = feeUsdNum  != null ? `$${feeUsdNum.toFixed(2)}`  : "$?";
+    const feeSolStr = feesSolVal != null ? `◎${feesSolVal.toFixed(4)}` : "◎?";
+    message += `💰 Fees earned: ${feeUsdStr} (${feeSolStr})\n`;
   }
 
   if (deployedSol) {

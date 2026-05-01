@@ -608,16 +608,22 @@ export async function executeTool(name, args) {
         // Calculate SOL values from USD if not provided
         let pnlSol = result.pnl_sol ?? null;
         let feesSolVal = result.fees_sol ?? null;
-        if ((pnlSol == null && result.pnl_usd != null && result.pnl_usd != 0) || (feesSolVal == null && result.fees_usd != null && result.fees_usd != 0)) {
+        if (pnlSol == null || (feesSolVal == null && result.fees_usd != null && result.fees_usd != 0)) {
+          let solPrice = 0;
           try {
             const res = await fetch("https://api.jup.ag/price/v2?ids=SOL");
-            const data = await res.json();
-            const solPrice = parseFloat(data?.data?.SOL?.price ?? 0);
-            if (solPrice > 0) {
-              if (pnlSol == null && result.pnl_usd != null && result.pnl_usd != 0) pnlSol = result.pnl_usd / solPrice;
-              if (feesSolVal == null && result.fees_usd != null && result.fees_usd != 0) feesSolVal = result.fees_usd / solPrice;
-            }
-          } catch (e) { /* ignore */ }
+            if (res.ok) solPrice = parseFloat((await res.json())?.data?.SOL?.price ?? 0);
+          } catch (_) {}
+          if (!(solPrice > 0)) {
+            try {
+              const res = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT");
+              if (res.ok) solPrice = parseFloat((await res.json())?.price ?? 0);
+            } catch (_) {}
+          }
+          if (solPrice > 0) {
+            if (pnlSol == null && result.pnl_usd != null) pnlSol = result.pnl_usd / solPrice;
+            if (feesSolVal == null && result.fees_usd != null && result.fees_usd != 0) feesSolVal = result.fees_usd / solPrice;
+          }
         }
         
         // Calculate hold time from tracked position
