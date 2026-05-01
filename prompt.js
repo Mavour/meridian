@@ -126,7 +126,8 @@ RISK SIGNALS (guidelines — use judgment):
 - rugpull flag from OKX → major negative score penalty and default to SKIP; only override if smart wallets are present and conviction is otherwise high
 - wash trading flag from OKX → treat as disqualifying even if other metrics look attractive
 - PVP symbol conflict (same exact symbol across multiple mints) → major negative. Avoid unless the setup is exceptional and clearly stronger than the competing symbol variants.
-- no narrative + no smart wallets → skip
+- no narrative (unavailable, still generating, or empty) → skip regardless of other signals. Narrative is required.
+- no smart wallets alone → acceptable if narrative is strong and other metrics are solid. Smart wallets are a bonus, not a requirement.
 
 NARRATIVE QUALITY (your main judgment call):
 - GOOD: specific origin — real event, viral moment, named entity, active community

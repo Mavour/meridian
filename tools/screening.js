@@ -525,7 +525,7 @@ export async function getTopCandidates({ limit = 10 } = {}) {
     if (minFeesSol) {
       const before = eligible.length;
       eligible.splice(0, eligible.length, ...eligible.filter((p) => {
-        const poolGlobalFeesSol = p.global_fees_sol ?? p.gmgn_total_fee_sol ?? null;
+        const poolGlobalFeesSol = p.gmgn_total_fee_sol ?? p.global_fees_sol ?? null; // GMGN token total fees take priority over OKX pool-specific fees
         if (poolGlobalFeesSol != null && poolGlobalFeesSol < minFeesSol) {
           log("screening", `Filtered low fees ${p.name}: ${poolGlobalFeesSol} SOL < ${minFeesSol} SOL`);
           pushFilteredReason(filteredOut, p, `fees ${poolGlobalFeesSol} SOL < min ${minFeesSol} SOL`);
