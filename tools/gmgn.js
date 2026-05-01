@@ -10,6 +10,7 @@ setDefaultResultOrder("ipv4first");
 const METEORA_DLMM_API = "https://dlmm.datapi.meteora.ag";
 const SUPPORTED_INTERVALS = new Set(["1m", "5m", "1h", "6h", "24h"]);
 let lastGmgnRequestAt = 0;
+let _paceLock = Promise.resolve(); // mutex — prevents race condition in concurrent callers
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -18,9 +19,13 @@ function sleep(ms) {
 async function paceGmgnRequest() {
   const delayMs = Math.max(0, Number(config.gmgn?.requestDelayMs ?? 2500));
   if (!delayMs) return;
-  const elapsed = Date.now() - lastGmgnRequestAt;
-  if (elapsed < delayMs) await sleep(delayMs - elapsed);
-  lastGmgnRequestAt = Date.now();
+  // Chain onto the lock so concurrent callers queue up, not fire simultaneously
+  _paceLock = _paceLock.then(async () => {
+    const elapsed = Date.now() - lastGmgnRequestAt;
+    if (elapsed < delayMs) await sleep(delayMs - elapsed);
+    lastGmgnRequestAt = Date.now();
+  });
+  await _paceLock;
 }
 
 function getApiKey() {
@@ -574,14 +579,13 @@ export async function discoverGmgnPools({ limit = 10 } = {}) {
   for (const { token, info, infoCheck } of s2) {
     const mint = token.address;
     try {
-      const [holdersPayload, tradersPayload] = await Promise.all([
-        gmgnFetch("/v1/market/token_top_holders", {
-          params: { chain: "sol", address: mint, limit: g.holdersLimit || 100, order_by: "amount_percentage", direction: "desc" },
-        }),
-        gmgnFetch("/v1/market/token_top_traders", {
-          params: { chain: "sol", address: mint, limit: g.holdersLimit || 100, order_by: "profit", direction: "desc" },
-        }),
-      ]);
+      // Sequential — not Promise.all — to avoid GMGN rate limit on concurrent requests
+      const holdersPayload = await gmgnFetch("/v1/market/token_top_holders", {
+        params: { chain: "sol", address: mint, limit: g.holdersLimit || 100, order_by: "amount_percentage", direction: "desc" },
+      });
+      const tradersPayload = await gmgnFetch("/v1/market/token_top_traders", {
+        params: { chain: "sol", address: mint, limit: g.holdersLimit || 100, order_by: "profit", direction: "desc" },
+      });
       const holders = unwrapList(holdersPayload, ["list", "holders", "data"]);
       const traders = unwrapList(tradersPayload, ["list", "traders", "data"]);
       const holdersCheck = analyzeHoldersAndTraders(holders, traders);
