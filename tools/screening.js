@@ -5,7 +5,7 @@ import { log } from "../logger.js";
 import { isBaseMintOnCooldown, isPoolOnCooldown } from "../pool-memory.js";
 import { isTokenWaveBlocked } from "../state.js";
 import { confirmIndicatorPreset } from "./chart-indicators.js";
-import { discoverGmgnPools } from "./gmgn.js";
+import { discoverGmgnPools, fetchGmgnTokenFees } from "./gmgn.js";
 
 const DATAPI_JUP = "https://datapi.jup.ag/v1";
 
@@ -518,6 +518,19 @@ export async function getTopCandidates({ limit = 10 } = {}) {
       }
       return true;
     }));
+
+    // Enrich fees with GMGN token total_fee for non-GMGN sources (meteora/okx).
+    // OKX total_fee_sol is pool-specific and often lower than the GMGN chart value.
+    // GMGN total_fee covers all pools for the token — this is what users configure against.
+    if (source !== "gmgn" && eligible.length > 0 && config.gmgn?.apiKey) {
+      await Promise.allSettled(
+        eligible.map(async (p) => {
+          if (!p.base?.mint) return;
+          const gmgnFees = await fetchGmgnTokenFees(p.base.mint);
+          if (gmgnFees != null) p.gmgn_total_fee_sol = gmgnFees;
+        })
+      );
+    }
 
     // Min token fees SOL filter (hard gate - cannot be overridden)
     // Must be AFTER OKX enrichment where global_fees_sol is populated

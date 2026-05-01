@@ -522,6 +522,20 @@ async function checkBounceSetup(mint) {
   };
 }
 
+export async function fetchGmgnTokenFees(mint) {
+  // Fetch token-level total fees from GMGN — matches value shown on GMGN chart.
+  // Used by non-GMGN screening paths (meteora/okx) to get accurate fee data.
+  try {
+    const payload = await gmgnFetch("/v1/token/info", { params: { chain: "sol", address: mint } });
+    const info = payload?.data?.data || payload?.data || payload;
+    const totalFee = parseFloat(info?.total_fee ?? 0);
+    return totalFee > 0 ? totalFee : null;
+  } catch (e) {
+    log("gmgn", `fetchGmgnTokenFees failed for ${mint?.slice(0, 8)}: ${e.message}`);
+    return null;
+  }
+}
+
 export async function discoverGmgnPools({ limit = 10 } = {}) {
   const g = config.gmgn;
   const filtered = [];
