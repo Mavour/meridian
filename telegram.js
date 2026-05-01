@@ -434,7 +434,7 @@ export async function notifyClose({ pair, pnlUsd, pnlPct, reason, feeUsd, deploy
   const sign   = pnlPctNum >= 0 ? "+" : "";
   const useSol = config.management?.solMode ?? false;
 
-  let message = `🟢 <b>Position Closed</b> — ${pair}\n`;
+  let message = `🟢 <b>Position Closed</b> — ${pair}\n\n`;
 
   // PnL: solMode=true → ◎4 decimals, solMode=false → $2 decimals
   if (useSol) {

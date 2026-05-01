@@ -522,6 +522,28 @@ async function checkBounceSetup(mint) {
   };
 }
 
+export async function fetchGmgnTokenInfo(mint) {
+  // Returns condensed token info from GMGN for narrative fallback.
+  try {
+    const payload = await gmgnFetch("/v1/token/info", { params: { chain: "sol", address: mint } });
+    const info = payload?.data?.data || payload?.data || payload;
+    if (!info?.symbol) return null;
+    return {
+      name:      info.name     || null,
+      symbol:    info.symbol   || null,
+      description: info.link?.description || null,
+      website:   info.link?.website      || null,
+      twitter:   info.link?.twitter_username ? `https://twitter.com/${info.link.twitter_username}` : null,
+      telegram:  info.link?.telegram     || null,
+      launchpad: info.launchpad_platform || info.launchpad || null,
+      cto_flag:  info.dev?.cto_flag === 1,
+    };
+  } catch (e) {
+    log("gmgn", `fetchGmgnTokenInfo failed for ${mint?.slice(0, 8)}: ${e.message}`);
+    return null;
+  }
+}
+
 export async function fetchGmgnTokenFees(mint) {
   // Fetch token-level total fees from GMGN — matches value shown on GMGN chart.
   // Used by non-GMGN screening paths (meteora/okx) to get accurate fee data.
