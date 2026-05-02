@@ -60,7 +60,7 @@ IMPORTANT:
 - Rules 2 and 3 are NOT stop losses — they are proactive exits to protect capital from silent IL decay.
 
 ${lessons ? `LESSONS LEARNED:\n${lessons}\n` : ""}Timestamp: ${new Date().toISOString()}
-\`;
+`;
   }
 
   let basePrompt = `You are an autonomous DLMM LP (Liquidity Provider) agent operating on Meteora, Solana.
