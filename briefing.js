@@ -2,6 +2,15 @@ import fs from "fs";
 import { log } from "./logger.js";
 import { getPerformanceSummary } from "./lessons.js";
 
+function escHtml(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 const STATE_FILE = "./state.json";
 const LESSONS_FILE = "./lessons.json";
 
@@ -46,7 +55,7 @@ export async function generateBriefing() {
     "",
     `<b>Lessons Learned:</b>`,
     lessonsLast24h.length > 0
-      ? lessonsLast24h.map(l => `• ${l.rule}`).join("\n")
+      ? lessonsLast24h.map(l => `• ${escHtml(l.rule)}`).join("\n")
       : "• No new lessons recorded overnight.",
     "",
     `<b>Current Portfolio:</b>`,
