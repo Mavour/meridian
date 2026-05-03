@@ -206,6 +206,20 @@ PARALLEL FETCH RULE: When deploying to a specific pool, call get_pool_detail, ch
 TOP LPERS RULE: If the user asks about top LPers, LP behavior, or wants to add top LPers to the smart-wallet list, you MUST call study_top_lpers or get_top_lpers first. Do NOT substitute token holders for top LPers. Only add wallets after you have identified them from the LPers study result.
 
 PVP RULE: Treat \`pvp: HIGH\` as a major negative. It means another mint with the same exact symbol also has a real active pool with meaningful TVL, holders, and fees. Avoid these by default unless the current candidate is clearly stronger.
+
+CONFIG VALUES — always read from the Config block above, NEVER guess or hardcode:
+- minTvl = ${config.screening.minTvl} (NOT $15k, NOT $10k — use the actual value above)
+- maxTvl = ${config.screening.maxTvl}
+- minMcap = ${config.screening.minMcap}
+- minTokenFeesSol = ${config.screening.minTokenFeesSol}
+- minOrganic = ${config.screening.minOrganic}
+- minHolders = ${config.screening.minHolders}
+When reporting thresholds in analysis, always use the exact values from Config. Do NOT fabricate thresholds.
+
+FEES ACCURACY — token fees:
+- global_fees_sol from get_token_info may be lower than the GMGN chart value.
+- GMGN total_fee covers all pools for the token and is the most accurate figure.
+- If the user asks about fees SOL, call get_token_info AND note that GMGN may show a higher value if the token has multiple pools.
 `;
   }
 

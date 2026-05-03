@@ -1,44 +1,18 @@
 const DATAPI_BASE = "https://datapi.jup.ag/v1";
 
 /**
- * Get the narrative/story behind a token.
- * Primary: Jupiter ChainInsight. Fallback: GMGN token info (description, links, tags).
- * ChainInsight has limited coverage — GMGN fallback ensures tokens with real communities
- * are not rejected just because ChainInsight has no data for them.
+ * Get the narrative/story behind a token from Jupiter ChainInsight.
+ * Useful for understanding if a token has a real community/theme vs nothing.
  */
 export async function getTokenNarrative({ mint }) {
-  // 1. Try Jupiter ChainInsight first
-  try {
-    const res = await fetch(`${DATAPI_BASE}/chaininsight/narrative/${mint}`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.narrative) {
-        return { mint, narrative: data.narrative, status: data.status, source: "chaininsight" };
-      }
-    }
-  } catch (_) {}
-
-  // 2. Fallback: build narrative from GMGN token info
-  try {
-    const { fetchGmgnTokenInfo } = await import("./gmgn.js");
-    const info = await fetchGmgnTokenInfo(mint);
-    if (info) {
-      const parts = [];
-      if (info.name && info.symbol) parts.push(`${info.name} (${info.symbol})`);
-      if (info.description)         parts.push(info.description);
-      if (info.website)             parts.push(`Website: ${info.website}`);
-      if (info.twitter)             parts.push(`Twitter: ${info.twitter}`);
-      if (info.telegram)            parts.push(`Telegram: ${info.telegram}`);
-      if (info.launchpad)           parts.push(`Launched via ${info.launchpad}`);
-      if (info.cto_flag)            parts.push("Community takeover (CTO)");
-      if (parts.length > 1) {
-        return { mint, narrative: parts.join(" | "), status: "gmgn_fallback", source: "gmgn" };
-      }
-    }
-  } catch (_) {}
-
-  // 3. Nothing available
-  return { mint, narrative: null, status: "unavailable", source: "none" };
+  const res = await fetch(`${DATAPI_BASE}/chaininsight/narrative/${mint}`);
+  if (!res.ok) throw new Error(`Narrative API error: ${res.status}`);
+  const data = await res.json();
+  return {
+    mint,
+    narrative: data.narrative || null,
+    status: data.status,
+  };
 }
 
 /**
@@ -105,6 +79,16 @@ export async function getTokenInfo({ query }) {
       results[0].top_cluster_trend = clusters[0]?.trend ?? null;
       results[0].clusters          = clusters;
     }
+
+    // Enrich global_fees_sol with GMGN total_fee — matches GMGN chart value
+    // OKX/Jupiter fees only cover one pool; GMGN covers all pools for the token
+    try {
+      const { fetchGmgnTokenFees } = await import("./gmgn.js");
+      const gmgnFees = await fetchGmgnTokenFees(results[0].mint);
+      if (gmgnFees != null && gmgnFees > 0) {
+        results[0].global_fees_sol = gmgnFees;
+      }
+    } catch (_) {}
   }
 
   return { found: true, query, results };
