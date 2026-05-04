@@ -73,6 +73,9 @@ export const config = {
     minHolders:        u.minHolders        ?? 500,
     minMcap:           u.minMcap           ?? 150_000,
     maxMcap:           u.maxMcap           ?? 10_000_000,
+    maxWavesPerToken:  u.maxWavesPerToken  ?? 3,   // block token after N wins in window
+    maxLossesPerToken: u.maxLossesPerToken ?? 1,   // block token after N losses in window
+    waveBlockHours:    u.waveBlockHours    ?? 48,  // how long wave block lasts (hours)
     minBinStep:        u.minBinStep        ?? 80,
     maxBinStep:        u.maxBinStep        ?? 125,
     timeframe:         u.timeframe         ?? "5m",

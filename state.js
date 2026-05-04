@@ -17,7 +17,9 @@ const WAVE_FILE = "./wave-history.json";
 
 const MAX_RECENT_EVENTS = 20;
 const MAX_INSTRUCTION_LENGTH = 280;
-const MAX_WAVES_BEFORE_BLOCK = () => config?.screening?.maxWavesPerToken ?? 2;
+const MAX_WAVES_BEFORE_BLOCK  = () => config?.screening?.maxWavesPerToken  ?? 3;
+const MAX_LOSSES_BEFORE_BLOCK = () => config?.screening?.maxLossesPerToken ?? 1; // block after N losses in window
+const WAVE_BLOCK_HOURS        = () => config?.screening?.waveBlockHours    ?? 48; // how long wave block lasts
 
 function sanitizeStoredText(text, maxLen = MAX_INSTRUCTION_LENGTH) {
   if (text == null) return null;
@@ -89,17 +91,30 @@ export function getWaveHistory(maxWaves = null) {
   const blocked = [];
   const history = {};
 
+  const blockHours = WAVE_BLOCK_HOURS();
+  const maxLosses  = MAX_LOSSES_BEFORE_BLOCK();
+
   for (const [mintOrKey, data] of Object.entries(waveState.waves)) {
-    if (!data.lastWinAt) continue;
-    const hoursAgo = (now - new Date(data.lastWinAt).getTime()) / 3_600_000;
-    if (hoursAgo >= 24) continue;
+    const lastActivity = data.lastLossAt || data.lastWinAt;
+    if (!lastActivity) continue;
+    const hoursAgo = (now - new Date(lastActivity).getTime()) / 3_600_000;
+    if (hoursAgo >= blockHours) continue;
+
+    const winHoursAgo  = data.lastWinAt  ? (now - new Date(data.lastWinAt).getTime())  / 3_600_000 : null;
+    const lossHoursAgo = data.lastLossAt ? (now - new Date(data.lastLossAt).getTime()) / 3_600_000 : null;
 
     history[mintOrKey] = {
-      symbol: data.symbol || mintOrKey,
-      wins: data.wins,
-      hours_ago: Math.round(hoursAgo * 10) / 10,
+      symbol:        data.symbol || mintOrKey,
+      wins:          data.wins   || 0,
+      losses:        data.losses || 0,
+      win_hours_ago:  winHoursAgo  != null ? Math.round(winHoursAgo  * 10) / 10 : null,
+      loss_hours_ago: lossHoursAgo != null ? Math.round(lossHoursAgo * 10) / 10 : null,
     };
-    if (data.wins >= effectiveMax) blocked.push(mintOrKey);
+
+    // Block if: too many wins in window OR any loss in window
+    const tooManyWins = data.wins  >= effectiveMax && winHoursAgo  != null && winHoursAgo  < blockHours;
+    const tooManyLoss = (data.losses || 0) >= maxLosses && lossHoursAgo != null && lossHoursAgo < blockHours;
+    if (tooManyWins || tooManyLoss) blocked.push(mintOrKey);
   }
 
   return { blocked, history };
@@ -268,7 +283,7 @@ export function recordClose(position_address, reason, pnl_pct = null) {
 
     if (tokenKey) {
       if (!waveState.waves[tokenKey]) {
-        waveState.waves[tokenKey] = { wins: 0, lastWinAt: null, symbol: tokenSymbol };
+        waveState.waves[tokenKey] = { wins: 0, losses: 0, lastWinAt: null, lastLossAt: null, symbol: tokenSymbol };
       }
 
       waveState.waves[tokenKey].wins += 1;
@@ -276,6 +291,19 @@ export function recordClose(position_address, reason, pnl_pct = null) {
       waveState.waves[tokenKey].symbol = tokenSymbol;
       saveWaves(waveState);
       log("state", `Wave #${waveState.waves[tokenKey].wins} recorded for ${tokenSymbol} (${tokenKey}) in wave-history.json`);
+    }
+
+    // Track losses too — used for wave block enforcement
+    const isLossClose = pnl_pct != null && pnl_pct < 0;
+    if (isLossClose && tokenKey) {
+      if (!waveState.waves[tokenKey]) {
+        waveState.waves[tokenKey] = { wins: 0, losses: 0, lastWinAt: null, lastLossAt: null, symbol: tokenSymbol };
+      }
+      waveState.waves[tokenKey].losses = (waveState.waves[tokenKey].losses || 0) + 1;
+      waveState.waves[tokenKey].lastLossAt = new Date().toISOString();
+      waveState.waves[tokenKey].symbol = tokenSymbol;
+      saveWaves(waveState);
+      log("state", `Loss recorded for ${tokenSymbol} (${tokenKey}) — total losses: ${waveState.waves[tokenKey].losses}`);
     }
   }
 

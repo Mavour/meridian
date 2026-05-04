@@ -35,7 +35,14 @@ TIME-AWARE EXIT RULES — check these IN ORDER for each position:
 RULE 1 — STOP LOSS / TRAILING TP (highest priority):
 If an exit alert is already fired (stop loss or trailing TP), close immediately. No further analysis needed.
 
-RULE 2 — SLOW BLEED PROTECTION:
+RULE 2 — NEGATIVE SENTIMENT EXIT:
+If sentiment is NEGATIVE (score < 0) AND age_minutes >= 30, apply this logic:
+- If pnl_pct >= 0 (break-even or profit): CLOSE immediately — lock in gains before sentiment drives price down further.
+- If pnl_pct is between -3% and 0% (small loss): HOLD and monitor — wait for price to recover to BEP, then close.
+- If pnl_pct < -3% (significant loss): do NOT close here — let stop loss handle it, closing now locks in too much loss.
+Rationale: negative sentiment signals distribution risk. Exit at BEP or better. Do NOT panic-sell into a loss — wait for recovery first unless stop loss triggers.
+
+RULE 3 — SLOW BLEED PROTECTION:
 If ALL of these are true → CLOSE:
 - age_minutes >= ${config.management.slowBleedMinAge ?? 60}
 - pnl_pct is between ${config.management.slowBleedMinPnl ?? -3}% and ${config.management.slowBleedMaxPnl ?? 2}% (small profit or shallow loss)
@@ -43,14 +50,14 @@ If ALL of these are true → CLOSE:
 - in_range = true (this is IL accumulation, not OOR issue)
 Rationale: token is slowly bleeding IL. Fees are insufficient to cover it. Exit in small loss/profit before it becomes a big loss.
 
-RULE 3 — TIME LIMIT WITH THIN MARGIN:
+RULE 4 — TIME LIMIT WITH THIN MARGIN:
 If ALL of these are true → CLOSE:
 - age_minutes >= ${config.management.maxHoldMinutes ?? 120}
 - pnl_pct < ${config.management.maxHoldMinPnlPct ?? 3}% (not in meaningful profit)
 - fee_per_tvl_24h < ${config.management.minFeePerTvl24h ?? 7}%
 Rationale: held long enough, not generating real yield, not in significant profit. Better to redeploy capital.
 
-RULE 4 — HEALTHY POSITION (STAY):
+RULE 5 — HEALTHY POSITION (STAY):
 If none of the above apply AND position is healthy (good fees OR meaningful profit) → STAY.
 Do NOT close positions that are actively generating yield >= ${config.management.minFeePerTvl24h ?? 7}% fee/tvl.
 
