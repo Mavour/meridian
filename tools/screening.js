@@ -313,18 +313,31 @@ export async function discoverPools({
             .then((r) => r.ok ? r.json() : null)
             .then((d) => {
               const t = Array.isArray(d) ? d[0] : d;
-              return { pool: p.pool, dev: t?.dev || null };
+              return { pool: p.pool, dev: t?.dev || null, tags: t?.tags || [] };
             })
-            .catch(() => ({ pool: p.pool, dev: null }))
+            .catch(() => ({ pool: p.pool, dev: null, tags: [] }))
         )
       );
       const devMap = {};
+      const tagMap = {};
       for (const r of devResults) {
-        if (r.status === "fulfilled") devMap[r.value.pool] = r.value.dev;
+        if (r.status === "fulfilled") {
+          devMap[r.value.pool] = r.value.dev;
+          tagMap[r.value.pool] = r.value.tags || [];
+        }
       }
       pools = pools.filter((p) => {
         const dev = devMap[p.pool];
+        const tags = tagMap[p.pool] || [];
         if (dev) p.dev = dev; // enrich in-place
+
+        // Block Token-2022 — has transfer tax that silently erodes LP profit
+        if (tags.includes("token-2022")) {
+          log("screening", `Filtered Token-2022 token ${p.base?.symbol} (${p.base?.mint?.slice(0, 8)}) — transfer tax incompatible with LP strategy`);
+          pushFilteredReason(filteredOut, p, "Token-2022 (transfer tax)");
+          return false;
+        }
+
         if (dev && isDevBlocked(dev)) {
           log("dev_blocklist", `Filtered blocked deployer (jup) ${dev.slice(0, 8)} token ${p.base?.symbol}`);
           return false;
