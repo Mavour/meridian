@@ -123,9 +123,17 @@ export function getWaveHistory(maxWaves = null) {
 /**
  * Quick check — is a specific token mint currently blocked from re-entry?
  */
-export function isTokenWaveBlocked(tokenMint, maxWaves = null) {
+export function isTokenWaveBlocked(tokenMintOrSymbol, maxWaves = null) {
   const { blocked } = getWaveHistory(maxWaves);
-  return blocked.includes(tokenMint);
+  if (!tokenMintOrSymbol) return false;
+  const upper = tokenMintOrSymbol.toUpperCase().trim();
+  // Match by exact key OR by symbol suffix (e.g. "APPLE" matches "APPLE-SOL")
+  return blocked.some(key => {
+    if (key === tokenMintOrSymbol) return true;
+    if (key.toUpperCase() === upper) return true;
+    if (key.toUpperCase().startsWith(upper + "-")) return true;
+    return false;
+  });
 }
 
 // ─── Position Registry ─────────────────────────────────────────
@@ -270,40 +278,46 @@ export function recordClose(position_address, reason, pnl_pct = null) {
   const isProfitClose = (pnl_pct != null && pnl_pct > 0) ||
     /trailing.?tp|take.?profit|fee.?target|profit.?target|\btp\b/i.test(reason || "");
 
-  if (isProfitClose) {
+  // Wave tracking — record wins AND losses, keyed by pool_name AND token_mint
+  // so both lookup paths (symbol or mint) work correctly
+  {
     const waveState = loadWaves();
-
-    const tokenKey = pos.token_mint
-      || (pos.pool_name ? pos.pool_name.split("/")[0].trim().toUpperCase() : null)
-      || pos.pool;
 
     const tokenSymbol = pos.pool_name
       ? pos.pool_name.split("/")[0].trim().toUpperCase()
-      : tokenKey;
+      : null;
 
-    if (tokenKey) {
-      if (!waveState.waves[tokenKey]) {
-        waveState.waves[tokenKey] = { wins: 0, losses: 0, lastWinAt: null, lastLossAt: null, symbol: tokenSymbol };
+    // Use BOTH keys: pool_name (e.g. "APPLE-SOL") and token_mint (e.g. "Aw5Sxk...")
+    // This ensures isTokenWaveBlocked works regardless of which key is used for lookup
+    const keys = [];
+    if (tokenSymbol) keys.push(tokenSymbol);
+    if (pos.token_mint && pos.token_mint !== tokenSymbol) keys.push(pos.token_mint);
+    if (keys.length === 0 && pos.pool) keys.push(pos.pool);
+
+    const now = new Date().toISOString();
+
+    for (const key of keys) {
+      if (!waveState.waves[key]) {
+        waveState.waves[key] = { wins: 0, losses: 0, lastWinAt: null, lastLossAt: null, symbol: tokenSymbol || key };
       }
+      waveState.waves[key].symbol = tokenSymbol || key;
 
-      waveState.waves[tokenKey].wins += 1;
-      waveState.waves[tokenKey].lastWinAt = new Date().toISOString();
-      waveState.waves[tokenKey].symbol = tokenSymbol;
-      saveWaves(waveState);
-      log("state", `Wave #${waveState.waves[tokenKey].wins} recorded for ${tokenSymbol} (${tokenKey}) in wave-history.json`);
+      if (isProfitClose) {
+        waveState.waves[key].wins += 1;
+        waveState.waves[key].lastWinAt = now;
+      } else if (pnl_pct != null && pnl_pct < 0) {
+        waveState.waves[key].losses = (waveState.waves[key].losses || 0) + 1;
+        waveState.waves[key].lastLossAt = now;
+      }
     }
 
-    // Track losses too — used for wave block enforcement
-    const isLossClose = pnl_pct != null && pnl_pct < 0;
-    if (isLossClose && tokenKey) {
-      if (!waveState.waves[tokenKey]) {
-        waveState.waves[tokenKey] = { wins: 0, losses: 0, lastWinAt: null, lastLossAt: null, symbol: tokenSymbol };
-      }
-      waveState.waves[tokenKey].losses = (waveState.waves[tokenKey].losses || 0) + 1;
-      waveState.waves[tokenKey].lastLossAt = new Date().toISOString();
-      waveState.waves[tokenKey].symbol = tokenSymbol;
-      saveWaves(waveState);
-      log("state", `Loss recorded for ${tokenSymbol} (${tokenKey}) — total losses: ${waveState.waves[tokenKey].losses}`);
+    waveState.lastUpdated = now;
+    saveWaves(waveState);
+
+    if (isProfitClose) {
+      log("state", `Wave #${waveState.waves[keys[0]]?.wins} recorded for ${tokenSymbol} in wave-history.json`);
+    } else if (pnl_pct != null && pnl_pct < 0) {
+      log("state", `Loss recorded for ${tokenSymbol} — total losses: ${waveState.waves[keys[0]]?.losses}`);
     }
   }
 
