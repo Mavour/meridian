@@ -18,6 +18,7 @@ function readJsonIfExists(filePath) {
 
 const u = readJsonIfExists(USER_CONFIG_PATH);
 const gmgnUserConfig = readJsonIfExists(GMGN_CONFIG_PATH);
+export const MIN_SAFE_BINS_BELOW = 35;
 
 // Apply wallet/RPC from user-config if not already in env
 if (u.rpcUrl)    process.env.RPC_URL            ||= u.rpcUrl;
