@@ -392,7 +392,15 @@ Execute the required actions. Do NOT re-evaluate CLOSE/CLAIM — rules already a
 After executing, write a brief one-line result per position.
       `, config.llm.maxSteps, [], "MANAGER", config.llm.managementModel, 2048, {
         onToolStart: async ({ name }) => { await liveMessage?.toolStart(name); },
-        onToolFinish: async ({ name, result, success }) => { await liveMessage?.toolFinish(name, result, success); },
+        onToolFinish: async ({ name, result, success }) => {
+          await liveMessage?.toolFinish(name, result, success);
+          // Track closed pools for ATH re-entry prevention in next screening cycle
+          if (name === "close_position" && success && result?.pool) {
+            _recentlyClosedPools.set(result.pool, { closedAt: Date.now(), baseMint: result.base_mint ?? null, pnlPct: result.pnl_pct ?? null });
+            if (result.base_mint) _recentlyClosedPools.set(`mint:${result.base_mint}`, { closedAt: Date.now(), pool: result.pool, pnlPct: result.pnl_pct ?? null });
+            log("cron", `Tracking closed pool ${result.pool_name || result.pool?.slice(0,8)} for ATH re-entry guard`);
+          }
+        },
       });
 
       mgmtReport += `\n\n${content}`;
@@ -406,7 +414,11 @@ After executing, write a brief one-line result per position.
     const afterCount = afterPositions?.positions?.length ?? 0;
     if (afterCount < config.risk.maxPositions && Date.now() - _screeningLastTriggered > screeningCooldownMs) {
       log("cron", `Post-management: ${afterCount}/${config.risk.maxPositions} positions — triggering screening`);
-      runScreeningCycle().catch((e) => log("cron_error", `Triggered screening failed: ${e.message}`));
+      // Pass recently closed pool info so screening can do fresh ATH/price check
+      const closedPools = Array.from(_recentlyClosedPools.entries())
+        .filter(([, v]) => Date.now() - v.closedAt < 60 * 60 * 1000) // last 1 hour
+        .map(([pool, v]) => ({ pool, ...v }));
+      runScreeningCycle({ recentlyClosed: closedPools }).catch((e) => log("cron_error", `Triggered screening failed: ${e.message}`));
     }
   } catch (error) {
     log("cron_error", `Management cycle failed: ${error.message}`);
@@ -428,7 +440,7 @@ After executing, write a brief one-line result per position.
   return mgmtReport;
 }
 
-export async function runScreeningCycle({ silent = false } = {}) {
+export async function runScreeningCycle({ silent = false, recentlyClosed = [] } = {}) {
   if (_screeningBusy) {
     log("cron", "Screening skipped — previous cycle still running");
     return null;
@@ -679,10 +691,22 @@ export async function runScreeningCycle({ silent = false } = {}) {
 
     const weightsSummary = config.darwin?.enabled ? getWeightsSummary() : null;
 
-    const { content } = await agentLoop(`
+    const recentlyClosedBlock = recentlyClosed.length > 0
+  ? `
+WARNING — RECENTLY CLOSED POOLS (last 1h):
+` +
+    recentlyClosed
+      .filter(r => !r.pool?.startsWith("mint:"))
+      .map(r => `- ${r.pool?.slice(0,8)} | closed ${Math.round((Date.now()-r.closedAt)/60000)}m ago | pnl: ${r.pnlPct?.toFixed(2) ?? "?"}%
+  ⚠️ Re-check current price vs entry — do NOT deploy if price has moved significantly above previous entry (ATH re-entry risk).`)
+      .join("
+")
+  : "";
+
+const { content } = await agentLoop(`
 SCREENING CYCLE
 ${strategyBlock}
-Positions: ${prePositions.total_positions}/${config.risk.maxPositions} | SOL: ${currentBalance.sol.toFixed(3)} | Deploy: ${deployAmount} SOL
+Positions: ${prePositions.total_positions}/${config.risk.maxPositions} | SOL: ${currentBalance.sol.toFixed(3)} | Deploy: ${deployAmount} SOL${recentlyClosedBlock}
 
 PRE-LOADED CANDIDATES (${passing.length} pools):
 ${candidateBlocks.join("\n\n")}

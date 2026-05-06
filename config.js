@@ -73,6 +73,9 @@ export const config = {
     minHolders:        u.minHolders        ?? 500,
     minMcap:           u.minMcap           ?? 150_000,
     maxMcap:           u.maxMcap           ?? 10_000_000,
+    blockedSymbols:    u.blockedSymbols    ?? [],  // extra symbols to block beyond hardcoded list
+    cgBlockRank:       u.cgBlockRank       ?? 1500, // reject tokens matching CoinGecko coins ranked <= this
+    postCloseReentryCooldownMin: u.postCloseReentryCooldownMin ?? 0, // 0 = no time block, just ATH context warning
     maxWavesPerToken:  u.maxWavesPerToken  ?? 3,   // block token after N wins in window
     maxLossesPerToken: u.maxLossesPerToken ?? 1,   // block token after N losses in window
     waveBlockHours:    u.waveBlockHours    ?? 48,  // how long wave block lasts (hours)
