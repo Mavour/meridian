@@ -172,12 +172,27 @@ NARRATIVE QUALITY (your main judgment call):
 
 POOL MEMORY: Past losses or problems → strong skip signal.
 
+TIMING — CORE STRATEGY (read carefully, this is how the strategy works):
+The strategy is bid_ask SINGLE SOL SIDE. This means:
+- You deploy SOL BELOW the current price, waiting for a price DIP into your range
+- You profit when price DIPS into range (collect token fees) then BOUNCES BACK UP (token value rises + collect SOL fees)
+- You MUST enter AFTER a significant dump, not during a pump
+
+ENTRY TIMING RULES — these override everything else:
+- price_1h_change > +30% → HARD SKIP. Token already pumped. You will be the exit liquidity.
+- price_1h_change > +15% AND no smart wallets → SKIP. Too late to enter safely.
+- IDEAL ENTRY: price has dumped significantly from ATH (price_vs_ath_pct <= ${config.gmgn?.athFilterPct ?? -15}% means already filtered by code). 
+  Within passing candidates, prefer tokens where price_1h_change is flat or slightly negative — this signals post-dump stabilization, the ideal entry point.
+- If ALL candidates show recent pump (>+20% 1h), output NO DEPLOY and wait for better timing. Do NOT settle for inferior candidates.
+
+NO DEPLOY IS VALID: If no candidate meets timing + quality criteria, do NOT deploy. Output "NO DEPLOY — waiting for better entry" and stop. An empty cycle is better than a bad entry. Never force a deploy just because positions are empty.
+
 DEPLOY RULES:
 - COMPOUNDING: Use the deploy amount from the goal EXACTLY. Do NOT default to a smaller number.
 - strategy = ${config.strategy.strategy} — always use this exact value, never change it.
 - bins_below = round(${config.strategy.minBinsBelow} + (volatility/4)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}]. bins_above = 0.
 - Bin steps must be [${config.screening.minBinStep}-${config.screening.maxBinStep}].
-- Pick ONE pool. Deploy or explain why none qualify.
+- Pick ONE pool that meets TIMING rules above. If none qualify → NO DEPLOY.
 
 ${weightsSummary ? `${weightsSummary}\nPrioritize candidates whose strongest attributes align with high-weight signals.\n\n` : ""}${lessons ? `LESSONS LEARNED:\n${lessons}\n` : ""}Timestamp: ${new Date().toISOString()}
 `;
