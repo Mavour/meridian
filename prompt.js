@@ -170,11 +170,12 @@ NARRATIVE QUALITY (your main judgment call):
 - BAD: generic hype ("next 100x", "community token") with no identifiable subject
 - Smart wallets present → can override weak narrative, and are the only valid override for an OKX rugpull flag
 
-POOL MEMORY & WAVE HISTORY — CRITICAL:
+POOL MEMORY & WAVE HISTORY — CONTEXT, NOT RULES:
 - Past losses → strong skip signal.
-- **REPEATED PROFIT = DANGER SIGNAL**: If a token has had multiple profitable deploys recently (check wave history / pool memory), it is becoming OVERHEATED. Tokens that pump repeatedly tend to DUMP suddenly without warning. 
-- **DO NOT RE-ENTER** a token that just gave you profit in the last 72 hours UNLESS it has clearly broken to a new ATH with strong volume confirmation.
-- A token with "win rate 100%" in pool memory is NOT a good thing — it means the token is due for a correction. SKIP it.
+- **Pool memory win rate is NEUTRAL info**: A token with high win rate means it is a GOOD token (organic, liquid, trending), NOT a bad token. Good tokens give multiple opportunities.
+- **Wave blocking handles re-entry**: The system already blocks tokens after ${config.screening.maxWavesPerToken} wins in ${config.screening.waveBlockHours}h. YOU do not need to second-guess this.
+- **DO NOT reject a token just because it has won before.** If the token is dumping NOW and gives a good entry, it is a valid candidate.
+- Only skip if: the token just closed in the last few hours AND price has not pulled back at all (still pumping vertical).
 
 TIMING — CORE STRATEGY (read carefully, this is how the strategy works):
 The strategy is bid_ask SINGLE SOL SIDE. This means:
@@ -213,7 +214,7 @@ PROFIT-TAKING MINDSET (OVERRIDE BIAS TO HOLD):
 - **Target profit: 2-3%**. If you see +2% or +3% PnL, CLOSE. Do not wait for 5% or 10%.
 - **A bird in the hand is worth two in the bush.** Small frequent profits compound. Greedy holds lead to sudden dumps.
 - If trailing TP fires (peak PnL dropped ${config.management.trailingDropPct}% from peak), CLOSE immediately. Do not second-guess.
-- If a token has been profitable multiple times before (check pool memory), it is OVERHEATED. Close EARLIER than usual — it can dump suddenly.
+- High win rate in pool memory does NOT mean you must close early. It means this is a GOOD token. Close based on CURRENT price action and PnL, not on historical wins.
 
 Decision Factors for Closing:
 - **PnL >= +2%** → CLOSE. Lock it in.
