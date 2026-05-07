@@ -114,6 +114,7 @@
   "minBinsBelow": 35,
   "maxBinsBelow": 69,
   "maxHoldMinutes": 45,
+  "maxHoldMinPnlPct": -2,
   "slowBleedMinAge": 30,
   "slowBleedMaxPnl": 1,
   "repeatDeployCooldownTriggerCount": 3,

@@ -221,7 +221,11 @@ Decision Factors for Closing:
 - **Price pumping far above range** (active bin > upper bin + 3 bins) → Close immediately. You missed the dip, don't chase.
 - **Stop loss at ${config.management.stopLossPct}%** → Close immediately if triggered. No hope, no prayer.
 - **Slow bleed**: age > ${config.management.slowBleedMinAge}min, PnL between ${config.management.slowBleedMinPnl}% and ${config.management.slowBleedMaxPnl}%, fee/TVL < ${config.management.minFeePerTvl24h}% → CLOSE. It is going nowhere.
-- **Max hold time ${config.management.maxHoldMinutes} minutes reached** → CLOSE regardless of PnL. Fresh opportunities exist.
+- **Max hold time ${config.management.maxHoldMinutes} minutes reached** → 
+  - If PnL >= ${config.management.maxHoldMinPnlPct ?? 0}% (slight loss or better): Use judgment. If the token is still strong (good volume, narrative intact, smart wallets active), you MAY continue holding. Good tokens often recover after a brief dip.
+  - If PnL < ${config.management.maxHoldMinPnlPct ?? 0}% (significant loss): CLOSE immediately. Do not hope for recovery.
+  - If PnL >= +1% (in profit): CLOSE. You have already won. Don't risk a reversal.
+  - If PnL >= 0% (break-even): CLOSE or hold — your call, but lean toward closing to free up capital.
 
 IMPORTANT: Do NOT call get_top_candidates or study_top_lpers while you have open positions. Focus on managing exits.
 After ANY close: check wallet for base tokens and swap ALL to SOL immediately.
