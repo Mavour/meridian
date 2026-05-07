@@ -444,6 +444,9 @@ After executing, write a brief one-line result per position.
 export async function runScreeningCycle({ silent = false, recentlyClosed = [] } = {}) {
   if (_screeningBusy) {
     log("cron", "Screening skipped — previous cycle still running");
+    if (!silent && telegramEnabled()) {
+      sendMessage("🔍 Screening Cycle\n\nScreening skipped — previous cycle still running.").catch(() => {});
+    }
     return null;
   }
   _screeningBusy = true; // set immediately — prevents TOCTOU race with concurrent callers

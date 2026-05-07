@@ -1631,8 +1631,6 @@ export async function closePosition({ position_address, reason }) {
           };
         }
 
-        recordClose(position_address, reason || "agent decision");
-
         if (tracked) {
           const deployedAt = new Date(tracked.deployed_at).getTime();
           const minutesHeld = Math.floor((Date.now() - deployedAt) / 60000);
@@ -1669,6 +1667,8 @@ export async function closePosition({ position_address, reason }) {
           } catch (e) {
             log("close_warn", `Relay closed PnL fetch failed: ${e.message}`);
           }
+
+          recordClose(position_address, reason || "agent decision", pnlPct);
 
           await recordPerformance({
             position: position_address,
@@ -1726,6 +1726,8 @@ export async function closePosition({ position_address, reason }) {
             base_mint: livePosition?.base_mint || null,
           };
         }
+
+        recordClose(position_address, reason || "agent decision");
 
         appendDecision({
           type: "close",
@@ -1865,8 +1867,6 @@ export async function closePosition({ position_address, reason }) {
       };
     }
 
-    recordClose(position_address, reason || "agent decision");
-
     // Record performance for learning
     if (tracked) {
       const deployedAt = new Date(tracked.deployed_at).getTime();
@@ -1953,6 +1953,8 @@ export async function closePosition({ position_address, reason }) {
         }
       }
 
+      recordClose(position_address, reason || "agent decision", pnlPct);
+
       await recordPerformance({
         position: position_address,
         pool: poolAddress,
@@ -2010,6 +2012,8 @@ export async function closePosition({ position_address, reason }) {
         hold_time_minutes: minutesHeld,
       };
     }
+
+    recordClose(position_address, reason || "agent decision");
 
     appendDecision({
       type: "close",

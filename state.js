@@ -274,51 +274,55 @@ export function recordClose(position_address, reason, pnl_pct = null) {
   pos.notes.push(`Closed at ${pos.closed_at}: ${reason}`);
   pushEvent(state, { action: "close", position: position_address, pool_name: pos.pool_name || pos.pool, reason });
 
-  // Wave tracking: record win if profitable close
-  const isProfitClose = (pnl_pct != null && pnl_pct > 0) ||
-    /trailing.?tp|take.?profit|fee.?target|profit.?target|\btp\b/i.test(reason || "");
+  // Wave tracking: record once per position when PnL is known or reason implies profit
+  if (!pos.waveRecorded) {
+    const isProfitClose = (pnl_pct != null && pnl_pct > 0) ||
+      /trailing.?tp|take.?profit|fee.?target|profit.?target|\btp\b/i.test(reason || "");
 
-  // Wave tracking — record wins AND losses, keyed by pool_name AND token_mint
-  // so both lookup paths (symbol or mint) work correctly
-  {
-    const waveState = loadWaves();
+    // Wave tracking — record wins AND losses, keyed by pool_name AND token_mint
+    // so both lookup paths (symbol or mint) work correctly
+    {
+      const waveState = loadWaves();
 
-    const tokenSymbol = pos.pool_name
-      ? pos.pool_name.split("/")[0].trim().toUpperCase()
-      : null;
+      const tokenSymbol = pos.pool_name
+        ? pos.pool_name.split("/")[0].trim().toUpperCase()
+        : null;
 
-    // Use BOTH keys: pool_name (e.g. "APPLE-SOL") and token_mint (e.g. "Aw5Sxk...")
-    // This ensures isTokenWaveBlocked works regardless of which key is used for lookup
-    const keys = [];
-    if (tokenSymbol) keys.push(tokenSymbol);
-    if (pos.token_mint && pos.token_mint !== tokenSymbol) keys.push(pos.token_mint);
-    if (keys.length === 0 && pos.pool) keys.push(pos.pool);
+      // Use BOTH keys: pool_name (e.g. "APPLE-SOL") and token_mint (e.g. "Aw5Sxk...")
+      // This ensures isTokenWaveBlocked works regardless of which key is used for lookup
+      const keys = [];
+      if (tokenSymbol) keys.push(tokenSymbol);
+      if (pos.token_mint && pos.token_mint !== tokenSymbol) keys.push(pos.token_mint);
+      if (keys.length === 0 && pos.pool) keys.push(pos.pool);
 
-    const now = new Date().toISOString();
+      const now = new Date().toISOString();
 
-    for (const key of keys) {
-      if (!waveState.waves[key]) {
-        waveState.waves[key] = { wins: 0, losses: 0, lastWinAt: null, lastLossAt: null, symbol: tokenSymbol || key };
+      for (const key of keys) {
+        if (!waveState.waves[key]) {
+          waveState.waves[key] = { wins: 0, losses: 0, lastWinAt: null, lastLossAt: null, symbol: tokenSymbol || key };
+        }
+        waveState.waves[key].symbol = tokenSymbol || key;
+
+        if (isProfitClose) {
+          waveState.waves[key].wins += 1;
+          waveState.waves[key].lastWinAt = now;
+        } else if (pnl_pct != null && pnl_pct < 0) {
+          waveState.waves[key].losses = (waveState.waves[key].losses || 0) + 1;
+          waveState.waves[key].lastLossAt = now;
+        }
       }
-      waveState.waves[key].symbol = tokenSymbol || key;
+
+      waveState.lastUpdated = now;
+      saveWaves(waveState);
 
       if (isProfitClose) {
-        waveState.waves[key].wins += 1;
-        waveState.waves[key].lastWinAt = now;
+        log("state", `Wave #${waveState.waves[keys[0]]?.wins} recorded for ${tokenSymbol} in wave-history.json`);
       } else if (pnl_pct != null && pnl_pct < 0) {
-        waveState.waves[key].losses = (waveState.waves[key].losses || 0) + 1;
-        waveState.waves[key].lastLossAt = now;
+        log("state", `Loss recorded for ${tokenSymbol} — total losses: ${waveState.waves[keys[0]]?.losses}`);
       }
     }
 
-    waveState.lastUpdated = now;
-    saveWaves(waveState);
-
-    if (isProfitClose) {
-      log("state", `Wave #${waveState.waves[keys[0]]?.wins} recorded for ${tokenSymbol} in wave-history.json`);
-    } else if (pnl_pct != null && pnl_pct < 0) {
-      log("state", `Loss recorded for ${tokenSymbol} — total losses: ${waveState.waves[keys[0]]?.losses}`);
-    }
+    pos.waveRecorded = true;
   }
 
   save(state);
