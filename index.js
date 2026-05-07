@@ -1,4 +1,6 @@
 import "./envcrypt.js";
+import fs from "fs";
+import path from "path";
 import cron from "node-cron";
 import readline from "readline";
 import { agentLoop } from "./agent.js";
@@ -34,6 +36,39 @@ import { stageSignals } from "./signal-tracker.js";
 import { getWeightsSummary } from "./signal-weights.js";
 import { bootstrapHiveMind, ensureAgentId, getHiveMindPullMode, isHiveMindEnabled, pullHiveMindLessons, pullHiveMindPresets, registerHiveMindAgent, startHiveMindBackgroundSync } from "./hivemind.js";
 import { appendDecision } from "./decision-log.js";
+
+const LOCK_FILE = path.join(process.cwd(), ".agent.lock");
+function acquireInstanceLock() {
+  try {
+    if (fs.existsSync(LOCK_FILE)) {
+      const pid = parseInt(fs.readFileSync(LOCK_FILE, "utf8").trim(), 10);
+      if (!Number.isNaN(pid)) {
+        try {
+          process.kill(pid, 0); // check if process is still alive
+          console.error(`Another instance is already running (PID ${pid}). Exiting.`);
+          process.exit(1);
+        } catch (_) {
+          // stale lock — previous process died
+        }
+      }
+    }
+    fs.writeFileSync(LOCK_FILE, String(process.pid), { flag: "w" });
+    process.on("exit", () => {
+      try { fs.unlinkSync(LOCK_FILE); } catch (_) {}
+    });
+    process.on("SIGINT", () => {
+      try { fs.unlinkSync(LOCK_FILE); } catch (_) {}
+      process.exit(0);
+    });
+    process.on("SIGTERM", () => {
+      try { fs.unlinkSync(LOCK_FILE); } catch (_) {}
+      process.exit(0);
+    });
+  } catch (e) {
+    console.error(`Lock file error: ${e.message}`);
+  }
+}
+acquireInstanceLock();
 
 log("startup", "DLMM LP Agent starting...");
 log("startup", `Mode: ${process.env.DRY_RUN === "true" ? "DRY RUN" : "LIVE"}`);
