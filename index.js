@@ -71,8 +71,9 @@ function acquireInstanceLock() {
 acquireInstanceLock();
 
 log("startup", "DLMM LP Agent starting...");
-log("startup", `Mode: ${process.env.DRY_RUN === "true" ? "DRY RUN" : "LIVE"}`);
+log("startup", `PID: ${process.pid} | Mode: ${process.env.DRY_RUN === "true" ? "DRY RUN" : "LIVE"}`);
 log("startup", `Model: ${process.env.LLM_MODEL || "hermes-3-405b"}`);
+log("startup", `Lock file: ${LOCK_FILE} | exists: ${fs.existsSync(LOCK_FILE)}`);
 ensureAgentId();
 bootstrapHiveMind().catch((error) => log("hivemind_warn", `Bootstrap failed: ${error.message}`));
 startHiveMindBackgroundSync();
@@ -241,7 +242,7 @@ export async function runManagementCycle({ silent = false } = {}) {
   if (_managementBusy) return null;
   _managementBusy = true;
   timers.managementLastRun = Date.now();
-  log("cron", "Starting management cycle");
+  log("cron", `Starting management cycle [PID ${process.pid}]`);
   let mgmtReport = null;
   let positions = [];
   let liveMessage = null;
@@ -463,8 +464,9 @@ After executing, write a brief one-line result per position.
     _managementBusy = false;
     if (!silent && telegramEnabled()) {
       if (mgmtReport) {
-        if (liveMessage) await liveMessage.finalize(stripThink(mgmtReport)).catch(() => {});
-        else sendMessage(`🔄 Management Cycle\n\n${stripThink(mgmtReport)}`).catch(() => { });
+        const pidTag = `\n<i>pid:${process.pid}</i>`;
+        if (liveMessage) await liveMessage.finalize(stripThink(mgmtReport) + pidTag).catch(() => {});
+        else sendMessage(`🔄 Management Cycle\n\n${stripThink(mgmtReport)}${pidTag}`).catch(() => { });
       }
       for (const p of positions) {
         if (!p.in_range && p.minutes_out_of_range >= config.management.outOfRangeWaitMinutes) {
