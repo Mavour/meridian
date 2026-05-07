@@ -250,7 +250,7 @@ const NEGATIVE_KEYWORDS = [
   "manipulated", "manipulation", "wash trade", "wash trading",
   "suspicious", "sketchy", "red flag", "red flags",
   "getting dumped", "about to dump", "will dump",
-  "paper handed", "paper hands", "rotted", "cabal", "shit", "negative", "exit", "stay away", "scam alert"
+  "paper handed", "paper hands", "rotted", "cabal", "shit", "negative", "exit", "stay away", "scam alert", "pvp"
 ];
 
 const POSITIVE_KEYWORDS = [
