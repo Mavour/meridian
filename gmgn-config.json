@@ -1,0 +1,69 @@
+{
+  "apiKey": "gmgn_42d56fe5e35d7663aa34cc39f6b76843",
+  "baseUrl": "https://openapi.gmgn.ai",
+  "athFilterPct": -15,
+  "interval": "15m",
+  "orderBy": "default",
+  "direction": "desc",
+  "minVolume": 3000,
+  "limit": 100,
+  "enrichLimit": 20,
+  "requestDelayMs": 2500,
+  "maxRetries": 2,
+  "filters": [
+    "renounced",
+    "frozen",
+    "not_wash_trading"
+  ],
+  "platforms": [
+    "Pump.fun",
+    "meteora_virtual_curve",
+    "pool_meteora"
+  ],
+  "minSmartDegenCount": 1,
+  "requireKol": true,
+  "minKolCount": 1,
+  "minTotalFeeSol": 30,
+  "maxRugRatio": 0.2,
+  "maxTop10HolderRate": 0.3,
+  "maxBundlerRate": 0.3,
+  "maxRatTraderRate": 0.15,
+  "maxFreshWalletRate": 0.15,
+  "maxDevTeamHoldRate": 0.03,
+  "maxBotDegenRate": 0.35,
+  "maxSniperCount": 15,
+  "maxSniperHoldRate": 0.25,
+  "holdersLimit": 100,
+  "preferredKolNames": [
+    "OGAntD",
+    "Loopierr",
+    "Cooker.hl | Kms.eth | 版本之子 | Cooker",
+    "RC",
+    "gake"
+  ],
+  "preferredKolMinHoldPct": 1,
+  "dumpKolNames": [
+    "Yenni",
+    "Marcell"
+  ],
+  "dumpKolMinHoldPct": 0.5,
+  "klineResolution": "5m",
+  "klineLookbackMinutes": 60,
+  "rejectSingleVolumeSpike": true,
+  "maxSingleCandleVolumeShare": 0.7,
+  "indicatorFilter": true,
+  "indicatorInterval": "5_MINUTE",
+  "indicatorRules": {
+    "requireBullishSupertrend": true,
+    "rejectAlreadyAtBottom": true,
+    "requireAboveSupertrend": false,
+    "minRsi": null,
+    "maxRsi": null,
+    "requireBbPosition": null
+  },
+  "_lastAgentTune": "2026-05-06T12:35:07.300Z",
+  "maxTokenAgeHours": 96,
+  "minTokenAgeHours": 4,
+  "minMcap": 250000,
+  "maxMcap": 5000000
+}
