@@ -27,9 +27,9 @@ import {
   createLiveMessage,
 } from "./telegram.js";
 import { generateBriefing } from "./briefing.js";
-import { getLastBriefingDate, setLastBriefingDate, getTrackedPosition, setPositionInstruction, updatePnlAndCheckExits, queuePeakConfirmation, resolvePendingPeak, queueTrailingDropConfirmation, resolvePendingTrailingDrop } from "./state.js";
+import { getLastBriefingDate, setLastBriefingDate, getTrackedPosition, setPositionInstruction, updatePnlAndCheckExits, queuePeakConfirmation, resolvePendingPeak, queueTrailingDropConfirmation, resolvePendingTrailingDrop, isTokenWaveBlocked } from "./state.js";
 import { getActiveStrategy } from "./strategy-library.js";
-import { recordPositionSnapshot, recallForPool, addPoolNote } from "./pool-memory.js";
+import { recordPositionSnapshot, recallForPool, addPoolNote, isBaseMintOnCooldown } from "./pool-memory.js";
 import { checkSmartWalletsOnPool } from "./smart-wallets.js";
 import { getTokenNarrative, getTokenInfo } from "./tools/token.js";
 import { stageSignals } from "./signal-tracker.js";
@@ -578,15 +578,33 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
     // Skipped for GMGN: platforms already filtered upstream; bundler/bot data from GMGN pipeline
     const filteredOut = [];
     const passing = allCandidates.filter(({ pool, ti, xs }) => {
+      // Wave block is LOCAL state — must check even for GMGN candidates
+      if (isTokenWaveBlocked(pool.base?.mint)) {
+        log("screening", `Filtered wave-blocked token ${pool.name} (${pool.base?.mint?.slice(0, 8)})`);
+        filteredOut.push({ name: pool.name, reason: "wave blocked (max profitable exits in window)" });
+        return false;
+      }
+      if (isBaseMintOnCooldown(pool.base?.mint)) {
+        log("screening", `Filtered cooldown token ${pool.name} (${pool.base?.mint?.slice(0, 8)})`);
+        filteredOut.push({ name: pool.name, reason: "token cooldown active" });
+        return false;
+      }
+      if (config.screening.maxVolatility && pool.volatility != null && pool.volatility > config.screening.maxVolatility) {
+        log("screening", `Filtered high volatility ${pool.name}: ${pool.volatility} > ${config.screening.maxVolatility}`);
+        filteredOut.push({ name: pool.name, reason: `volatility too high (${pool.volatility} > max ${config.screening.maxVolatility})` });
+        return false;
+      }
+
+      // GMGN upstream already filters platforms/bundlers/bots; skip Jupiter-only filters
       if (pool.gmgn) return true;
-      
+
       // X Sentiment hard filter - reject if negative
       if (config.xSentiment?.enabled && xs?.score != null && xs.score < config.xSentiment.minScore) {
         log("screening", `Skipping ${pool.name} — negative X sentiment (${xs.score})`);
         filteredOut.push({ name: pool.name, reason: `negative X sentiment (${xs.score})` });
         return false;
       }
-      
+
       const launchpad = ti?.launchpad ?? null;
       if (launchpad && config.screening.allowedLaunchpads?.length > 0 && !config.screening.allowedLaunchpads.includes(launchpad)) {
         log("screening", `Skipping ${pool.name} — launchpad ${launchpad} not in allow-list`);
