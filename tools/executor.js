@@ -818,6 +818,24 @@ async function runSafetyChecks(name, args) {
         };
       }
 
+      // ── HARD GUARD: maxBinsBelow ──────────────────────────────────────────
+      const maxBinsBelow = Number(config.strategy.maxBinsBelow ?? 69);
+      if (requestedBinsBelow > maxBinsBelow) {
+        return {
+          pass: false,
+          reason: `bins_below ${requestedBinsBelow} exceeds maximum allowed ${maxBinsBelow}. Refusing wide-range deploy that increases IL risk.`,
+        };
+      }
+
+      // ── HARD GUARD: maxVolatility ─────────────────────────────────────────
+      const maxVolatility = Number(config.screening.maxVolatility ?? 7);
+      if (requestedVolatility != null && requestedVolatility > maxVolatility) {
+        return {
+          pass: false,
+          reason: `volatility ${requestedVolatility} exceeds maximum allowed ${maxVolatility}. Token too volatile for safe LP deploy.`,
+        };
+      }
+
       // Check position count limit + duplicate pool guard — force fresh scan to avoid stale cache
       const positions = await getMyPositions({ force: true });
       if (positions.total_positions >= config.risk.maxPositions) {
