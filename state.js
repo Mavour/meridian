@@ -155,6 +155,7 @@ export function trackPosition({
   fee_tvl_ratio,
   organic_score,
   initial_value_usd,
+  base_mint = null,
   signal_snapshot = null,
 }) {
   const state = load();
@@ -166,6 +167,7 @@ export function trackPosition({
     bin_range,
     amount_sol,
     amount_x,
+    token_mint: base_mint,
     active_bin_at_deploy: active_bin,
     bin_step,
     volatility,

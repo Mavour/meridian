@@ -579,7 +579,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
     const filteredOut = [];
     const passing = allCandidates.filter(({ pool, ti, xs }) => {
       // Wave block is LOCAL state — must check even for GMGN candidates
-      if (isTokenWaveBlocked(pool.base?.mint)) {
+      if (isTokenWaveBlocked(pool.base?.mint) || isTokenWaveBlocked(pool.base?.symbol)) {
         log("screening", `Filtered wave-blocked token ${pool.name} (${pool.base?.mint?.slice(0, 8)})`);
         filteredOut.push({ name: pool.name, reason: "wave blocked (max profitable exits in window)" });
         return false;

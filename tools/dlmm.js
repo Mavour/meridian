@@ -810,6 +810,7 @@ export async function deployPosition({
           amount_x: finalAmountX,
           active_bin: activeBin.binId,
           initial_value_usd,
+          base_mint: pool.lbPair.tokenXMint.toString(),
         });
       }
 
@@ -944,6 +945,7 @@ export async function deployPosition({
       amount_x: finalAmountX,
       active_bin: activeBin.binId,
       initial_value_usd,
+      base_mint: pool.lbPair.tokenXMint.toString(),
     });
 
     appendDecision({
