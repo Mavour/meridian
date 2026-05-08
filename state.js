@@ -278,7 +278,7 @@ export function recordClose(position_address, reason, pnl_pct = null) {
 
   // Wave tracking: record once per position when PnL is known or reason implies profit
   if (!pos.waveRecorded) {
-    const isProfitClose = (pnl_pct != null && pnl_pct > 0) ||
+    const isProfitClose = (pnl_pct != null && pnl_pct >= 1.0) ||
       /trailing.?tp|take.?profit|fee.?target|profit.?target|\btp\b/i.test(reason || "");
 
     // Wave tracking — record wins AND losses, keyed by pool_name AND token_mint
