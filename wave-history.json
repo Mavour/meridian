@@ -1,9 +1,9 @@
 {
   "waves": {
-    "\u53d1\u8d22-SOL": {
+    "发财-SOL": {
       "wins": 3,
       "lastWinAt": "2026-04-23T05:54:03.156Z",
-      "symbol": "\u53d1\u8d22-SOL"
+      "symbol": "发财-SOL"
     },
     "CATCOIN-SOL": {
       "wins": 1,
@@ -31,7 +31,21 @@
       "lastWinAt": "2026-05-06T10:00:00.000Z",
       "lastLossAt": null,
       "symbol": "APPLE-SOL"
+    },
+    "SELLOR-SOL": {
+      "wins": 1,
+      "losses": 0,
+      "lastWinAt": "2026-05-06T10:46:39.588Z",
+      "lastLossAt": null,
+      "symbol": "SELLOR-SOL"
+    },
+    "HANTA-SOL": {
+      "wins": 1,
+      "losses": 0,
+      "lastWinAt": "2026-05-06T22:05:05.210Z",
+      "lastLossAt": null,
+      "symbol": "HANTA-SOL"
     }
   },
-  "lastUpdated": "2026-05-06T10:00:00.000Z"
+  "lastUpdated": "2026-05-06T22:05:05.210Z"
 }

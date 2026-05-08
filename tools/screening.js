@@ -411,13 +411,6 @@ export async function discoverPools({
         const tags = tagMap[p.pool] || [];
         if (dev) p.dev = dev; // enrich in-place
 
-        // Block Token-2022 — has transfer tax that silently erodes LP profit
-        if (tags.includes("token-2022")) {
-          log("screening", `Filtered Token-2022 token ${p.base?.symbol} (${p.base?.mint?.slice(0, 8)}) — transfer tax incompatible with LP strategy`);
-          pushFilteredReason(filteredOut, p, "Token-2022 (transfer tax)");
-          return false;
-        }
-
         if (dev && isDevBlocked(dev)) {
           log("dev_blocklist", `Filtered blocked deployer (jup) ${dev.slice(0, 8)} token ${p.base?.symbol}`);
           return false;
