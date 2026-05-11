@@ -33,9 +33,13 @@ const POLITICAL_KEYWORDS = [
 ];
 
 function isPoliticalNarrative(narrative) {
-  if (!narrative) return false;
+  if (!narrative) return { isPolitical: false, keyword: null };
   const text = String(narrative).toLowerCase();
-  return POLITICAL_KEYWORDS.some(kw => text.includes(kw));
+  const matched = POLITICAL_KEYWORDS.find(kw => text.includes(kw));
+  if (matched) {
+    log("political_debug", `Political narrative detected! Keyword: "${matched}" in text: "${text.slice(0, 120)}..."`);
+  }
+  return { isPolitical: !!matched, keyword: matched || null };
 }
 
 function sanitizeStoredText(text, maxLen = MAX_INSTRUCTION_LENGTH) {
@@ -147,8 +151,13 @@ export function getWaveHistory(maxWaves = null) {
  * @param {string|null} narrative — token narrative text; if political, maxWaves forced to 1 (nyopet rule)
  */
 export function isTokenWaveBlocked(tokenMintOrSymbol, maxWaves = null, narrative = null) {
-  const isPolitical = isPoliticalNarrative(narrative);
+  const { isPolitical, keyword } = isPoliticalNarrative(narrative);
   const effectiveMax = isPolitical ? 1 : maxWaves;
+
+  if (isPolitical) {
+    log("political_debug", `NYOPET override for ${tokenMintOrSymbol?.slice(0, 8)}: political keyword "${keyword}" → maxWaves forced to 1 (was ${maxWaves ?? MAX_WAVES_BEFORE_BLOCK()})`);
+  }
+
   const { blocked, history } = getWaveHistory(effectiveMax);
   if (!tokenMintOrSymbol) return false;
   if (blocked.length === 0) return false;
@@ -156,13 +165,18 @@ export function isTokenWaveBlocked(tokenMintOrSymbol, maxWaves = null, narrative
   const upper = tokenMintOrSymbol.toUpperCase().trim();
 
   // Match by canonical key (mint address)
-  if (blocked.some(key => key.toUpperCase() === upper)) return true;
+  if (blocked.some(key => key.toUpperCase() === upper)) {
+    if (isPolitical) log("political_debug", `BLOCKED ${tokenMintOrSymbol?.slice(0, 8)}: political token hit wave limit (1 win max)`);
+    return true;
+  }
 
   // Match by symbol metadata (e.g. "BEAR" matches a wave keyed by its mint)
-  return Object.entries(history).some(([key, data]) => {
+  const blockedBySymbol = Object.entries(history).some(([key, data]) => {
     if (!blocked.includes(key)) return false;
     return data.symbol?.toUpperCase() === upper;
   });
+  if (blockedBySymbol && isPolitical) log("political_debug", `BLOCKED ${tokenMintOrSymbol?.slice(0, 8)} (by symbol): political token hit wave limit (1 win max)`);
+  return blockedBySymbol;
 }
 
 // ─── Position Registry ─────────────────────────────────────────
