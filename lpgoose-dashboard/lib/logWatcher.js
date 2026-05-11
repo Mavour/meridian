@@ -1,74 +1,62 @@
 import fs from "fs";
 import path from "path";
-import chokidar from "chokidar";
-import { getLogFilePath } from "./dataReader.js";
 import { parseLogLine } from "./logParser.js";
 
+/**
+ * Robust log tail using polling.
+ * More reliable than chokidar for append-only log files.
+ */
 export function createLogWatcher(broadcastFn) {
-  const todayStr = () => new Date().toISOString().split("T")[0];
+  const MERIDIAN_PATH = process.env.MERIDIAN_PATH || ".";
+  const getTodayFile = () =>
+    path.join(MERIDIAN_PATH, "logs", `agent-${new Date().toISOString().split("T")[0]}.log`);
 
-  let currentLogFile = getLogFilePath(todayStr());
+  let currentFile = getTodayFile();
   let lastSize = 0;
+  let leftover = "";
 
-  // Watch all agent log files
-  const watcher = chokidar.watch("**/logs/agent-*.log", {
-    cwd: process.env.MERIDIAN_PATH || ".",
-    ignoreInitial: false,
-    persistent: true,
-  });
+  // Check every second
+  const interval = setInterval(() => {
+    const todayFile = getTodayFile();
 
-  watcher.on("change", (filePath) => {
-    const fullPath = filePath.startsWith("/")
-      ? filePath
-      : path.join(process.env.MERIDIAN_PATH || ".", filePath);
-
-    try {
-      const stats = fs.statSync(fullPath);
-      if (stats.size <= lastSize && fullPath === currentLogFile) return;
-
-      const stream = fs.createReadStream(fullPath, {
-        start: fullPath === currentLogFile ? lastSize : 0,
-        encoding: "utf8",
-      });
-
-      let leftover = "";
-      stream.on("data", (chunk) => {
-        const lines = (leftover + chunk).split("\n");
-        leftover = lines.pop(); // incomplete line
-        lines.forEach((line) => {
-          const parsed = parseLogLine(line);
-          if (parsed) broadcastFn({ type: "log", data: parsed });
-        });
-      });
-
-      stream.on("end", () => {
-        if (leftover.trim()) {
-          const parsed = parseLogLine(leftover);
-          if (parsed) broadcastFn({ type: "log", data: parsed });
-        }
-        if (fullPath === currentLogFile) {
-          lastSize = stats.size;
-        }
-      });
-    } catch (err) {
-      // ignore file read errors
-    }
-  });
-
-  // Daily rollover: update currentLogFile at midnight
-  const rolloverInterval = setInterval(() => {
-    const newPath = getLogFilePath(todayStr());
-    if (newPath !== currentLogFile) {
-      currentLogFile = newPath;
+    // Day rollover
+    if (todayFile !== currentFile) {
+      currentFile = todayFile;
       lastSize = 0;
-      watcher.add(newPath);
+      leftover = "";
     }
-  }, 60_000);
+
+    if (!fs.existsSync(currentFile)) return;
+
+    const stats = fs.statSync(currentFile);
+    if (stats.size <= lastSize) return;
+
+    const stream = fs.createReadStream(currentFile, {
+      start: lastSize,
+      encoding: "utf8",
+    });
+
+    let chunkLeftover = leftover;
+    stream.on("data", (chunk) => {
+      const lines = (chunkLeftover + chunk).split("\n");
+      chunkLeftover = lines.pop(); // incomplete line
+      for (const line of lines) {
+        const parsed = parseLogLine(line);
+        if (parsed) broadcastFn({ type: "log", data: parsed });
+      }
+    });
+
+    stream.on("end", () => {
+      leftover = chunkLeftover;
+      lastSize = stats.size;
+    });
+
+    stream.on("error", () => {
+      // ignore read errors
+    });
+  }, 1000);
 
   return {
-    stop: () => {
-      clearInterval(rolloverInterval);
-      watcher.close();
-    },
+    stop: () => clearInterval(interval),
   };
 }

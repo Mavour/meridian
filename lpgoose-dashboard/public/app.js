@@ -74,6 +74,9 @@ async function api(path) {
 
 // ─── WebSocket ────────────────────────────────────────────────────────
 
+const logBuffer = [];
+const MAX_LOG_BUFFER = 50;
+
 function connectWS() {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   ws = new WebSocket(`${protocol}//${location.host}/ws`);
@@ -86,7 +89,13 @@ function connectWS() {
   ws.onmessage = (ev) => {
     try {
       const msg = JSON.parse(ev.data);
-      if (msg.type === "log") appendInlineLog(msg.data);
+      if (msg.type === "log") {
+        logBuffer.push(msg.data);
+        if (logBuffer.length > MAX_LOG_BUFFER) logBuffer.shift();
+        appendInlineLog(msg.data);
+        // Also re-render all buffered logs to keep inline container up to date
+        renderInlineLogBuffer();
+      }
       if (msg.type === "positions") { cache.positions = msg.data; refreshPositions(); }
       if (msg.type === "waves") { cache.waves = msg.data; refreshWaves(); }
     } catch {}
@@ -98,6 +107,13 @@ function connectWS() {
   };
 
   ws.onerror = () => updateBotDot(false);
+}
+
+function renderInlineLogBuffer() {
+  const container = document.getElementById("inline-log-container");
+  if (!container) return;
+  const lines = logBuffer.slice(-8);
+  container.innerHTML = lines.map(renderInlineLogLine).join("") || `<div style="color:var(--text-2)">No logs yet</div>`;
 }
 
 function updateBotDot(online) {
@@ -392,8 +408,39 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch { updateBotDot(false); }
   }, 5000);
 
-  // Poll logs every 10s
-  setInterval(() => {
-    loadInlineLogs();
+  // Poll positions + waves + closed + logs every 10s
+  setInterval(async () => {
+    try {
+      const [positions, waves, perf] = await Promise.all([
+        api("/api/positions"),
+        api("/api/waves"),
+        api("/api/performance"),
+      ]);
+      cache.positions = positions;
+      cache.waves = waves;
+      cache.performance = perf;
+      refreshPositions();
+      refreshWaves();
+
+      // Update stats
+      const statsContainer = document.getElementById("dashboard-stats");
+      if (statsContainer) renderStats(perf, positions);
+
+      // Update closed
+      const closed = await api("/api/positions/closed");
+      renderRecentClosed(closed);
+
+      // Update balance
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        const snaps = await api(`/api/snapshots?date=${today}`);
+        if (snaps && snaps.length > 0) {
+          const latest = snaps[snaps.length - 1];
+          if (latest.sol != null) {
+            document.getElementById("balance-pill").textContent = `◎${latest.sol.toFixed(3)} SOL`;
+          }
+        }
+      } catch {}
+    } catch {}
   }, 10000);
 });

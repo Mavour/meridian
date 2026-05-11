@@ -88,16 +88,17 @@ function getOpenPositions(state) {
 function getClosedPositions(state, lessons) {
   const pos = state.positions || {};
   const lessonList = lessons?.lessons || [];
+
   // Build lookup: pool -> latest lesson with pnl
   const pnlByPool = {};
   for (const l of lessonList) {
     if (l.pool && l.pnl_pct != null) {
-      // keep the latest lesson per pool
       if (!pnlByPool[l.pool] || new Date(l.created_at) > new Date(pnlByPool[l.pool].created_at)) {
         pnlByPool[l.pool] = l;
       }
     }
   }
+
   return Object.values(pos)
     .filter((p) => p.closed)
     .sort((a, b) => new Date(b.closed_at || 0) - new Date(a.closed_at || 0))
@@ -105,7 +106,15 @@ function getClosedPositions(state, lessons) {
     .map((p) => {
       const lesson = pnlByPool[p.pool];
       if (lesson) {
-        return { ...p, pnl_pct: lesson.pnl_pct, pnl_usd: lesson.pnl_usd };
+        const pnlPct = Number(lesson.pnl_pct);
+        const initial = Number(lesson.initial_value_usd);
+        const pnlUsd = initial * pnlPct / 100;
+        return {
+          ...p,
+          pnl_pct: pnlPct,
+          pnl_usd: pnlUsd,
+          close_reason: lesson.close_reason || p.notes?.[0] || "—",
+        };
       }
       return p;
     });
