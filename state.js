@@ -23,8 +23,10 @@ const MAX_LOSSES_BEFORE_BLOCK = () => config?.screening?.maxLossesPerToken ?? 1;
 const WAVE_BLOCK_HOURS        = () => config?.screening?.waveBlockHours    ?? 48; // how long wave block lasts
 
 const POLITICAL_KEYWORDS = [
-  "trump", "donald trump", "maga", "elon", "elon musk", "musk",
-  "sam altman", "altman", "openai", "political", "election", "biden",
+  "trump", "donald trump", "maga",
+  "elon", "elon musk", "musk",
+  "sam altman", "sama",           // 'sama' = Sam Altman's Twitter handle; NOT 'altman' alone (too broad) and NOT 'openai' (company != political figure)
+  "political", "election", "biden",
   "president", "governor", "senator", "congress", "vote", "campaign",
   "kamala", "putin", "zelensky", "xi jinping", "modi", "macron",
   "milei", "bolsonaro", "lula", "impeach", "rally", "protest",
