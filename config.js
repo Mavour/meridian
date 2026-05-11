@@ -205,6 +205,13 @@ export const config = {
     trailingTriggerPct:    u.trailingTriggerPct    ?? 3,    // activate trailing at X% PnL
     trailingDropPct:       u.trailingDropPct       ?? 1.5,  // close when drops X% from peak
     pnlSanityMaxDiffPct:   u.pnlSanityMaxDiffPct   ?? 5,    // max allowed diff between reported and derived pnl % before ignoring a tick
+    // Emergency hard stop — bypass LLM and close immediately
+    hardStopPct:           u.hardStopPct           ?? u.stopLossPct ?? -50,  // instant close threshold (bypasses suspicious PnL check)
+    hardStopBypassSuspicious: u.hardStopBypassSuspicious ?? true,  // if true, ignore pnl_suspicious when hard stop triggers
+    // Trailing stop confirmation
+    trailingConfirmDelaySec: u.trailingConfirmDelaySec ?? 10,     // seconds to wait for trailing drop confirmation
+    // PnL polling
+    pnlPollIntervalSec:    u.pnlPollIntervalSec    ?? 10,         // how often to poll PnL (seconds)
     // SOL mode — positions, PnL, and balances reported in SOL instead of USD
     solMode:               u.solMode               ?? false,
   },

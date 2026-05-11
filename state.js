@@ -615,6 +615,18 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
 
   if (changed) save(state);
 
+  // ── Hard stop (emergency) ──────────────────────────────────────
+  // Bypasses PnL suspicious check — closes immediately without LLM
+  const hardStopPct = mgmtConfig.hardStopPct ?? mgmtConfig.stopLossPct;
+  const hardStopBypass = mgmtConfig.hardStopBypassSuspicious ?? true;
+  if (currentPnlPct != null && hardStopPct != null && currentPnlPct <= hardStopPct) {
+    return {
+      action: "HARD_STOP",
+      reason: `Hard stop: PnL ${currentPnlPct.toFixed(2)}% <= ${hardStopPct}%`,
+      bypass_suspicious: hardStopBypass,
+    };
+  }
+
   // ── Stop loss ──────────────────────────────────────────────────
   if (!pnl_pct_suspicious && currentPnlPct != null && mgmtConfig.stopLossPct != null && currentPnlPct <= mgmtConfig.stopLossPct) {
     return {

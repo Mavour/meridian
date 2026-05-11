@@ -221,6 +221,7 @@ Decision Factors for Closing:
 - **Out of range for >10 minutes** → Likely not coming back soon. Close to free up capital.
 - **Price pumping far above range** (active bin > upper bin + 3 bins) → Close immediately. You missed the dip, don't chase.
 - **Stop loss at ${config.management.stopLossPct}%** → Close immediately if triggered. No hope, no prayer.
+- **Hard stop at ${config.management.hardStopPct ?? config.management.stopLossPct}%** → Emergency instant close (bypasses PnL suspicious checks). Executed automatically without LLM.
 - **Slow bleed**: age > ${config.management.slowBleedMinAge}min, PnL between ${config.management.slowBleedMinPnl}% and ${config.management.slowBleedMaxPnl}%, fee/TVL < ${config.management.minFeePerTvl24h}% → CLOSE. It is going nowhere.
 - **Max hold time ${config.management.maxHoldMinutes} minutes reached** → 
   - If PnL >= ${config.management.maxHoldMinPnlPct ?? 0}% (slight loss or better): Use judgment. If the token is still strong (good volume, narrative intact, smart wallets active), you MAY continue holding. Good tokens often recover after a brief dip.

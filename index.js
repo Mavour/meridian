@@ -6,7 +6,7 @@ import cron from "node-cron";
 import readline from "readline";
 import { agentLoop } from "./agent.js";
 import { log } from "./logger.js";
-import { getMyPositions, getActiveBin } from "./tools/dlmm.js";
+import { getMyPositions, getActiveBin, closePosition } from "./tools/dlmm.js";
 import { getWalletBalances } from "./tools/wallet.js";
 import { getTopCandidates } from "./tools/screening.js";
 import { formatGmgnCandidateForPrompt } from "./tools/gmgn.js";
@@ -183,6 +183,7 @@ function schedulePeakConfirmation(positionAddress) {
 function scheduleTrailingDropConfirmation(positionAddress) {
   if (!positionAddress || _trailingDropConfirmTimers.has(positionAddress)) return;
 
+  const confirmDelayMs = (config.management.trailingConfirmDelaySec ?? 10) * 1000;
   const timer = setTimeout(async () => {
     _trailingDropConfirmTimers.delete(positionAddress);
     try {
@@ -201,9 +202,62 @@ function scheduleTrailingDropConfirmation(positionAddress) {
     } catch (error) {
       log("state_warn", `Trailing drop confirmation failed for ${positionAddress}: ${error.message}`);
     }
-  }, TRAILING_DROP_CONFIRM_DELAY_MS);
+  }, confirmDelayMs);
 
   _trailingDropConfirmTimers.set(positionAddress, timer);
+}
+
+/**
+ * Execute instant close without LLM — used for hard stops and trailing exits.
+ * This bypasses the management cycle for speed.
+ */
+async function executeInstantClose(position, reason) {
+  const startTime = Date.now();
+  log("state", `[Instant Close] Executing immediate close for ${position.pair} — ${reason}`);
+
+  try {
+    const result = await closePosition({
+      position_address: position.position,
+      reason: reason,
+    });
+
+    const duration = Date.now() - startTime;
+    const success = result?.success !== false && !result?.error;
+
+    if (success) {
+      log("state", `[Instant Close] ✅ Closed ${position.pair} in ${duration}ms — PnL: ${result.pnl_pct ?? "?"}%`);
+
+      // Telegram notification
+      if (telegramEnabled()) {
+        const msg = `🚨 <b>INSTANT CLOSE EXECUTED</b>
+
+<b>${position.pair}</b>
+Position: <code>${position.position}</code>
+Reason: ${reason}
+PnL: ${result.pnl_pct ?? "?"}%
+Duration: ${duration}ms
+
+<i>Closed instantly without LLM delay</i>`;
+        sendMessage(msg).catch(() => {});
+      }
+
+      // Track closed pool
+      if (result?.pool) {
+        _recentlyClosedPools.set(result.pool, { closedAt: Date.now(), baseMint: result.base_mint ?? null, pnlPct: result.pnl_pct ?? null });
+        if (result.base_mint) {
+          _recentlyClosedPools.set(`mint:${result.base_mint}`, { closedAt: Date.now(), pool: result.pool, pnlPct: result.pnl_pct ?? null });
+        }
+      }
+
+      return result;
+    } else {
+      log("state_warn", `[Instant Close] ❌ Failed to close ${position.pair}: ${result?.error || "unknown error"}`);
+      return result;
+    }
+  } catch (error) {
+    log("state_error", `[Instant Close] Error closing ${position.pair}: ${error.message}`);
+    return { success: false, error: error.message };
+  }
 }
 
 async function runBriefing() {
@@ -313,7 +367,7 @@ export async function runManagementCycle({ silent = false } = {}) {
           }
           continue;
         }
-        exitMap.set(p.position, exit.reason);
+        exitMap.set(p.position, { reason: exit.reason, action: exit.action });
         log("state", `Exit alert for ${p.pair}: ${exit.reason}`);
       }
     }
@@ -324,7 +378,8 @@ export async function runManagementCycle({ silent = false } = {}) {
     for (const p of positionData) {
       // Hard exit — highest priority
       if (exitMap.has(p.position)) {
-        actionMap.set(p.position, { action: "CLOSE", rule: "exit", reason: exitMap.get(p.position) });
+        const exitInfo = exitMap.get(p.position);
+        actionMap.set(p.position, { action: "CLOSE", rule: "exit", reason: exitInfo.reason, exitAction: exitInfo.action });
         continue;
       }
       // Instruction-set — pass to LLM, can't parse in JS
@@ -384,7 +439,13 @@ export async function runManagementCycle({ silent = false } = {}) {
       if (xs && xs.sentiment !== "DISABLED" && xs.sentiment !== "COOKIE_EXPIRED" && xs.sentiment !== "NO_ACCOUNTS") {
         line += `\n⚠️ X Sentiment: ${xs.sentiment} (${xs.score}) | ${xs.post_count} posts`;
       }
-      if (act.action === "CLOSE" && act.rule === "exit") line += `\n⚡ Trailing TP: ${act.reason}`;
+      if (act.action === "CLOSE" && act.rule === "exit") {
+        if (act.exitAction === "HARD_STOP") {
+          line += `\n🚨 HARD STOP: ${act.reason}`;
+        } else {
+          line += `\n⚡ Trailing TP: ${act.reason}`;
+        }
+      }
       if (act.action === "CLOSE" && act.rule && act.rule !== "exit") line += `\nRule ${act.rule}: ${act.reason}`;
       if (act.action === "CLAIM") line += `\n→ Claiming fees`;
       return line;
@@ -399,10 +460,21 @@ export async function runManagementCycle({ silent = false } = {}) {
     mgmtReport = reportLines.join("\n\n") +
       `\n\nSummary: 💼 ${positions.length} positions | ${cur}${totalValue.toFixed(4)} | fees: ${cur}${totalUnclaimed.toFixed(4)} | ${actionSummary}`;
 
+    // ── Handle HARD_STOP instantly (no LLM) ────────────────────────
+    const hardStopPositions = positionData.filter(p => {
+      const a = actionMap.get(p.position);
+      return a.exitAction === "HARD_STOP";
+    });
+    for (const p of hardStopPositions) {
+      const act = actionMap.get(p.position);
+      log("cron", `Management: Hard stop for ${p.pair} — executing instantly`);
+      await executeInstantClose(p, act.reason);
+    }
+
     // ── Call LLM only if action needed ──────────────────────────────
     const actionPositions = positionData.filter(p => {
       const a = actionMap.get(p.position);
-      return a.action !== "STAY";
+      return a.action !== "STAY" && a.exitAction !== "HARD_STOP";
     });
 
     if (actionPositions.length > 0) {
@@ -903,8 +975,9 @@ Summarize the current portfolio health, total fees earned, and performance of al
     await maybeRunMissedBriefing();
   }, { timezone: 'UTC' });
 
-  // Lightweight 30s PnL poller — updates trailing TP state between management cycles, no LLM
+  // Lightweight PnL poller — updates trailing TP state between management cycles, no LLM
   let _pnlPollBusy = false;
+  const pollIntervalSec = config.management.pnlPollIntervalSec ?? 10;
   const pnlPollInterval = setInterval(async () => {
     if (_managementBusy || _screeningBusy || _pnlPollBusy) return;
     _pnlPollBusy = true;
@@ -921,12 +994,28 @@ Summarize the current portfolio health, total fees earned, and performance of al
         }
         const exit = updatePnlAndCheckExits(p.position, p, config.management);
         if (exit) {
-          if (exit.action === "TRAILING_TP" && exit.needs_confirmation && shouldUsePnlRecheck()) {
-            if (queueTrailingDropConfirmation(p.position, exit.peak_pnl_pct, exit.current_pnl_pct, config.management.trailingDropPct)) {
-              scheduleTrailingDropConfirmation(p.position);
+          // ── HARD STOP: Instant close without LLM ──────────────────
+          if (exit.action === "HARD_STOP") {
+            log("state", `[PnL poll] 🚨 HARD STOP triggered for ${p.pair} — ${exit.reason} — executing instantly`);
+            await executeInstantClose(p, exit.reason);
+            break; // stop checking other positions after hard stop
+          }
+
+          // ── TRAILING TP: Instant execution if enabled ──────────────
+          if (exit.action === "TRAILING_TP" && exit.needs_confirmation) {
+            if (config.management.trailingInstantExecution) {
+              log("state", `[PnL poll] Trailing TP triggered for ${p.pair} — instant execution enabled`);
+              await executeInstantClose(p, exit.reason);
+              break;
+            } else if (shouldUsePnlRecheck()) {
+              if (queueTrailingDropConfirmation(p.position, exit.peak_pnl_pct, exit.current_pnl_pct, config.management.trailingDropPct)) {
+                scheduleTrailingDropConfirmation(p.position);
+              }
             }
             continue;
           }
+
+          // ── Regular exits: Trigger management cycle ────────────────
           const cooldownMs = config.schedule.managementIntervalMin * 60 * 1000;
           const sinceLastTrigger = Date.now() - _pollTriggeredAt;
           if (sinceLastTrigger >= cooldownMs) {
