@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LPGoose Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo">LPGoose</div>
+        <div class="status-dot" id="bot-status" title="Bot status"></div>
+      </div>
+      <nav class="nav-tabs" id="nav-tabs">
+        <button data-page="dashboard" class="nav-btn active">Dashboard</button>
+        <button data-page="logs" class="nav-btn">Logs</button>
+        <button data-page="performance" class="nav-btn">Performance</button>
+        <button data-page="pools" class="nav-btn">Pools</button>
+        <button data-page="config" class="nav-btn">Config</button>
+      </nav>
+    </header>
+    <main id="main-content"></main>
+  </div>
+
+  <script src="/components/navBar.js"></script>
+  <script src="/components/statsBar.js"></script>
+  <script src="/components/positionCard.js"></script>
+  <script src="/components/logTerminal.js"></script>
+  <script src="/components/pnlChart.js"></script>
+
+  <script src="/pages/dashboard.js"></script>
+  <script src="/pages/logs.js"></script>
+  <script src="/pages/performance.js"></script>
+  <script src="/pages/pools.js"></script>
+  <script src="/pages/config.js"></script>
+
+  <script src="/app.js"></script>
+</body>
+</html>
