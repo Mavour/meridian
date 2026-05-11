@@ -223,6 +223,28 @@ app.get("/api/snapshots", (req, res) => {
   res.json(parsed);
 });
 
+// Debug endpoint
+app.get("/api/debug", (req, res) => {
+  const today = new Date().toISOString().split("T")[0];
+  const logFile = getLogFilePath(today);
+  const lessons = readLessons();
+  const state = readState();
+  const closed = getClosedPositions(state, lessons);
+
+  res.json({
+    meridian_path: MERIDIAN_PATH,
+    log_file_exists: fs.existsSync(logFile),
+    log_file_size: fs.existsSync(logFile) ? fs.statSync(logFile).size : 0,
+    log_file_path: logFile,
+    lessons_count: lessons.lessons?.length || 0,
+    closed_positions_count: closed.length,
+    first_closed_pool: closed[0]?.pool || null,
+    first_lesson_pool: lessons.lessons?.[0]?.pool || null,
+    has_pnl_match: closed[0] && lessons.lessons?.some((l) => l.pool === closed[0]?.pool),
+    env_meridian_path: process.env.MERIDIAN_PATH,
+  });
+});
+
 // ─── WebSocket ──────────────────────────────────────────────────
 
 function broadcast(type, data) {
@@ -263,4 +285,8 @@ const logWatcher = createLogWatcher(broadcast);
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`LPGoose Dashboard running on http://0.0.0.0:${PORT}`);
+  console.log(`MERIDIAN_PATH: ${MERIDIAN_PATH}`);
+  console.log(`State file exists: ${fs.existsSync(path.join(MERIDIAN_PATH, "state.json"))}`);
+  console.log(`Lessons file exists: ${fs.existsSync(path.join(MERIDIAN_PATH, "lessons.json"))}`);
+  console.log(`Log dir exists: ${fs.existsSync(path.join(MERIDIAN_PATH, "logs"))}`);
 });
