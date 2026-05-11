@@ -5,7 +5,7 @@ import cron from "node-cron";
 import readline from "readline";
 import { agentLoop } from "./agent.js";
 import { log } from "./logger.js";
-import { getMyPositions, closePosition, getActiveBin } from "./tools/dlmm.js";
+import { getMyPositions, getActiveBin } from "./tools/dlmm.js";
 import { getWalletBalances } from "./tools/wallet.js";
 import { getTopCandidates } from "./tools/screening.js";
 import { formatGmgnCandidateForPrompt } from "./tools/gmgn.js";
@@ -1743,79 +1743,68 @@ async function telegramHandler(msg) {
   }
 
   // /close [symbol|n|all] — always direct, never LLM
-  // if (/^\/close(\s+.*)?$/i.test(text.trim())) {
-  //   try {
-  //     const { positions } = await getMyPositions({ force: true });
-  //     if (!positions.length) { await sendMessage("No open positions."); return; }
-
-  //     const arg = text.trim().replace(/^\/close\s*/i, "").trim().toLowerCase();
-
-  //     // /close or /close all → close all
-  //     if (!arg || arg === "all") {
-  //       await sendMessage(`Closing ${positions.length} position(s)...`);
-  //       for (const pos of positions) {
-  //         const result = await closePosition({ position_address: pos.position });
-  //         await sendMessage(result.success
-  //           ? `✅ ${pos.pair} | PnL: ${config.management.solMode ? "◎" : "$"}${result.pnl_usd ?? "?"}`
-  //           : `❌ ${pos.pair} failed: ${result.error || "unknown"}`);
-  //       }
-  //       return;
-  //     }
-
-  //     // /close <n> → by index
-  //     const byIndex = parseInt(arg);
-  //     if (!isNaN(byIndex)) {
-  //       const pos = positions[byIndex - 1];
-  //       if (!pos) { await sendMessage(`Invalid number. ${positions.length} position(s) open.`); return; }
-  //       await sendMessage(`Closing ${pos.pair}...`);
-  //       const result = await closePosition({ position_address: pos.position });
-  //       await sendMessage(result.success
-  //         ? `✅ ${pos.pair} | PnL: ${config.management.solMode ? "◎" : "$"}${result.pnl_usd ?? "?"}`
-  //         : `❌ Failed: ${result.error || "unknown"}`);
-  //       return;
-  //     }
-
-  //     // /close <symbol> → match by name e.g. /close AGI
-  //     const matched = positions.filter(p =>
-  //       p.pair?.toLowerCase().includes(arg) ||
-  //       p.base_symbol?.toLowerCase().includes(arg)
-  //     );
-  //     if (matched.length === 0) {
-  //       const list = positions.map((p, i) => `${i+1}. ${p.pair}`).join("\n");
-  //       await sendMessage(`No position matching "${arg}".\nOpen:\n${list}`);
-  //       return;
-  //     }
-  //     if (matched.length > 1) {
-  //       const list = matched.map((p, i) => `${i+1}. ${p.pair}`).join("\n");
-  //       await sendMessage(`Multiple matches for "${arg}":\n${list}\nUse /close <n>.`);
-  //       return;
-  //     }
-  //     const pos = matched[0];
-  //     await sendMessage(`Closing ${pos.pair}...`);
-  //     const result = await closePosition({ position_address: pos.position });
-  //     await sendMessage(result.success
-  //       ? `✅ ${pos.pair} | PnL: ${config.management.solMode ? "◎" : "$"}${result.pnl_usd ?? "?"}`
-  //       : `❌ Failed: ${result.error || "unknown"}`);
-  //   } catch (e) { await sendMessage(`Error: ${e.message}`).catch(() => {}); }
-  //   return;
-  // }
-
-  const closeMatch = text.match(/^\/close\s+(\d+)$/i);
-  if (closeMatch) {
+  if (/^\/close(\s+.*)?$/i.test(text.trim())) {
     try {
-      const idx = parseInt(closeMatch[1]) - 1;
       const { positions } = await getMyPositions({ force: true });
-      if (idx < 0 || idx >= positions.length) { await sendMessage("Invalid number. Use /positions first."); return; }
-      const pos = positions[idx];
-      await sendMessage(`Closing ${pos.pair}...`);
-      const result = await closePosition({ position_address: pos.position });
-      if (result.success) {
-        const closeTxs = result.close_txs?.length ? result.close_txs : result.txs;
-        const claimNote = result.claim_txs?.length ? `\nClaim txs: ${result.claim_txs.join(", ")}` : "";
-        await sendMessage(`✅ Closed ${pos.pair}\nPnL: ${config.management.solMode ? "◎" : "$"}${result.pnl_usd ?? "?"} | close txs: ${closeTxs?.join(", ") || "n/a"}${claimNote}`);
-      } else {
-        await sendMessage(`❌ Close failed: ${JSON.stringify(result)}`);
+      if (!positions.length) { await sendMessage("No open positions."); return; }
+
+      const arg = text.trim().replace(/^\/close\s*/i, "").trim().toLowerCase();
+
+      // /close or /close all → close all
+      if (!arg || arg === "all") {
+        await sendMessage(`Closing ${positions.length} position(s)...`);
+        for (const pos of positions) {
+          const result = await executeTool("close_position", {
+            position_address: pos.position,
+            reason: "manual telegram /close all"
+          });
+          await sendMessage(result?.success
+            ? `✅ ${pos.pair} closed${result.auto_swapped ? " & swapped to SOL" : ""}`
+            : `❌ ${pos.pair} failed: ${result?.error || "unknown"}`);
+        }
+        return;
       }
+
+      // /close <n> → by index
+      const byIndex = parseInt(arg);
+      if (!isNaN(byIndex)) {
+        const pos = positions[byIndex - 1];
+        if (!pos) { await sendMessage(`Invalid number. ${positions.length} position(s) open.`); return; }
+        await sendMessage(`Closing ${pos.pair}...`);
+        const result = await executeTool("close_position", {
+          position_address: pos.position,
+          reason: "manual telegram /close"
+        });
+        await sendMessage(result?.success
+          ? `✅ ${pos.pair} closed${result.auto_swapped ? " & swapped to SOL" : ""}`
+          : `❌ Failed: ${result?.error || "unknown"}`);
+        return;
+      }
+
+      // /close <symbol> → match by name e.g. /close AGI
+      const matched = positions.filter(p =>
+        p.pair?.toLowerCase().includes(arg) ||
+        p.base_symbol?.toLowerCase().includes(arg)
+      );
+      if (matched.length === 0) {
+        const list = positions.map((p, i) => `${i+1}. ${p.pair}`).join("\n");
+        await sendMessage(`No position matching "${arg}".\nOpen:\n${list}`);
+        return;
+      }
+      if (matched.length > 1) {
+        const list = matched.map((p, i) => `${i+1}. ${p.pair}`).join("\n");
+        await sendMessage(`Multiple matches for "${arg}":\n${list}\nUse /close <n>.`);
+        return;
+      }
+      const pos = matched[0];
+      await sendMessage(`Closing ${pos.pair}...`);
+      const result = await executeTool("close_position", {
+        position_address: pos.position,
+        reason: "manual telegram /close"
+      });
+      await sendMessage(result?.success
+        ? `✅ ${pos.pair} closed${result.auto_swapped ? " & swapped to SOL" : ""}`
+        : `❌ Failed: ${result?.error || "unknown"}`);
     } catch (e) { await sendMessage(`Error: ${e.message}`).catch(() => {}); }
     return;
   }
@@ -1828,8 +1817,11 @@ async function telegramHandler(msg) {
       const results = [];
       for (const pos of positions) {
         try {
-          const result = await closePosition({ position_address: pos.position });
-          results.push(`${pos.pair}: ${result.success ? "closed" : `failed (${result.error || "unknown"})`}`);
+          const result = await executeTool("close_position", {
+            position_address: pos.position,
+            reason: "manual telegram /closeall"
+          });
+          results.push(`${pos.pair}: ${result?.success ? `closed${result.auto_swapped ? "+swap" : ""}` : `failed (${result?.error || "unknown"})`}`);
         } catch (error) {
           results.push(`${pos.pair}: failed (${error.message})`);
         }
