@@ -234,6 +234,36 @@ export function isBaseMintOnCooldown(baseMint) {
   );
 }
 
+/**
+ * Set cooldown after ANY close (win or loss) to prevent immediate redeploy.
+ * Uses postCloseReentryCooldownMin from config.
+ */
+export function setPostCloseCooldown(poolAddress, baseMint, reason) {
+  const cooldownMin = Number(config?.screening?.postCloseReentryCooldownMin ?? 0);
+  if (cooldownMin <= 0) return null;
+
+  const db = load();
+  const entry = db[poolAddress] || { name: poolAddress.slice(0, 8) };
+  if (!db[poolAddress]) db[poolAddress] = entry;
+
+  const cooldownUntil = new Date(Date.now() + cooldownMin * 60 * 1000).toISOString();
+  entry.cooldown_until = cooldownUntil;
+  entry.cooldown_reason = reason || "post-close cooldown";
+
+  if (baseMint) {
+    for (const e of Object.values(db)) {
+      if (e?.base_mint === baseMint) {
+        e.base_mint_cooldown_until = cooldownUntil;
+        e.base_mint_cooldown_reason = reason || "post-close cooldown";
+      }
+    }
+  }
+
+  save(db);
+  log("pool-memory", `Post-close cooldown set for ${entry.name} until ${cooldownUntil} (${reason})`);
+  return cooldownUntil;
+}
+
 // ─── Read ──────────────────────────────────────────────────────
 
 /**

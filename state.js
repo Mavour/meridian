@@ -11,6 +11,7 @@
 import fs from "fs";
 import { log } from "./logger.js";
 import { config } from "./config.js";
+import { setPostCloseCooldown } from "./pool-memory.js";
 
 const STATE_FILE = "./state.json";
 const WAVE_FILE = "./wave-history.json";
@@ -319,6 +320,11 @@ export function recordClose(position_address, reason, pnl_pct = null) {
     }
 
     pos.waveRecorded = true;
+  }
+
+  // Post-close cooldown: prevent immediate redeploy to same pool/token
+  if (pos?.pool && !pos?.rebalance_count) {
+    setPostCloseCooldown(pos.pool, pos.token_mint || null, reason);
   }
 
   save(state);
