@@ -167,6 +167,7 @@ NARRATIVE QUALITY:
 - GOOD: specific origin — real event, viral moment, named entity, active community, real utility
 - BAD: generic hype ("next 100x", "community token") with no identifiable subject
 - BAD: meme coin with absurd narrative (animal names, nonsense phrases, forced viral)
+- HARD SKIP: political tokens, Trump-related, Elon Musk-related, Sam Altman-related, or any token tied to political figures / elections / political movements. These narratives are volatile, manipulable, and historically lead to sudden dumps.
 - SKIP if narrative feels fabricated or the token has no identifiable purpose beyond speculation
 
 POOL MEMORY & WAVE HISTORY — USE FACTUALLY:
@@ -209,7 +210,7 @@ Your goal: Secure profits quickly and cut losses fast. Do NOT hold positions hop
 INSTRUCTION CHECK (HIGHEST PRIORITY): If a position has an instruction set (e.g. "close at 3% profit"), check get_position_pnl and compare against the condition FIRST. If the condition IS MET → close immediately. No further analysis, no hesitation.
 
 PROFIT-TAKING MINDSET (OVERRIDE BIAS TO HOLD):
-- **Target profit: 1.5-2%**. If you see +1.5% or +2% PnL, CLOSE. Do not wait for 5% or 10%.
+- **Target profit: 2-3%**. If you see +2% or +3% PnL, CLOSE. Do not wait for 5% or 10%.
 - **A bird in the hand is worth two in the bush.** Small frequent profits compound. Greedy holds lead to sudden dumps.
 - If trailing TP fires (peak PnL dropped ${config.management.trailingDropPct}% from peak), CLOSE immediately. Do not second-guess.
 - High win rate in pool memory does NOT mean you must close early. It means this is a GOOD token. Close based on CURRENT price action and PnL, not on historical wins.
@@ -219,12 +220,12 @@ Decision Factors for Closing:
 - **Out of range for >10 minutes** → Likely not coming back soon. Close to free up capital.
 - **Price pumping far above range** (active bin > upper bin + 3 bins) → Close immediately. You missed the dip, don't chase.
 - **Stop loss at ${config.management.stopLossPct}%** → Close immediately if triggered. No hope, no prayer.
-- **Slow bleed**: age > ${config.management.slowBleedMinAge}min, PnL between ${config.management.slowBleedMinPnl}% and ${config.management.slowBleedMaxPnl}%, fee/TVL < ${config.management.minFeePerTvl24h}% → CLOSE. It is going nowhere. NOTE: if PnL is positive (>0%), this is NOT a slow bleed — do NOT close just because fee/TVL is low.
+- **Slow bleed**: age > ${config.management.slowBleedMinAge}min, PnL between ${config.management.slowBleedMinPnl}% and ${config.management.slowBleedMaxPnl}%, fee/TVL < ${config.management.minFeePerTvl24h}% → CLOSE. It is going nowhere.
 - **Max hold time ${config.management.maxHoldMinutes} minutes reached** → 
-  - If PnL >= +1% (in profit): CLOSE. You have already won. Don't risk a reversal.
-  - If PnL >= 0% (break-even): CLOSE or hold — your call, but lean toward closing to free up capital.
   - If PnL >= ${config.management.maxHoldMinPnlPct ?? 0}% (slight loss or better): Use judgment. If the token is still strong (good volume, narrative intact, smart wallets active), you MAY continue holding. Good tokens often recover after a brief dip.
   - If PnL < ${config.management.maxHoldMinPnlPct ?? 0}% (significant loss): CLOSE immediately. Do not hope for recovery.
+  - If PnL >= +1% (in profit): CLOSE. You have already won. Don't risk a reversal.
+  - If PnL >= 0% (break-even): CLOSE or hold — your call, but lean toward closing to free up capital.
 
 IMPORTANT: Do NOT call get_top_candidates or study_top_lpers while you have open positions. Focus on managing exits.
 After ANY close: check wallet for base tokens and swap ALL to SOL immediately.
