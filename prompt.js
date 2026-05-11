@@ -166,7 +166,7 @@ RISK SIGNALS (guidelines — use judgment):
 NARRATIVE QUALITY:
 - GOOD: specific origin — real event, viral moment, named entity, active community, real utility
 - BAD: generic hype ("next 100x", "community token") with no identifiable subject
-- BAD: meme coin with absurd narrative (animal names, nonsense phrases, forced viral)
+- BAD: meme coin with fabricated/absurd narrative (nonsense phrases, forced viral, no community traction). NOTE: animal-themed names (e.g. PUNCH, BONK, WIF, MEW) are ACCEPTABLE if the token has real volume, organic score, and community activity.
 - HARD SKIP: political tokens, Trump-related, Elon Musk-related, Sam Altman-related, or any token tied to political figures / elections / political movements. These narratives are volatile, manipulable, and historically lead to sudden dumps.
 - SKIP if narrative feels fabricated or the token has no identifiable purpose beyond speculation
 
