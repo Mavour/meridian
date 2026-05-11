@@ -115,7 +115,10 @@ export function getWaveHistory(maxWaves = null) {
     // Block if: too many wins in window OR any loss in window
     const tooManyWins = data.wins  >= effectiveMax && winHoursAgo  != null && winHoursAgo  < blockHours;
     const tooManyLoss = (data.losses || 0) >= maxLosses && lossHoursAgo != null && lossHoursAgo < blockHours;
-    if (tooManyWins || tooManyLoss) blocked.push(mintOrKey);
+    if (tooManyWins || tooManyLoss) {
+      blocked.push(mintOrKey);
+      log("wave_debug", `Block ${data.symbol || mintOrKey}: wins=${data.wins}/${effectiveMax} (lastWin ${winHoursAgo?.toFixed(1)}h ago), losses=${data.losses}/${maxLosses} (lastLoss ${lossHoursAgo?.toFixed(1)}h ago), window=${blockHours}h — ${tooManyWins ? "tooManyWins" : ""}${tooManyLoss ? "tooManyLoss" : ""}`);
+    }
   }
 
   return { blocked, history };
