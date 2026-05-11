@@ -738,6 +738,10 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
     );
 
     // Build compact candidate blocks
+    const hardFilteredBlock = earlyFilteredExamples.length > 0
+      ? `\n\nREJECTED BY HARD FILTERS (${earlyFilteredExamples.length} pool${earlyFilteredExamples.length !== 1 ? 's' : ''} — do NOT deploy into these):\n${earlyFilteredExamples.slice(0, 5).map((e) => `- ${e.name}: ${e.reason}`).join('\n')}`
+      : "";
+
     const candidateBlocks = passing.map(({ pool, sw, n, ti, mem, xs }, i) => {
       const botPct = ti?.audit?.bot_holders_pct ?? "?";
       const top10Pct = ti?.audit?.top_holders_pct ?? "?";
@@ -796,6 +800,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
           pvpLine,
           okxParts ? `  okx: ${okxParts}` : okxUnavailable ? `  okx: unavailable` : null,
           okxTags  ? `  tags: ${okxTags}` : null,
+          pool.dex_boosts != null ? `  dex_boosts: ${pool.dex_boosts}` : null,
           pool.price_vs_ath_pct != null ? `  ath: price_vs_ath=${pool.price_vs_ath_pct}%${pool.top_cluster_trend ? `, top_cluster=${pool.top_cluster_trend}` : ""}` : null,
           // X Sentiment
           xs && xs.sentiment !== "DISABLED" && xs.sentiment !== "COOKIE_EXPIRED" && xs.sentiment !== "NO_ACCOUNTS" 
@@ -842,7 +847,7 @@ ${strategyBlock}
 Positions: ${prePositions.total_positions}/${config.risk.maxPositions} | SOL: ${currentBalance.sol.toFixed(3)} | Deploy: ${deployAmount} SOL${recentlyClosedBlock}
 
 PRE-LOADED CANDIDATES (${passing.length} pools):
-${candidateBlocks.join("\n\n")}
+${candidateBlocks.join("\n\n")}${hardFilteredBlock}
 
 STEPS:
 1. Pick the best candidate based on narrative quality, smart wallets, and pool metrics.
@@ -914,6 +919,9 @@ IMPORTANT:
       });
     const funnelAppend = buildGmgnFunnelReport(gmgnStageCounts, gmgnAllFiltered, { fromStage: 2 });
     screenReport = funnelAppend ? `${content}\n\n─────────────\n${funnelAppend}` : content;
+    if (hardFilteredBlock) {
+      screenReport += `\n\n─────────────${hardFilteredBlock}`;
+    }
     if (/⛔\s*NO DEPLOY/i.test(content)) {
       appendDecision({
         type: "no_deploy",

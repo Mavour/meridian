@@ -6,6 +6,7 @@ import { isBaseMintOnCooldown, isPoolOnCooldown } from "../pool-memory.js";
 import { isTokenWaveBlocked } from "../state.js";
 import { confirmIndicatorPreset } from "./chart-indicators.js";
 import { discoverGmgnPools, fetchGmgnTokenFees } from "./gmgn.js";
+import { fetchDexScreenerBoosts } from "./dexscreener.js";
 
 const DATAPI_JUP = "https://datapi.jup.ag/v1";
 
@@ -736,6 +737,35 @@ export async function getTopCandidates({ limit = 10 } = {}) {
     });
     eligible.splice(0, eligible.length, ...filtered);
     if (eligible.length < before) log("dev_blocklist", `Filtered ${before - eligible.length} pool(s) via OKX creator check`);
+  }
+
+  // ── DexScreener boost enrichment + hard filter ───────────────────────────
+  if (eligible.length > 0) {
+    const boostResults = await Promise.allSettled(
+      eligible.map(async (p) => {
+        if (!p.base?.mint) return null;
+        return fetchDexScreenerBoosts(p.base.mint);
+      })
+    );
+    for (let i = 0; i < eligible.length; i++) {
+      const r = boostResults[i];
+      if (r.status === "fulfilled" && r.value != null) {
+        eligible[i].dex_boosts = r.value;
+      }
+    }
+    const maxDexBoosts = config.screening.maxDexBoosts;
+    if (maxDexBoosts != null && maxDexBoosts >= 0) {
+      const before = eligible.length;
+      eligible.splice(0, eligible.length, ...eligible.filter((p) => {
+        if (p.dex_boosts != null && p.dex_boosts > maxDexBoosts) {
+          log("screening", `Filtered high DexScreener boosts ${p.name}: ${p.dex_boosts} > max ${maxDexBoosts}`);
+          pushFilteredReason(filteredOut, p, `DexScreener boosts ${p.dex_boosts} > max ${maxDexBoosts}`);
+          return false;
+        }
+        return true;
+      }));
+      if (eligible.length < before) log("screening", `DexScreener boost filter removed ${before - eligible.length} pool(s)`);
+    }
   }
 
   if (config.indicators.enabled && eligible.length > 0) {

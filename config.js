@@ -115,6 +115,7 @@ export const config = {
     maxTokenAgeHours:   u.maxTokenAgeHours   ?? null, // null = no maximum
     athFilterPct:       u.athFilterPct       ?? null, // e.g. -20 = only deploy if price is >= 20% below ATH
     maxVolatility:       u.maxVolatility       ?? 7,   // max pool volatility (filters high-vol pools)
+    maxDexBoosts:       u.maxDexBoosts       ?? null, // max DexScreener active boosts (null = no filter)
   },
 
   gmgn: {
@@ -366,6 +367,7 @@ export function reloadScreeningThresholds() {
     if (fresh.allowedLaunchpads !== undefined) s.allowedLaunchpads = fresh.allowedLaunchpads;
     if (fresh.blockedLaunchpads !== undefined) s.blockedLaunchpads = fresh.blockedLaunchpads;
     if (fresh.maxVolatility !== undefined) s.maxVolatility = fresh.maxVolatility;
+    if (fresh.maxDexBoosts !== undefined) s.maxDexBoosts = fresh.maxDexBoosts;
     const minBinsBelow = numericConfig(fresh.minBinsBelow) ?? config.strategy.minBinsBelow;
     const maxBinsBelow = numericConfig(fresh.maxBinsBelow) ?? numericConfig(fresh.binsBelow) ?? config.strategy.maxBinsBelow;
     const defaultBinsBelow = numericConfig(fresh.defaultBinsBelow) ?? numericConfig(fresh.binsBelow) ?? config.strategy.defaultBinsBelow ?? maxBinsBelow;

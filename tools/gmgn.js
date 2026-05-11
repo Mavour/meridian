@@ -754,7 +754,8 @@ export function formatGmgnCandidateForPrompt(p) {
 
   const header = [sym, launchpad, age, mcap, binStep].filter(Boolean).join(" | ");
   const pool = [tvl, feeTvl, vol, volatility, ath].filter(Boolean).join(" | ");
-  const risk = [top10, dev, bot, fresh, bundler].filter(Boolean).join(" | ");
+  const dexBoosts = p.dex_boosts != null ? `dex_boosts=${p.dex_boosts}` : "";
+  const risk = [top10, dev, bot, fresh, bundler, dexBoosts].filter(Boolean).join(" | ");
   const traction = [holders, fees, smart, kol].filter(Boolean).join(" | ");
 
   return [
