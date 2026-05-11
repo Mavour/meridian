@@ -89,12 +89,24 @@ function getClosedPositions(state, lessons) {
   const pos = state.positions || {};
   const lessonList = lessons?.lessons || [];
 
-  // Build lookup: pool -> latest lesson with pnl
-  const pnlByPool = {};
+  // Build lookups
+  const pnlByPool = {};     // match by pool address
+  const pnlBySymbol = {};   // fallback: match by token symbol (pool_name)
+
   for (const l of lessonList) {
-    if (l.pool && l.pnl_pct != null) {
+    if (l.pnl_pct == null) continue;
+    // by pool address
+    if (l.pool) {
       if (!pnlByPool[l.pool] || new Date(l.created_at) > new Date(pnlByPool[l.pool].created_at)) {
         pnlByPool[l.pool] = l;
+      }
+    }
+    // by symbol parsed from context
+    const symbolMatch = (l.context || "").match(/^([A-Z0-9-]+)/);
+    if (symbolMatch) {
+      const sym = symbolMatch[1];
+      if (!pnlBySymbol[sym] || new Date(l.created_at) > new Date(pnlBySymbol[sym].created_at)) {
+        pnlBySymbol[sym] = l;
       }
     }
   }
@@ -104,10 +116,15 @@ function getClosedPositions(state, lessons) {
     .sort((a, b) => new Date(b.closed_at || 0) - new Date(a.closed_at || 0))
     .slice(0, 20)
     .map((p) => {
-      const lesson = pnlByPool[p.pool];
+      // Try match by pool address first
+      let lesson = pnlByPool[p.pool];
+      // Fallback: match by pool_name symbol
+      if (!lesson && p.pool_name) {
+        lesson = pnlBySymbol[p.pool_name];
+      }
       if (lesson) {
         const pnlPct = Number(lesson.pnl_pct);
-        const initial = Number(lesson.initial_value_usd);
+        const initial = Number(lesson.initial_value_usd || 20); // fallback $20
         const pnlUsd = initial * pnlPct / 100;
         return {
           ...p,
@@ -223,28 +240,6 @@ app.get("/api/snapshots", (req, res) => {
   res.json(parsed);
 });
 
-// Debug endpoint
-app.get("/api/debug", (req, res) => {
-  const today = new Date().toISOString().split("T")[0];
-  const logFile = getLogFilePath(today);
-  const lessons = readLessons();
-  const state = readState();
-  const closed = getClosedPositions(state, lessons);
-
-  res.json({
-    meridian_path: MERIDIAN_PATH,
-    log_file_exists: fs.existsSync(logFile),
-    log_file_size: fs.existsSync(logFile) ? fs.statSync(logFile).size : 0,
-    log_file_path: logFile,
-    lessons_count: lessons.lessons?.length || 0,
-    closed_positions_count: closed.length,
-    first_closed_pool: closed[0]?.pool || null,
-    first_lesson_pool: lessons.lessons?.[0]?.pool || null,
-    has_pnl_match: closed[0] && lessons.lessons?.some((l) => l.pool === closed[0]?.pool),
-    env_meridian_path: process.env.MERIDIAN_PATH,
-  });
-});
-
 // ─── WebSocket ──────────────────────────────────────────────────
 
 function broadcast(type, data) {
@@ -258,6 +253,19 @@ function broadcast(type, data) {
 
 wss.on("connection", (ws) => {
   ws.send(JSON.stringify({ type: "connected", data: "LPGoose Dashboard" }));
+  // Send last 20 log lines on connect so client sees something immediately
+  const today = new Date().toISOString().split("T")[0];
+  const logFile = getLogFilePath(today);
+  if (fs.existsSync(logFile)) {
+    const allLines = fs.readFileSync(logFile, "utf8").split("\n").filter(Boolean);
+    const lastLines = allLines.slice(-20);
+    const parsed = parseLogLines(lastLines);
+    for (const line of parsed) {
+      if (ws.readyState === 1) {
+        ws.send(JSON.stringify({ type: "log", data: line, ts: Date.now() }));
+      }
+    }
+  }
 });
 
 // ─── File Watchers ──────────────────────────────────────────────
@@ -285,8 +293,4 @@ const logWatcher = createLogWatcher(broadcast);
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`LPGoose Dashboard running on http://0.0.0.0:${PORT}`);
-  console.log(`MERIDIAN_PATH: ${MERIDIAN_PATH}`);
-  console.log(`State file exists: ${fs.existsSync(path.join(MERIDIAN_PATH, "state.json"))}`);
-  console.log(`Lessons file exists: ${fs.existsSync(path.join(MERIDIAN_PATH, "lessons.json"))}`);
-  console.log(`Log dir exists: ${fs.existsSync(path.join(MERIDIAN_PATH, "logs"))}`);
 });
