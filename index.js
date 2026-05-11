@@ -1,6 +1,7 @@
 import "./envcrypt.js";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import cron from "node-cron";
 import readline from "readline";
 import { agentLoop } from "./agent.js";
