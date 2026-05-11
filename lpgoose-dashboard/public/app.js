@@ -284,8 +284,8 @@ function renderStats(perf, positions) {
       </div>
       <div class="stat-card">
         <div class="stat-label">Today Fees</div>
-        <div class="stat-value">◎0.0000</div>
-        <div class="stat-sublabel">$0.00</div>
+        <div class="stat-value">◎${perf?.today_fees_sol || "0.0000"}</div>
+        <div class="stat-sublabel">$${perf?.today_fees_usd || "0.00"}</div>
       </div>
     </div>
   `;
@@ -306,17 +306,31 @@ function refreshWaves() {
   const container = document.getElementById("wave-chips");
   if (!container) return;
   const waves = cache.waves || {};
-  const entries = Object.entries(waves).sort((a, b) => (b[1].wins || 0) - (a[1].wins || 0));
+
+  // Deduplicate by symbol, merge wins/losses
+  const merged = {};
+  for (const [key, data] of Object.entries(waves)) {
+    const symbol = data.symbol || key;
+    if (!merged[symbol]) {
+      merged[symbol] = { wins: 0, losses: 0 };
+    }
+    merged[symbol].wins += data.wins || 0;
+    merged[symbol].losses += data.losses || 0;
+  }
+
+  // Filter: only show tokens with wins >= 1, sort by wins desc
+  const entries = Object.entries(merged)
+    .filter(([, data]) => data.wins >= 1)
+    .sort((a, b) => b[1].wins - a[1].wins);
+
   if (entries.length === 0) {
     container.innerHTML = `<span style="color:var(--text-2)">No wave history</span>`;
     return;
   }
-  container.innerHTML = entries.map(([key, data]) => {
-    const symbol = data.symbol || key;
-    const wins = data.wins || 0;
-    const losses = data.losses || 0;
-    const icon = losses > 0 ? "⚠" : "✓";
-    return `<div class="wave-chip">${symbol} <span class="count">×${wins}</span> <span class="icon">${icon}</span></div>`;
+
+  container.innerHTML = entries.map(([symbol, data]) => {
+    const icon = data.losses > 0 ? "⚠" : "✓";
+    return `<div class="wave-chip">${symbol} <span class="count">×${data.wins}</span> <span class="icon">${icon}</span></div>`;
   }).join("");
 }
 

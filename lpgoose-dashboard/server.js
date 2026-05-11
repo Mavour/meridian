@@ -58,17 +58,17 @@ function sanitizeConfig(cfg) {
 function calcPerformance(lessons) {
   const perf = lessons.lessons || [];
   const trades = perf.filter((p) => p.pnl_pct != null);
-  const wins = trades.filter((p) => p.pnl_pct > 0);
-  const losses = trades.filter((p) => p.pnl_pct < 0);
+  const wins = trades.filter((p) => Number(p.pnl_pct) > 0);
+  const losses = trades.filter((p) => Number(p.pnl_pct) < 0);
   const avgWin =
     wins.length > 0
-      ? wins.reduce((s, p) => s + p.pnl_pct, 0) / wins.length
+      ? wins.reduce((s, p) => s + Number(p.pnl_pct), 0) / wins.length
       : 0;
   const avgLoss =
     losses.length > 0
-      ? losses.reduce((s, p) => s + p.pnl_pct, 0) / losses.length
+      ? losses.reduce((s, p) => s + Number(p.pnl_pct), 0) / losses.length
       : 0;
-  const totalPnl = trades.reduce((s, p) => s + (p.pnl_usd || 0), 0);
+  const totalPnl = trades.reduce((s, p) => s + Number(p.pnl_usd || 0), 0);
   return {
     total_trades: trades.length,
     win_count: wins.length,
@@ -85,12 +85,30 @@ function getOpenPositions(state) {
   return Object.values(pos).filter((p) => !p.closed);
 }
 
-function getClosedPositions(state) {
+function getClosedPositions(state, lessons) {
   const pos = state.positions || {};
+  const lessonList = lessons?.lessons || [];
+  // Build lookup: pool -> latest lesson with pnl
+  const pnlByPool = {};
+  for (const l of lessonList) {
+    if (l.pool && l.pnl_pct != null) {
+      // keep the latest lesson per pool
+      if (!pnlByPool[l.pool] || new Date(l.created_at) > new Date(pnlByPool[l.pool].created_at)) {
+        pnlByPool[l.pool] = l;
+      }
+    }
+  }
   return Object.values(pos)
     .filter((p) => p.closed)
     .sort((a, b) => new Date(b.closed_at || 0) - new Date(a.closed_at || 0))
-    .slice(0, 20);
+    .slice(0, 20)
+    .map((p) => {
+      const lesson = pnlByPool[p.pool];
+      if (lesson) {
+        return { ...p, pnl_pct: lesson.pnl_pct, pnl_usd: lesson.pnl_usd };
+      }
+      return p;
+    });
 }
 
 // ─── API Routes ─────────────────────────────────────────────────
@@ -115,12 +133,25 @@ app.get("/api/positions", (req, res) => {
 
 app.get("/api/positions/closed", (req, res) => {
   const state = readState();
-  res.json(getClosedPositions(state));
+  const lessons = readLessons();
+  res.json(getClosedPositions(state, lessons));
 });
 
 app.get("/api/performance", (req, res) => {
   const lessons = readLessons();
-  res.json(calcPerformance(lessons));
+  const perf = calcPerformance(lessons);
+
+  // Calculate today fees from lessons created today
+  const today = new Date().toISOString().split("T")[0];
+  const todayLessons = (lessons.lessons || []).filter((l) =>
+    l.created_at && l.created_at.startsWith(today)
+  );
+  const todayFeesUsd = todayLessons.reduce((s, l) => s + Number(l.fees_earned_usd || 0), 0);
+  const solPrice = 150; // approximate SOL price
+  perf.today_fees_sol = (todayFeesUsd / solPrice).toFixed(4);
+  perf.today_fees_usd = todayFeesUsd.toFixed(2);
+
+  res.json(perf);
 });
 
 app.get("/api/lessons", (req, res) => {
