@@ -200,6 +200,7 @@ export const config = {
     slowBleedMinPnl:       u.slowBleedMinPnl        ?? -3,   // slow bleed: pnl lower bound (%)
     slowBleedMaxPnl:       u.slowBleedMaxPnl        ?? 2,    // slow bleed: pnl upper bound (%)
     maxHoldMinPnlPct:      u.maxHoldMinPnlPct       ?? 3,    // min profit% to justify holding past maxHoldMinutes
+    maxHoldGraceMinutes:   u.maxHoldGraceMinutes    ?? 15,  // extra minutes after maxHoldMinutes to wait for BEP/profit if loss is shallow
     // Trailing take-profit
     trailingTakeProfit:    u.trailingTakeProfit    ?? true,
     trailingTriggerPct:    u.trailingTriggerPct    ?? 3,    // activate trailing at X% PnL

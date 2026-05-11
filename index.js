@@ -1160,6 +1160,40 @@ function getDeterministicCloseRule(position, managementConfig) {
   ) {
     return { action: "CLOSE", rule: 5, reason: "low yield" };
   }
+  // Rule 6: max hold time — 2-tier (hard cut + grace period)
+  const grace = managementConfig.maxHoldGraceMinutes ?? 0;
+  // 6a: Hard cut — deep loss at or past max hold time
+  if (
+    position.age_minutes != null &&
+    position.age_minutes >= managementConfig.maxHoldMinutes &&
+    position.pnl_pct != null &&
+    position.pnl_pct <= managementConfig.maxHoldMinPnlPct
+  ) {
+    return { action: "CLOSE", rule: 6, reason: `max hold hard cut (${position.age_minutes}m >= ${managementConfig.maxHoldMinutes}m, PnL ${position.pnl_pct}% <= ${managementConfig.maxHoldMinPnlPct}%)` };
+  }
+  // 6b: Grace period expired — still negative after extra minutes
+  if (
+    grace > 0 &&
+    position.age_minutes != null &&
+    position.age_minutes >= (managementConfig.maxHoldMinutes + grace) &&
+    position.pnl_pct != null &&
+    position.pnl_pct < 0
+  ) {
+    return { action: "CLOSE", rule: 6, reason: `max hold grace expired (${position.age_minutes}m >= ${managementConfig.maxHoldMinutes + grace}m, PnL ${position.pnl_pct}% still negative)` };
+  }
+  // Rule 7: slow bleed / slow rug — in range, low fees, shallow PnL, going nowhere
+  if (
+    position.in_range === true &&
+    position.age_minutes != null &&
+    position.age_minutes >= (managementConfig.slowBleedMinAge ?? 20) &&
+    position.pnl_pct != null &&
+    position.pnl_pct >= (managementConfig.slowBleedMinPnl ?? -1) &&
+    position.pnl_pct <= (managementConfig.slowBleedMaxPnl ?? 0.5) &&
+    position.fee_per_tvl_24h != null &&
+    position.fee_per_tvl_24h < managementConfig.minFeePerTvl24h
+  ) {
+    return { action: "CLOSE", rule: 7, reason: `slow bleed / slow rug — age ${position.age_minutes}m, PnL ${position.pnl_pct}% (range ${managementConfig.slowBleedMinPnl ?? -1}% to ${managementConfig.slowBleedMaxPnl ?? 0.5}%), fee/TVL ${position.fee_per_tvl_24h}% < ${managementConfig.minFeePerTvl24h}%` };
+  }
   return null;
 }
 
@@ -1248,6 +1282,8 @@ function formatConfigSnapshot() {
     `Strategy: ${config.strategy.strategy} | bins: [${config.strategy.minBinsBelow}–${config.strategy.maxBinsBelow}] (volatility-scaled)`,
     `Deploy: ${config.management.deployAmountSol} SOL | gasReserve: ${config.management.gasReserve} | maxPositions: ${config.risk.maxPositions}`,
     `Stop loss: ${config.management.stopLossPct}% | take profit: ${config.management.takeProfitPct}%`,
+    `Max hold: ${config.management.maxHoldMinutes}m (+${config.management.maxHoldGraceMinutes ?? 15}m grace) | hard cut <= ${config.management.maxHoldMinPnlPct}%`,
+    `Slow bleed: age >= ${config.management.slowBleedMinAge ?? 20}m | PnL ${config.management.slowBleedMinPnl ?? -1}% to ${config.management.slowBleedMaxPnl ?? 0.5}% | auto-close`,
     `Trailing: ${config.management.trailingTakeProfit ? "on" : "off"} | trigger ${config.management.trailingTriggerPct}% | drop ${config.management.trailingDropPct}%`,
     `OOR: ${config.management.outOfRangeWaitMinutes}m | cooldown ${config.management.oorCooldownTriggerCount}x / ${config.management.oorCooldownHours}h`,
     `Repeat deploy cooldown: ${config.management.repeatDeployCooldownEnabled ? "on" : "off"} | ${config.management.repeatDeployCooldownTriggerCount}x / ${config.management.repeatDeployCooldownHours}h | min fee earned ${config.management.repeatDeployCooldownMinFeeEarnedPct}% | ${config.management.repeatDeployCooldownScope}`,
@@ -1309,6 +1345,12 @@ function settingValue(key) {
     maxDeployAmount: config.risk.maxDeployAmount,
     takeProfitPct: config.management.takeProfitPct,
     stopLossPct: config.management.stopLossPct,
+    maxHoldMinutes: config.management.maxHoldMinutes,
+    maxHoldMinPnlPct: config.management.maxHoldMinPnlPct,
+    maxHoldGraceMinutes: config.management.maxHoldGraceMinutes,
+    slowBleedMinAge: config.management.slowBleedMinAge,
+    slowBleedMinPnl: config.management.slowBleedMinPnl,
+    slowBleedMaxPnl: config.management.slowBleedMaxPnl,
     trailingTriggerPct: config.management.trailingTriggerPct,
     trailingDropPct: config.management.trailingDropPct,
     repeatDeployCooldownEnabled: config.management.repeatDeployCooldownEnabled,
@@ -1398,6 +1440,12 @@ function renderSettingsMenu(page = "main") {
       inputButton("maxDeployAmount", "Max SOL"),
       inputButton("takeProfitPct", "TP %"),
       inputButton("stopLossPct", "SL %"),
+      inputButton("maxHoldMinutes", "Max hold min"),
+      inputButton("maxHoldMinPnlPct", "Max hold min PnL", { digits: 1 }),
+      inputButton("maxHoldGraceMinutes", "Grace min", { digits: 0 }),
+      inputButton("slowBleedMinAge", "Slow bleed age", { digits: 0 }),
+      inputButton("slowBleedMinPnl", "Slow bleed min PnL", { digits: 1 }),
+      inputButton("slowBleedMaxPnl", "Slow bleed max PnL", { digits: 1 }),
       [toggleButton("trailingTakeProfit", "Trailing TP")],
       inputButton("trailingTriggerPct", "Trail trigger", { digits: 1 }),
       inputButton("trailingDropPct", "Trail drop", { digits: 1 }),
