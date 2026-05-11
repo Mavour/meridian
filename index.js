@@ -583,7 +583,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
     // Hard filters after token recon — block launchpads and excessive Jupiter bot holders
     // Skipped for GMGN: platforms already filtered upstream; bundler/bot data from GMGN pipeline
     const filteredOut = [];
-    const passing = allCandidates.filter(({ pool, ti, xs }) => {
+    const passing = allCandidates.filter(({ pool, n, ti, xs }) => {
       // Wave block is LOCAL state — must check even for GMGN candidates
       const narrativeText = n?.narrative || null;
       if (isTokenWaveBlocked(pool.base?.mint, null, narrativeText) || isTokenWaveBlocked(pool.base?.symbol, null, narrativeText)) {
