@@ -4,28 +4,39 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LPGoose Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
 <body>
   <div id="app">
-    <header class="app-header">
-      <div class="header-left">
-        <div class="logo">LPGoose</div>
-        <div class="status-dot" id="bot-status" title="Bot status"></div>
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="brand">
+          <span class="brand-icon">◯</span>
+          <span class="brand-name">LPGoose</span>
+        </div>
+        <nav class="topnav" id="nav-tabs">
+          <button data-page="dashboard" class="nav-link active">Dashboard</button>
+          <button data-page="logs" class="nav-link">Live Logs</button>
+          <button data-page="performance" class="nav-link">Performance</button>
+          <button data-page="pools" class="nav-link">Pools</button>
+          <button data-page="config" class="nav-link">Config</button>
+        </nav>
       </div>
-      <nav class="nav-tabs" id="nav-tabs">
-        <button data-page="dashboard" class="nav-btn active">Dashboard</button>
-        <button data-page="logs" class="nav-btn">Logs</button>
-        <button data-page="performance" class="nav-btn">Performance</button>
-        <button data-page="pools" class="nav-btn">Pools</button>
-        <button data-page="config" class="nav-btn">Config</button>
-      </nav>
+      <div class="topbar-right">
+        <div class="bot-pill" id="bot-pill">
+          <span class="bot-dot" id="bot-dot"></span>
+          <span id="bot-text">Bot running</span>
+        </div>
+        <div class="balance-pill" id="balance-pill">— SOL</div>
+      </div>
     </header>
     <main id="main-content"></main>
   </div>
 
-  <script src="/components/navBar.js"></script>
   <script src="/components/statsBar.js"></script>
   <script src="/components/positionCard.js"></script>
   <script src="/components/logTerminal.js"></script>

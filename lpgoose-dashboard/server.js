@@ -171,6 +171,18 @@ app.get("/api/log-dates", (req, res) => {
   res.json(listLogDates());
 });
 
+app.get("/api/snapshots", (req, res) => {
+  const today = new Date().toISOString().split("T")[0];
+  const date = req.query.date || today;
+  const fp = path.join(MERIDIAN_PATH, "logs", `snapshots-${date}.jsonl`);
+  if (!fs.existsSync(fp)) return res.json([]);
+  const lines = fs.readFileSync(fp, "utf8").split("\n").filter(Boolean);
+  const parsed = lines.map((l) => {
+    try { return JSON.parse(l); } catch { return null; }
+  }).filter(Boolean);
+  res.json(parsed);
+});
+
 // ─── WebSocket ──────────────────────────────────────────────────
 
 function broadcast(type, data) {
