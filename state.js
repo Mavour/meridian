@@ -22,6 +22,22 @@ const MAX_WAVES_BEFORE_BLOCK  = () => config?.screening?.maxWavesPerToken  ?? 3;
 const MAX_LOSSES_BEFORE_BLOCK = () => config?.screening?.maxLossesPerToken ?? 1; // block after N losses in window
 const WAVE_BLOCK_HOURS        = () => config?.screening?.waveBlockHours    ?? 48; // how long wave block lasts
 
+const POLITICAL_KEYWORDS = [
+  "trump", "donald trump", "maga", "elon", "elon musk", "musk",
+  "sam altman", "altman", "openai", "political", "election", "biden",
+  "president", "governor", "senator", "congress", "vote", "campaign",
+  "kamala", "putin", "zelensky", "xi jinping", "modi", "macron",
+  "milei", "bolsonaro", "lula", "impeach", "rally", "protest",
+  "manifesto", "white house", "capitol", "parliament", "republican",
+  "democrat", "liberal", "conservative", "gop", "dnc", "rnc"
+];
+
+function isPoliticalNarrative(narrative) {
+  if (!narrative) return false;
+  const text = String(narrative).toLowerCase();
+  return POLITICAL_KEYWORDS.some(kw => text.includes(kw));
+}
+
 function sanitizeStoredText(text, maxLen = MAX_INSTRUCTION_LENGTH) {
   if (text == null) return null;
   const cleaned = String(text)
@@ -126,9 +142,14 @@ export function getWaveHistory(maxWaves = null) {
 
 /**
  * Quick check — is a specific token mint currently blocked from re-entry?
+ * @param {string} tokenMintOrSymbol — token mint address or symbol
+ * @param {number|null} maxWaves — override max waves (null = use config default)
+ * @param {string|null} narrative — token narrative text; if political, maxWaves forced to 1 (nyopet rule)
  */
-export function isTokenWaveBlocked(tokenMintOrSymbol, maxWaves = null) {
-  const { blocked, history } = getWaveHistory(maxWaves);
+export function isTokenWaveBlocked(tokenMintOrSymbol, maxWaves = null, narrative = null) {
+  const isPolitical = isPoliticalNarrative(narrative);
+  const effectiveMax = isPolitical ? 1 : maxWaves;
+  const { blocked, history } = getWaveHistory(effectiveMax);
   if (!tokenMintOrSymbol) return false;
   if (blocked.length === 0) return false;
 

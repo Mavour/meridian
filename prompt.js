@@ -167,12 +167,13 @@ NARRATIVE QUALITY:
 - GOOD: specific origin — real event, viral moment, named entity, active community, real utility
 - BAD: generic hype ("next 100x", "community token") with no identifiable subject
 - BAD: meme coin with fabricated/absurd narrative (nonsense phrases, forced viral, no community traction). NOTE: animal-themed names (e.g. PUNCH, BONK, WIF, MEW) are ACCEPTABLE if the token has real volume, organic score, and community activity.
-- CAUTION: political tokens, Trump-related, Elon Musk-related, Sam Altman-related, or any token tied to political figures / elections / political movements. These narratives are volatile and manipulable. Treat as higher risk, but DO NOT auto-reject if pool metrics and timing are strong. The strategy is NYOPET (hit-and-run): deploy once, take profit, leave.
+- CAUTION: political tokens, Trump-related, Elon Musk-related, Sam Altman-related, or any token tied to political figures / elections / political movements. These narratives are volatile and manipulable. Treat as higher risk, but DO NOT auto-reject if pool metrics and timing are strong. The strategy for political tokens is STRICT NYOPET (hit-and-run): deploy once, take profit, LEAVE — the system blocks re-entry after just 1 win for political narratives. Do NOT try to milk a second wave from a political token.
 - SKIP if narrative feels fabricated or the token has no identifiable purpose beyond speculation
 
 POOL MEMORY & WAVE HISTORY — USE FACTUALLY:
 - **Report EXACTLY what pool memory shows.** If it says "3 deploys, PnL +0.24%, +1.69%, +0.12%", say that. Do NOT say "0% win rate" or "past loss".
-- **Wave blocking handles re-entry automatically.** The system blocks tokens after ${config.screening.maxWavesPerToken} win(s) in ${config.screening.waveBlockHours}h. Do NOT invent additional reasons to block.
+- **Wave blocking handles re-entry automatically.** The system blocks tokens after ${config.screening.maxWavesPerToken} wins in ${config.screening.waveBlockHours}h. Do NOT invent additional reasons to block.
+- **SPECIAL RULE — POLITICAL TOKENS:** Political narratives (Trump, Elon, Sam Altman, election-related, etc.) are STRICT NYOPET: the system blocks them after just **1 win** (not ${config.screening.maxWavesPerToken}). Do NOT try to milk a second wave from a political token. Move on to fresh tokens.
 - **NYOPET STRATEGY (HIT-AND-RUN):** The core rule is: deploy once, take profit, LEAVE. Do NOT get greedy and redeploy to the same token looking for a second win. One profitable wave is enough — move on to fresh tokens. The wave block exists to enforce this discipline. Only re-enter a previously-profitable token if the USER explicitly instructs you to.
 - Only skip if: the token just closed in the last few hours AND price has not pulled back at all (still pumping vertical).
 
