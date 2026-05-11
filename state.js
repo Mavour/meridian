@@ -285,43 +285,48 @@ export function recordClose(position_address, reason, pnl_pct = null) {
   pushEvent(state, { action: "close", position: position_address, pool_name: pos.pool_name || pos.pool, reason });
 
   // Wave tracking: record once per position when PnL is known.
-  // Strict rule: win only if PnL >= 1.0%. No regex bypass.
-  if (!pos.waveRecorded && pnl_pct != null) {
-    const isProfitClose = pnl_pct >= 1.0;
-    const isLossClose = pnl_pct < 0;
+  // Win: PnL >= 1.0% (real profit)
+  // Loss: PnL < -5.0% (significant loss) — excludes "pumped above range" / OOR where PnL is just gas/fees
+  const lowerReason = String(reason || "").toLowerCase();
+  const isOorClose = /pumped.*above|out.*of.*range|\boor\b|above.*range/.test(lowerReason);
+  const isProfitClose = pnl_pct != null && pnl_pct >= 1.0;
+  const isLossClose = pnl_pct != null && pnl_pct < -5.0 && !isOorClose;
 
-    if (isProfitClose || isLossClose) {
-      const waveState = loadWaves();
+  if (!pos.waveRecorded && (isProfitClose || isLossClose)) {
+    const waveState = loadWaves();
 
-      const tokenSymbol = pos.pool_name
-        ? pos.pool_name.split("/")[0].trim().toUpperCase()
-        : null;
+    const tokenSymbol = pos.pool_name
+      ? pos.pool_name.split("/")[0].trim().toUpperCase()
+      : null;
 
-      // Use ONLY token_mint as canonical key. Symbol is stored as metadata.
-      const key = pos.token_mint || pos.pool;
-      if (key) {
-        if (!waveState.waves[key]) {
-          waveState.waves[key] = { wins: 0, losses: 0, lastWinAt: null, lastLossAt: null, symbol: tokenSymbol || key };
-        }
-        waveState.waves[key].symbol = tokenSymbol || key;
-
-        const now = new Date().toISOString();
-
-        if (isProfitClose) {
-          waveState.waves[key].wins += 1;
-          waveState.waves[key].lastWinAt = now;
-          log("state", `Wave #${waveState.waves[key].wins} recorded for ${tokenSymbol || key} (PnL ${pnl_pct.toFixed(2)}%) in wave-history.json`);
-        } else if (isLossClose) {
-          waveState.waves[key].losses = (waveState.waves[key].losses || 0) + 1;
-          waveState.waves[key].lastLossAt = now;
-          log("state", `Loss recorded for ${tokenSymbol || key} (PnL ${pnl_pct.toFixed(2)}%) — total losses: ${waveState.waves[key].losses}`);
-        }
-
-        waveState.lastUpdated = now;
-        saveWaves(waveState);
+    // Use ONLY token_mint as canonical key. Symbol is stored as metadata.
+    const key = pos.token_mint || pos.pool;
+    if (key) {
+      if (!waveState.waves[key]) {
+        waveState.waves[key] = { wins: 0, losses: 0, lastWinAt: null, lastLossAt: null, symbol: tokenSymbol || key };
       }
+      waveState.waves[key].symbol = tokenSymbol || key;
+
+      const now = new Date().toISOString();
+
+      if (isProfitClose) {
+        waveState.waves[key].wins += 1;
+        waveState.waves[key].lastWinAt = now;
+        log("state", `Wave #${waveState.waves[key].wins} recorded for ${tokenSymbol || key} (PnL ${pnl_pct.toFixed(2)}%) in wave-history.json`);
+      } else if (isLossClose) {
+        waveState.waves[key].losses = (waveState.waves[key].losses || 0) + 1;
+        waveState.waves[key].lastLossAt = now;
+        log("state", `Loss recorded for ${tokenSymbol || key} (PnL ${pnl_pct.toFixed(2)}%) — total losses: ${waveState.waves[key].losses}`);
+      }
+
+      waveState.lastUpdated = now;
+      saveWaves(waveState);
     }
 
+    pos.waveRecorded = true;
+  } else if (!pos.waveRecorded && isOorClose) {
+    // OOR / pumped above range: mark as recorded but do NOT count as win or loss
+    log("state", `Wave skip for ${pos.pool_name || pos.pool}: OOR/pumped above range (PnL ${pnl_pct?.toFixed?.(2) ?? "unknown"}%) — not counted`);
     pos.waveRecorded = true;
   }
 
