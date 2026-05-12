@@ -628,6 +628,19 @@ export async function getTopCandidates({ limit = 10 } = {}) {
         pushFilteredReason(filteredOut, p, `bin_step ${binStep} above maxBinStep ${config.screening.maxBinStep}`);
         return false;
       }
+      // Trend filter — avoid deepening downtrend (not yet stabilized)
+      const price1h = numeric(p.price_1h_change);
+      const price30m = numeric(p.price_change_pct);
+      if (price1h != null && price1h < -3 && price30m != null && price30m < -3) {
+        log("screening", `Filtered deepening downtrend ${p.name}: 1h=${price1h}% 30m=${price30m}%`);
+        pushFilteredReason(filteredOut, p, `deepening downtrend 1h=${price1h}% 30m=${price30m}%`);
+        return false;
+      }
+      if (price1h != null && price1h < -20) {
+        log("screening", `Filtered deep dump ${p.name}: ${price1h}% in 1h`);
+        pushFilteredReason(filteredOut, p, `deep dump ${price1h}% in 1h`);
+        return false;
+      }
       return true;
     })
     .sort((a, b) => scoreCandidate(b) - scoreCandidate(a))

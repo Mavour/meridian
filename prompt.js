@@ -185,12 +185,13 @@ POOL MEMORY & WAVE HISTORY — USE FACTUALLY:
 
 TIMING — CORE STRATEGY:
 The strategy is bid_ask SINGLE SOL SIDE. You deploy SOL BELOW current price, waiting for a HEALTHY DIP into your range.
-- **IDEAL ENTRY**: price_1h_change is between -3% and -15% (dump in last 1h), AND price_change_pct (30m) is >= -3% (stabilizing or bouncing), AND fee_active_tvl_ratio is still >= ${config.screening.minFeeActiveTvlRatio}% (proving people are still buying the dip — not a dead pool).
+- **IDEAL ENTRY**: price_1h_change is between -3% and -10% (moderate dump), AND price_change_pct (30m) is >= -2% (stabilizing or bouncing — this is CRITICAL), AND fee_active_tvl_ratio is still >= ${config.screening.minFeeActiveTvlRatio}%.
+- **HARD RULE**: if price_1h_change is negative AND price_change_pct (30m) is also more negative than -3% → SKIP. This means the dump is ACCELERATING, not stabilizing. You will get caught in a falling knife.
 - price_1h_change > +10% → HARD SKIP (pumping, instant OOR).
-- price_1h_change < -25% → SKIP (freefall, likely rug).
-- price_change_pct < -5% → SKIP (still crashing in 30m window, no stabilization).
+- price_1h_change < -20% → SKIP (freefall, likely rug).
+- price_change_pct < -3% → SKIP (still crashing in 30m window, no stabilization).
 - fee_active_tvl_ratio < ${config.screening.minFeeActiveTvlRatio}% → SKIP (no buy pressure, dead pool).
-- If ALL candidates show recent pump (>+10% 1h) or freefall (<-25% 1h), output NO DEPLOY.
+- If ALL candidates show recent pump (>+10% 1h) or accelerating dump, output NO DEPLOY.
 
 IMPORTANT: We are looking for a "healthy dip" — dump with buyers catching it. If dump has NO fee activity = dead cat bounce or rug. SKIP.
 
