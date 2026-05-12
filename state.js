@@ -139,7 +139,6 @@ export function getWaveHistory(maxWaves = null) {
     const tooManyLoss = (data.losses || 0) >= maxLosses && lossHoursAgo != null && lossHoursAgo < blockHours;
     if (tooManyWins || tooManyLoss) {
       blocked.push(mintOrKey);
-      log("wave_debug", `Block ${data.symbol || mintOrKey}: wins=${data.wins}/${effectiveMax} (lastWin ${winHoursAgo?.toFixed(1)}h ago), losses=${data.losses}/${maxLosses} (lastLoss ${lossHoursAgo?.toFixed(1)}h ago), window=${blockHours}h — ${tooManyWins ? "tooManyWins" : ""}${tooManyLoss ? "tooManyLoss" : ""}`);
     }
   }
 
@@ -157,7 +156,7 @@ export function isTokenWaveBlocked(tokenMintOrSymbol, maxWaves = null, narrative
   const effectiveMax = isPolitical ? 1 : maxWaves;
 
   if (isPolitical) {
-    log("political_debug", `NYOPET override for ${tokenMintOrSymbol?.slice(0, 8)}: political keyword "${keyword}" → maxWaves forced to 1 (was ${maxWaves ?? MAX_WAVES_BEFORE_BLOCK()})`);
+    // NYOPET override applied silently
   }
 
   const { blocked, history } = getWaveHistory(effectiveMax);
@@ -168,7 +167,6 @@ export function isTokenWaveBlocked(tokenMintOrSymbol, maxWaves = null, narrative
 
   // Match by canonical key (mint address)
   if (blocked.some(key => key.toUpperCase() === upper)) {
-    if (isPolitical) log("political_debug", `BLOCKED ${tokenMintOrSymbol?.slice(0, 8)}: political token hit wave limit (1 win max)`);
     return true;
   }
 
@@ -177,7 +175,6 @@ export function isTokenWaveBlocked(tokenMintOrSymbol, maxWaves = null, narrative
     if (!blocked.includes(key)) return false;
     return data.symbol?.toUpperCase() === upper;
   });
-  if (blockedBySymbol && isPolitical) log("political_debug", `BLOCKED ${tokenMintOrSymbol?.slice(0, 8)} (by symbol): political token hit wave limit (1 win max)`);
   return blockedBySymbol;
 }
 
