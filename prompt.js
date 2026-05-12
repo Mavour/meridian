@@ -205,10 +205,10 @@ DEPLOY RULES:
 - bins_below = round(${config.strategy.minBinsBelow} + (candidate volatility/5)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}]. bins_above = 0.
 - Bin steps must be [${config.screening.minBinStep}-${config.screening.maxBinStep}].
 
-REPORT FORMAT (keep it SHORT):
+REPORT FORMAT (keep it SHORT — copy the exact values from the candidate data above, do NOT invent numbers):
 - Candidate: [name]
 - Pool Memory: [exact data from tool]
-- Timing: 1h=\${price_1h_change}% | 5m=\${price_5m_change}% | fee/TVL=\${fee_active_tvl_ratio}%
+- Timing: 1h=[paste price_1h_change from candidate] | 5m=[paste price_change_pct from candidate] | fee/TVL=[paste fee_active_tvl_ratio from candidate]
 - Decision: DEPLOY / NO DEPLOY
 - Reason (1 sentence max): [specific factual reason]
 

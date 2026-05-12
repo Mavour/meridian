@@ -753,7 +753,8 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
             : null,
           `  smart_wallets: ${sw?.in_pool?.length ?? 0} present${sw?.in_pool?.length ? ` → CONFIDENCE BOOST (${sw.in_pool.map(w => w.name).join(", ")})` : ""}`,
           activeBin != null ? `  active_bin: ${activeBin}` : null,
-          priceChange != null ? `  1h: price${priceChange >= 0 ? "+" : ""}${priceChange}%, net_buyers=${netBuyers ?? "?"}` : null,
+          pool.price_1h_change != null ? `  price_1h_change: ${pool.price_1h_change >= 0 ? "+" : ""}${pool.price_1h_change}%` : null,
+          priceChange != null ? `  jup_1h: price${priceChange >= 0 ? "+" : ""}${priceChange}%, net_buyers=${netBuyers ?? "?"}` : null,
           n?.narrative ? `  narrative_untrusted: ${sanitizeUntrustedPromptText(n.narrative, 500)}` : `  narrative_untrusted: none`,
           mem ? `  memory_untrusted: ${sanitizeUntrustedPromptText(mem, 500)}` : null,
         ].filter(Boolean).join("\n");
