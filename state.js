@@ -327,7 +327,7 @@ export function recordClose(position_address, reason, pnl_pct = null) {
   const lowerReason = String(reason || "").toLowerCase();
   const isOorClose = /pumped.*above|out.*of.*range|\boor\b|above.*range/.test(lowerReason);
   const isProfitClose = pnl_pct != null && pnl_pct >= 1.0;
-  const isLossClose = pnl_pct != null && pnl_pct < -5.0 && !isOorClose;
+      const isLossClose = pnl_pct != null && pnl_pct < 0 && !isOorClose;
 
   if (!pos.waveRecorded && (isProfitClose || isLossClose)) {
     const waveState = loadWaves();
