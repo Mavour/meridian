@@ -223,36 +223,6 @@ async function applyVolatilityTimeframe(rawPools, sourceTimeframe) {
   return rawPools;
 }
 
-async function applyPriceChange1h(rawPools) {
-  if (!Array.isArray(rawPools) || rawPools.length === 0) return rawPools;
-
-  const uniquePoolAddresses = [...new Set(rawPools.map((pool) => pool?.pool_address).filter(Boolean))];
-  const results = await Promise.allSettled(
-    uniquePoolAddresses.map(async (poolAddress) => {
-      try {
-        const pool = await fetchPoolDiscoveryDetail({ poolAddress, timeframe: "1h" });
-        return { poolAddress, price_change_pct: numeric(pool?.pool_price_change_pct) };
-      } catch {
-        return { poolAddress, price_change_pct: null };
-      }
-    })
-  );
-
-  const priceChangeByPool = new Map();
-  for (const result of results) {
-    if (result.status !== "fulfilled") continue;
-    if (result.value.price_change_pct == null) continue;
-    priceChangeByPool.set(result.value.poolAddress, result.value.price_change_pct);
-  }
-
-  for (const pool of rawPools) {
-    if (!pool?.pool_address || !priceChangeByPool.has(pool.pool_address)) continue;
-    pool.price_1h_change = priceChangeByPool.get(pool.pool_address);
-  }
-
-  return rawPools;
-}
-
 async function searchAssetsBySymbol(symbol) {
   const res = await fetch(`${DATAPI_JUP}/assets/search?query=${encodeURIComponent(symbol)}`);
   if (!res.ok) throw new Error(`assets/search ${res.status}`);
@@ -451,7 +421,31 @@ export async function discoverPools({
   }
 
   rawPools = await applyVolatilityTimeframe(rawPools, s.timeframe);
-  rawPools = await applyPriceChange1h(rawPools);
+
+  // Fetch 1h price changes in bulk (single API call) and merge into rawPools
+  try {
+    const data1h = await fetchPoolDiscoveryPage({
+      page_size,
+      filters,
+      timeframe: "1h",
+      category: s.category,
+    });
+    const pools1h = Array.isArray(data1h.data) ? data1h.data : [];
+    const priceChange1hByPool = new Map();
+    for (const p of pools1h) {
+      const addr = p?.pool_address;
+      const pct = numeric(p?.pool_price_change_pct);
+      if (addr != null && pct != null) priceChange1hByPool.set(addr, pct);
+    }
+    for (const pool of rawPools) {
+      if (pool?.pool_address && priceChange1hByPool.has(pool.pool_address)) {
+        pool.price_1h_change = priceChange1hByPool.get(pool.pool_address);
+      }
+    }
+  } catch (err) {
+    log("screening", `1h price change bulk fetch failed: ${err.message}`);
+  }
+
   await enrichDiscordSignalLaunchpads(rawPools);
 
   const filteredExamples = [];

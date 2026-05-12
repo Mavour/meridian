@@ -185,10 +185,10 @@ POOL MEMORY & WAVE HISTORY — USE FACTUALLY:
 
 TIMING — CORE STRATEGY:
 The strategy is bid_ask SINGLE SOL SIDE. You deploy SOL BELOW current price, waiting for a HEALTHY DIP into your range.
-- **IDEAL ENTRY**: price has dumped -3% to -15% in the last 1h, AND price_5m_change is >= -3% (stabilizing or bouncing), AND fee_active_tvl_ratio is still >= ${config.screening.minFeeActiveTvlRatio}% (proving people are still buying the dip — not a dead pool).
+- **IDEAL ENTRY**: price_1h_change is between -3% and -15% (dump in last 1h), AND price_change_pct (30m) is >= -3% (stabilizing or bouncing), AND fee_active_tvl_ratio is still >= ${config.screening.minFeeActiveTvlRatio}% (proving people are still buying the dip — not a dead pool).
 - price_1h_change > +10% → HARD SKIP (pumping, instant OOR).
 - price_1h_change < -25% → SKIP (freefall, likely rug).
-- price_5m_change < -5% → SKIP (still crashing, no stabilization).
+- price_change_pct < -5% → SKIP (still crashing in 30m window, no stabilization).
 - fee_active_tvl_ratio < ${config.screening.minFeeActiveTvlRatio}% → SKIP (no buy pressure, dead pool).
 - If ALL candidates show recent pump (>+10% 1h) or freefall (<-25% 1h), output NO DEPLOY.
 
@@ -208,7 +208,7 @@ DEPLOY RULES:
 REPORT FORMAT (keep it SHORT — copy the exact values from the candidate data above, do NOT invent numbers):
 - Candidate: [name]
 - Pool Memory: [exact data from tool]
-- Timing: 1h=[paste price_1h_change from candidate] | 5m=[paste price_change_pct from candidate] | fee/TVL=[paste fee_active_tvl_ratio from candidate]
+- Timing: 1h=[paste price_1h_change from candidate metrics] | 30m=[paste price_change_pct from candidate metrics] | fee/TVL=[paste fee_active_tvl_ratio from candidate metrics]
 - Decision: DEPLOY / NO DEPLOY
 - Reason (1 sentence max): [specific factual reason]
 
