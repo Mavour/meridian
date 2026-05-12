@@ -184,11 +184,15 @@ POOL MEMORY & WAVE HISTORY — USE FACTUALLY:
 - Only skip if: the token just closed in the last few hours AND price has not pulled back at all (still pumping vertical).
 
 TIMING — CORE STRATEGY:
-The strategy is bid_ask SINGLE SOL SIDE. You deploy SOL BELOW current price, waiting for a DIP into your range.
-- **IDEAL ENTRY**: price has dumped -5% to -15% in the last 1h AND is stabilizing.
-- price_1h_change > +20% → HARD SKIP.
-- price_1h_change > +10% AND no smart wallets → SKIP.
-- If ALL candidates show recent pump (>+15% 1h), output NO DEPLOY.
+The strategy is bid_ask SINGLE SOL SIDE. You deploy SOL BELOW current price, waiting for a HEALTHY DIP into your range.
+- **IDEAL ENTRY**: price has dumped -3% to -15% in the last 1h, AND price_5m_change is >= -3% (stabilizing or bouncing), AND fee_active_tvl_ratio is still >= ${config.screening.minFeeActiveTvlRatio}% (proving people are still buying the dip — not a dead pool).
+- price_1h_change > +10% → HARD SKIP (pumping, instant OOR).
+- price_1h_change < -25% → SKIP (freefall, likely rug).
+- price_5m_change < -5% → SKIP (still crashing, no stabilization).
+- fee_active_tvl_ratio < ${config.screening.minFeeActiveTvlRatio}% → SKIP (no buy pressure, dead pool).
+- If ALL candidates show recent pump (>+10% 1h) or freefall (<-25% 1h), output NO DEPLOY.
+
+IMPORTANT: We are looking for a "healthy dip" — dump with buyers catching it. If dump has NO fee activity = dead cat bounce or rug. SKIP.
 
 DEPLOY DECISION:
 - If there is a candidate that meets timing + quality → DEPLOY.
@@ -198,13 +202,13 @@ DEPLOY DECISION:
 DEPLOY RULES:
 - COMPOUNDING: Use the deploy amount from the goal EXACTLY. Do NOT default to a smaller number.
 - strategy = ${config.strategy.strategy} — always use this exact value, never change it.
-- bins_below = round(${config.strategy.minBinsBelow} + (candidate volatility/4)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}]. bins_above = 0.
+- bins_below = round(${config.strategy.minBinsBelow} + (candidate volatility/5)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}]. bins_above = 0.
 - Bin steps must be [${config.screening.minBinStep}-${config.screening.maxBinStep}].
 
 REPORT FORMAT (keep it SHORT):
 - Candidate: [name]
 - Pool Memory: [exact data from tool]
-- Timing: [price_1h_change%]
+- Timing: 1h=\${price_1h_change}% | 5m=\${price_5m_change}% | fee/TVL=\${fee_active_tvl_ratio}%
 - Decision: DEPLOY / NO DEPLOY
 - Reason (1 sentence max): [specific factual reason]
 
@@ -224,7 +228,7 @@ PROFIT-TAKING MINDSET (OVERRIDE BIAS TO HOLD):
 
 Decision Factors for Closing:
 - **PnL >= +2%** → CLOSE. Lock it in.
-- **Out of range for >10 minutes** → Likely not coming back soon. Close to free up capital.
+- **Out of range for >20 minutes** → Likely not coming back soon. Close to free up capital.
 - **Price pumping far above range** (active bin > upper bin + 3 bins) → Close immediately. You missed the dip, don't chase.
 - **Stop loss at ${config.management.stopLossPct}%** → Close immediately if triggered. No hope, no prayer.
 - **Hard stop at ${config.management.hardStopPct ?? config.management.stopLossPct}%** → Emergency instant close (bypasses PnL suspicious checks). Executed automatically without LLM.

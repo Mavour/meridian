@@ -223,6 +223,32 @@ async function applyVolatilityTimeframe(rawPools, sourceTimeframe) {
   return rawPools;
 }
 
+async function applyPriceChange1h(rawPools) {
+  if (!Array.isArray(rawPools) || rawPools.length === 0) return rawPools;
+
+  const uniquePoolAddresses = [...new Set(rawPools.map((pool) => pool?.pool_address).filter(Boolean))];
+  const results = await Promise.allSettled(
+    uniquePoolAddresses.map((poolAddress) =>
+      fetchPoolDiscoveryDetail({ poolAddress, timeframe: "1h" })
+        .then((pool) => ({ poolAddress, price_change_pct: numeric(pool?.pool_price_change_pct) }))
+    )
+  );
+
+  const priceChangeByPool = new Map();
+  for (const result of results) {
+    if (result.status !== "fulfilled") continue;
+    if (result.value.price_change_pct == null) continue;
+    priceChangeByPool.set(result.value.poolAddress, result.value.price_change_pct);
+  }
+
+  for (const pool of rawPools) {
+    if (!pool?.pool_address || !priceChangeByPool.has(pool.pool_address)) continue;
+    pool.price_1h_change = priceChangeByPool.get(pool.pool_address);
+  }
+
+  return rawPools;
+}
+
 async function searchAssetsBySymbol(symbol) {
   const res = await fetch(`${DATAPI_JUP}/assets/search?query=${encodeURIComponent(symbol)}`);
   if (!res.ok) throw new Error(`assets/search ${res.status}`);
@@ -421,6 +447,7 @@ export async function discoverPools({
   }
 
   rawPools = await applyVolatilityTimeframe(rawPools, s.timeframe);
+  rawPools = await applyPriceChange1h(rawPools);
   await enrichDiscordSignalLaunchpads(rawPools);
 
   const filteredExamples = [];
@@ -601,6 +628,18 @@ export async function getTopCandidates({ limit = 10 } = {}) {
       if (binStep > config.screening.maxBinStep) {
         log("screening", `Filtered bin_step ${p.name}: ${binStep} above maxBinStep ${config.screening.maxBinStep}`);
         pushFilteredReason(filteredOut, p, `bin_step ${binStep} above maxBinStep ${config.screening.maxBinStep}`);
+        return false;
+      }
+      // Price momentum filter — avoid pumps and freefalls
+      const price1h = numeric(p.price_1h_change);
+      if (price1h != null && price1h > 10) {
+        log("screening", `Filtered pumped pool ${p.name}: +${price1h}% in 1h`);
+        pushFilteredReason(filteredOut, p, `pumped +${price1h}% in 1h (> +10%)`);
+        return false;
+      }
+      if (price1h != null && price1h < -25) {
+        log("screening", `Filtered freefall pool ${p.name}: ${price1h}% in 1h`);
+        pushFilteredReason(filteredOut, p, `freefall ${price1h}% in 1h (< -25%)`);
         return false;
       }
       return true;
@@ -898,6 +937,7 @@ function condensePool(p) {
     // Price action
     price: p.pool_price,
     price_change_pct: fix(p.pool_price_change_pct, 1),
+    price_1h_change: fix(p.price_1h_change, 1),
     price_trend: p.price_trend,
     min_price: p.min_price,
     max_price: p.max_price,
