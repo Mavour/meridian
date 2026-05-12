@@ -628,15 +628,22 @@ export async function getTopCandidates({ limit = 10 } = {}) {
         pushFilteredReason(filteredOut, p, `bin_step ${binStep} above maxBinStep ${config.screening.maxBinStep}`);
         return false;
       }
-      // Trend filter — avoid deepening downtrend (not yet stabilized)
+      // Trend filter — avoid falling knife (downtrend still accelerating)
       const price1h = numeric(p.price_1h_change);
       const price30m = numeric(p.price_change_pct);
-      if (price1h != null && price1h < -3 && price30m != null && price30m < -3) {
+      // If 30m is more negative than 1h = dump is ACCELERATING, not stabilizing
+      if (price1h != null && price30m != null && price30m < price1h - 1) {
+        log("screening", `Filtered falling knife ${p.name}: 1h=${price1h}% 30m=${price30m}% (dump accelerating)`);
+        pushFilteredReason(filteredOut, p, `falling knife 1h=${price1h}% 30m=${price30m}%`);
+        return false;
+      }
+      // If both 1h and 30m are deeply red = no stabilization yet
+      if (price1h != null && price1h < -5 && price30m != null && price30m < -3) {
         log("screening", `Filtered deepening downtrend ${p.name}: 1h=${price1h}% 30m=${price30m}%`);
         pushFilteredReason(filteredOut, p, `deepening downtrend 1h=${price1h}% 30m=${price30m}%`);
         return false;
       }
-      if (price1h != null && price1h < -20) {
+      if (price1h != null && price1h < -15) {
         log("screening", `Filtered deep dump ${p.name}: ${price1h}% in 1h`);
         pushFilteredReason(filteredOut, p, `deep dump ${price1h}% in 1h`);
         return false;
