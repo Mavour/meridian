@@ -591,6 +591,18 @@ export async function getTopCandidates({ limit = 10 } = {}) {
         pushFilteredReason(filteredOut, p, `volatility too high (${p.volatility} > max ${config.screening.maxVolatility})`);
         return false;
       }
+      // Bin step filter (GMGN path safety — Meteora API already enforces this)
+      const binStep = numeric(p.bin_step);
+      if (binStep == null || binStep < config.screening.minBinStep) {
+        log("screening", `Filtered bin_step ${p.name}: ${binStep ?? "unknown"} below minBinStep ${config.screening.minBinStep}`);
+        pushFilteredReason(filteredOut, p, `bin_step ${binStep ?? "unknown"} below minBinStep ${config.screening.minBinStep}`);
+        return false;
+      }
+      if (binStep > config.screening.maxBinStep) {
+        log("screening", `Filtered bin_step ${p.name}: ${binStep} above maxBinStep ${config.screening.maxBinStep}`);
+        pushFilteredReason(filteredOut, p, `bin_step ${binStep} above maxBinStep ${config.screening.maxBinStep}`);
+        return false;
+      }
       return true;
     })
     .sort((a, b) => scoreCandidate(b) - scoreCandidate(a))
