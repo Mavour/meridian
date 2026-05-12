@@ -228,10 +228,14 @@ async function applyPriceChange1h(rawPools) {
 
   const uniquePoolAddresses = [...new Set(rawPools.map((pool) => pool?.pool_address).filter(Boolean))];
   const results = await Promise.allSettled(
-    uniquePoolAddresses.map((poolAddress) =>
-      fetchPoolDiscoveryDetail({ poolAddress, timeframe: "1h" })
-        .then((pool) => ({ poolAddress, price_change_pct: numeric(pool?.pool_price_change_pct) }))
-    )
+    uniquePoolAddresses.map(async (poolAddress) => {
+      try {
+        const pool = await fetchPoolDiscoveryDetail({ poolAddress, timeframe: "1h" });
+        return { poolAddress, price_change_pct: numeric(pool?.pool_price_change_pct) };
+      } catch {
+        return { poolAddress, price_change_pct: null };
+      }
+    })
   );
 
   const priceChangeByPool = new Map();
@@ -628,18 +632,6 @@ export async function getTopCandidates({ limit = 10 } = {}) {
       if (binStep > config.screening.maxBinStep) {
         log("screening", `Filtered bin_step ${p.name}: ${binStep} above maxBinStep ${config.screening.maxBinStep}`);
         pushFilteredReason(filteredOut, p, `bin_step ${binStep} above maxBinStep ${config.screening.maxBinStep}`);
-        return false;
-      }
-      // Price momentum filter — avoid pumps and freefalls
-      const price1h = numeric(p.price_1h_change);
-      if (price1h != null && price1h > 10) {
-        log("screening", `Filtered pumped pool ${p.name}: +${price1h}% in 1h`);
-        pushFilteredReason(filteredOut, p, `pumped +${price1h}% in 1h (> +10%)`);
-        return false;
-      }
-      if (price1h != null && price1h < -25) {
-        log("screening", `Filtered freefall pool ${p.name}: ${price1h}% in 1h`);
-        pushFilteredReason(filteredOut, p, `freefall ${price1h}% in 1h (< -25%)`);
         return false;
       }
       return true;
