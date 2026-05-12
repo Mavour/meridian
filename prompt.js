@@ -202,7 +202,8 @@ DEPLOY DECISION:
 
 DEPLOY RULES:
 - COMPOUNDING: Use the deploy amount from the goal EXACTLY. Do NOT default to a smaller number.
-- strategy = ${config.strategy.strategy} — always use this exact value, never change it.
+- strategy = use the candidate's recommended_strategy (spot or bid_ask). Override ONLY with strong justification (e.g. clear contradicting signal from pool memory or lessons).
+- spot = uptrend/pump (price_1h_change > +5%, 30m not falling knife, or top LPers consensus). bid_ask = sideways/consolidation/dip.
 - bins_below = round(${config.strategy.minBinsBelow} + (candidate volatility/5)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}]. bins_above = 0.
 - Bin steps must be [${config.screening.minBinStep}-${config.screening.maxBinStep}].
 

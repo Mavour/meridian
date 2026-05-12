@@ -33,6 +33,7 @@ import { getActiveStrategy } from "./strategy-library.js";
 import { recordPositionSnapshot, recallForPool, addPoolNote, isBaseMintOnCooldown } from "./pool-memory.js";
 import { checkSmartWalletsOnPool } from "./smart-wallets.js";
 import { getTokenNarrative, getTokenInfo } from "./tools/token.js";
+import { studyTopLPers } from "./tools/study.js";
 import { stageSignals } from "./signal-tracker.js";
 import { getWeightsSummary } from "./signal-weights.js";
 import { bootstrapHiveMind, ensureAgentId, getHiveMindPullMode, isHiveMindEnabled, pullHiveMindLessons, pullHiveMindPresets, registerHiveMindAgent, startHiveMindBackgroundSync } from "./hivemind.js";
@@ -179,6 +180,74 @@ function schedulePeakConfirmation(positionAddress) {
   }, TRAILING_PEAK_CONFIRM_DELAY_MS);
 
   _peakConfirmTimers.set(positionAddress, timer);
+}
+
+/**
+ * Resolve the best strategy (spot vs bid_ask) for a single pool candidate.
+ * Priority:
+ *  1. Top LPer consensus (≥60%)
+ *  2. Market heuristic (price action + volatility)
+ *  3. Active strategy fallback
+ */
+function resolveStrategyForPool(pool, studyResult) {
+  const activeStrategy = getActiveStrategy();
+  const globalStrategy = activeStrategy?.lp_strategy || config.strategy.strategy;
+
+  if (config.strategy.dynamicStrategyEnabled === false) {
+    return { strategy: globalStrategy, reason: "dynamic strategy disabled" };
+  }
+
+  // ── 1. Top LPer consensus ──────────────────────────────────────────
+  const lpers = studyResult?.lpers || studyResult?.top_lpers || studyResult?.aggregates || [];
+  if (lpers.length > 0) {
+    const spotCount = lpers.filter((l) =>
+      (l.strategy === "spot" || l.lp_strategy === "spot" || l.style === "spot")
+    ).length;
+    const total = lpers.length;
+    const spotPct = total > 0 ? spotCount / total : 0;
+
+    if (spotPct >= 0.6) {
+      return { strategy: "spot", reason: `top LPer consensus (${spotCount}/${total} use spot)` };
+    }
+    if (spotPct <= 0.4) {
+      return { strategy: "bid_ask", reason: `top LPer consensus (${total - spotCount}/${total} use bid_ask)` };
+    }
+  }
+
+  // ── 2. Market heuristic fallback ───────────────────────────────────
+  const price1h  = pool.price_1h_change ?? null;
+  const price30m = pool.price_change_pct ?? null;
+  const volatility = pool.volatility ?? null;
+  const gmgnPrice = pool.gmgn_price_action || {};
+
+  const minPrice1h = config.strategy.spotMinPrice1hChange ?? 5;
+  const minVol     = config.strategy.spotMinVolatility      ?? 3;
+  const min30m     = config.strategy.spotMinPrice30mFloor   ?? -2;
+
+  // Uptrend: clear pump with stabilization
+  const isUptrend =
+    price1h != null && price1h > minPrice1h &&
+    price30m != null && price30m >= min30m;
+
+  // Volatile directional pump
+  const isVolatilePump =
+    volatility != null && volatility > minVol &&
+    price1h != null && price1h > (minPrice1h - 2); // > 3%
+
+  // GMGN supertrend confirmation (if available)
+  const supertrendUp = gmgnPrice.supertrend?.direction === "UP" && price1h != null && price1h > 0;
+
+  if (isUptrend || isVolatilePump || supertrendUp) {
+    return {
+      strategy: "spot",
+      reason: `market heuristic: uptrend (1h=${price1h}%, 30m=${price30m}%, vol=${volatility}${supertrendUp ? ", supertrend=UP" : ""})`,
+    };
+  }
+
+  return {
+    strategy: "bid_ask",
+    reason: `market heuristic: sideways/consolidation (1h=${price1h}%, 30m=${price30m}%, vol=${volatility})`,
+  };
 }
 
 function scheduleTrailingDropConfirmation(positionAddress) {
@@ -682,6 +751,11 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
       passing.map(({ pool }) => getActiveBin({ pool_address: pool.pool }))
     );
 
+    // Study top LPers for strategy consensus
+    const studyResults = await Promise.allSettled(
+      passing.map(({ pool }) => studyTopLPers({ pool_address: pool.pool, limit: 4 }))
+    );
+
     // Build compact candidate blocks
     const hardFilteredBlock = earlyFilteredExamples.length > 0
       ? `\n\nREJECTED BY HARD FILTERS (${earlyFilteredExamples.length} pool${earlyFilteredExamples.length !== 1 ? 's' : ''} — do NOT deploy into these):\n${earlyFilteredExamples.slice(0, 5).map((e) => `- ${e.name}: ${e.reason}`).join('\n')}`
@@ -695,6 +769,8 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
       const priceChange = ti?.stats_1h?.price_change;
       const netBuyers = ti?.stats_1h?.net_buyers;
       const activeBin = activeBinResults[i]?.status === "fulfilled" ? activeBinResults[i].value?.binId : null;
+      const studyResult = studyResults[i]?.status === "fulfilled" ? studyResults[i].value : null;
+      const strategyRec = resolveStrategyForPool(pool, studyResult);
 
       // OKX signals
       const okxParts = [
@@ -723,6 +799,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
         block = [
           `POOL: ${pool.name} (${pool.pool})`,
           formatGmgnCandidateForPrompt(pool),
+          `  recommended_strategy: ${strategyRec.strategy} (${strategyRec.reason})`,
           pvpLine,
           `  smart_wallets: ${sw?.in_pool?.length ?? 0} present${sw?.in_pool?.length ? ` → CONFIDENCE BOOST (${sw.in_pool.map(w => w.name).join(", ")})` : ""}`,
           activeBin != null ? `  active_bin: ${activeBin}` : null,
@@ -740,6 +817,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
         block = [
           `POOL: ${pool.name} (${pool.pool})`,
           `  metrics: bin_step=${pool.bin_step}, fee_pct=${pool.fee_pct}%, fee_tvl=${pool.fee_active_tvl_ratio}, vol=$${pool.volume_window}, tvl=$${pool.tvl ?? pool.active_tvl}, volatility_${pool.volatility_timeframe || "30m"}=${pool.volatility}, mcap=$${pool.mcap}, organic=${pool.organic_score}${pool.token_age_hours != null ? `, age=${pool.token_age_hours}h` : ""}`,
+          `  recommended_strategy: ${strategyRec.strategy} (${strategyRec.reason})`,
           `  audit: top10=${top10Pct}%, bots=${botPct}%, fees=${feesSol}SOL${launchpad ? `, launchpad=${launchpad}` : ""}`,
           gmgnPriceLine,
           pvpLine,
@@ -798,7 +876,7 @@ ${candidateBlocks.join("\n\n")}${hardFilteredBlock}
 STEPS:
 1. Pick the best candidate based on narrative quality, smart wallets, and pool metrics.
 2. Call deploy_position (active_bin is pre-fetched above — no need to call get_active_bin).
-   strategy = ${config.strategy.strategy} (always use this, never change it).
+   strategy = use the candidate's recommended_strategy (spot or bid_ask). Override ONLY with strong justification.
    bins_below = round(${config.strategy.minBinsBelow} + (candidate volatility/4)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}].
    pass deploy_position.volatility = the candidate volatility value.
    bins_above = 0. Single-side SOL only: set amount_y, keep amount_x = 0.

@@ -410,6 +410,10 @@ const toolMap = {
       minBinsBelow: ["strategy", "minBinsBelow"],
       maxBinsBelow: ["strategy", "maxBinsBelow"],
       defaultBinsBelow: ["strategy", "defaultBinsBelow"],
+      dynamicStrategyEnabled: ["strategy", "dynamicStrategyEnabled"],
+      spotMinPrice1hChange:   ["strategy", "spotMinPrice1hChange"],
+      spotMinVolatility:      ["strategy", "spotMinVolatility"],
+      spotMinPrice30mFloor:   ["strategy", "spotMinPrice30mFloor"],
       // hivemind
       hiveMindUrl: ["hiveMind", "url"],
       hiveMindApiKey: ["hiveMind", "apiKey"],

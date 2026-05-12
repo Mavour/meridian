@@ -224,6 +224,10 @@ export const config = {
     minBinsBelow: strategyMinBinsBelow,
     maxBinsBelow: strategyMaxBinsBelow,
     defaultBinsBelow: strategyDefaultBinsBelow,
+    dynamicStrategyEnabled: u.dynamicStrategyEnabled ?? true,
+    spotMinPrice1hChange:   u.spotMinPrice1hChange   ?? 5,
+    spotMinVolatility:      u.spotMinVolatility      ?? 3,
+    spotMinPrice30mFloor:   u.spotMinPrice30mFloor   ?? -2,
   },
 
   // ─── Scheduling ─────────────────────────
@@ -375,8 +379,15 @@ export function reloadScreeningThresholds() {
     config.strategy.maxBinsBelow = Math.max(config.strategy.minBinsBelow, Math.round(maxBinsBelow));
     config.strategy.defaultBinsBelow = Math.max(
       config.strategy.minBinsBelow,
-      Math.min(config.strategy.maxBinsBelow, Math.round(defaultBinsBelow)),
+      Math.min(
+        config.strategy.maxBinsBelow,
+        Math.round(Number(config.strategy.defaultBinsBelow ?? config.strategy.maxBinsBelow)),
+      ),
     );
+    if (fresh.dynamicStrategyEnabled !== undefined) config.strategy.dynamicStrategyEnabled = fresh.dynamicStrategyEnabled;
+    if (fresh.spotMinPrice1hChange != null) config.strategy.spotMinPrice1hChange = fresh.spotMinPrice1hChange;
+    if (fresh.spotMinVolatility != null) config.strategy.spotMinVolatility = fresh.spotMinVolatility;
+    if (fresh.spotMinPrice30mFloor != null) config.strategy.spotMinPrice30mFloor = fresh.spotMinPrice30mFloor;
   } catch { /* ignore */ }
   try {
     const freshGmgn = readJsonIfExists(GMGN_CONFIG_PATH);
