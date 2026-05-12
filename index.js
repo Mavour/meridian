@@ -134,6 +134,7 @@ let _managementBusy = false; // prevents overlapping management cycles
 let _screeningBusy = false;  // prevents overlapping screening cycles
 let _screeningLastTriggered = 0; // epoch ms — prevents management from spamming screening
 let _pollTriggeredAt = 0; // epoch ms — cooldown for poller-triggered management
+const _closingPositions = new Set(); // prevents double-close race
 const _peakConfirmTimers = new Map();
 const _trailingDropConfirmTimers = new Map();
 const _recentlyClosedPools = new Map(); // tracks recently closed pools for ATH re-entry guard
@@ -349,48 +350,13 @@ export async function runManagementCycle({ silent = false } = {}) {
       }
     }
 
-    // JS trailing TP check
-    const exitMap = new Map();
-    for (const p of positionData) {
-      if (
-        !p.pnl_pct_suspicious &&
-        queuePeakConfirmation(p.position, p.pnl_pct, { immediate: !shouldUsePnlRecheck() }) &&
-        shouldUsePnlRecheck()
-      ) {
-        schedulePeakConfirmation(p.position);
-      }
-      const exit = updatePnlAndCheckExits(p.position, p, config.management);
-      if (exit) {
-        if (exit.action === "TRAILING_TP" && exit.needs_confirmation && shouldUsePnlRecheck()) {
-          if (queueTrailingDropConfirmation(p.position, exit.peak_pnl_pct, exit.current_pnl_pct, config.management.trailingDropPct)) {
-            scheduleTrailingDropConfirmation(p.position);
-          }
-          continue;
-        }
-        exitMap.set(p.position, { reason: exit.reason, action: exit.action });
-        log("state", `Exit alert for ${p.pair}: ${exit.reason}`);
-      }
-    }
-
     // ── Deterministic rule checks (no LLM) ──────────────────────────
-    // action: CLOSE | CLAIM | STAY | INSTRUCTION (needs LLM)
+    // Close actions are handled by the PnL poller instantly — management cycle only handles CLAIM / INSTRUCTION / STAY
     const actionMap = new Map();
     for (const p of positionData) {
-      // Hard exit — highest priority
-      if (exitMap.has(p.position)) {
-        const exitInfo = exitMap.get(p.position);
-        actionMap.set(p.position, { action: "CLOSE", rule: "exit", reason: exitInfo.reason, exitAction: exitInfo.action });
-        continue;
-      }
       // Instruction-set — pass to LLM, can't parse in JS
       if (p.instruction) {
         actionMap.set(p.position, { action: "INSTRUCTION" });
-        continue;
-      }
-
-      const closeRule = getDeterministicCloseRule(p, config.management);
-      if (closeRule) {
-        actionMap.set(p.position, closeRule);
         continue;
       }
 
@@ -439,14 +405,6 @@ export async function runManagementCycle({ silent = false } = {}) {
       if (xs && xs.sentiment !== "DISABLED" && xs.sentiment !== "COOKIE_EXPIRED" && xs.sentiment !== "NO_ACCOUNTS") {
         line += `\n⚠️ X Sentiment: ${xs.sentiment} (${xs.score}) | ${xs.post_count} posts`;
       }
-      if (act.action === "CLOSE" && act.rule === "exit") {
-        if (act.exitAction === "HARD_STOP") {
-          line += `\n🚨 HARD STOP: ${act.reason}`;
-        } else {
-          line += `\n⚡ Trailing TP: ${act.reason}`;
-        }
-      }
-      if (act.action === "CLOSE" && act.rule && act.rule !== "exit") line += `\nRule ${act.rule}: ${act.reason}`;
       if (act.action === "CLAIM") line += `\n→ Claiming fees`;
       return line;
     });
@@ -460,21 +418,10 @@ export async function runManagementCycle({ silent = false } = {}) {
     mgmtReport = reportLines.join("\n\n") +
       `\n\nSummary: 💼 ${positions.length} positions | ${cur}${totalValue.toFixed(4)} | fees: ${cur}${totalUnclaimed.toFixed(4)} | ${actionSummary}`;
 
-    // ── Handle HARD_STOP instantly (no LLM) ────────────────────────
-    const hardStopPositions = positionData.filter(p => {
-      const a = actionMap.get(p.position);
-      return a.exitAction === "HARD_STOP";
-    });
-    for (const p of hardStopPositions) {
-      const act = actionMap.get(p.position);
-      log("cron", `Management: Hard stop for ${p.pair} — executing instantly`);
-      await executeInstantClose(p, act.reason);
-    }
-
     // ── Call LLM only if action needed ──────────────────────────────
     const actionPositions = positionData.filter(p => {
       const a = actionMap.get(p.position);
-      return a.action !== "STAY" && a.exitAction !== "HARD_STOP";
+      return a.action !== "STAY";
     });
 
     if (actionPositions.length > 0) {
@@ -485,7 +432,7 @@ export async function runManagementCycle({ silent = false } = {}) {
         return [
           `POSITION: ${p.pair} (${p.position})`,
           `  pool: ${p.pool}`,
-          `  action: ${act.action}${act.rule && act.rule !== "exit" ? ` — Rule ${act.rule}: ${act.reason}` : ""}${act.rule === "exit" ? ` — ⚡ Trailing TP: ${act.reason}` : ""}`,
+          `  action: ${act.action}${act.reason ? ` — ${act.reason}` : ""}`,
           `  pnl_pct: ${p.pnl_pct}% | unclaimed_fees: ${cur}${p.unclaimed_fees_usd} | value: ${cur}${p.total_value_usd} | fee_per_tvl_24h: ${p.fee_per_tvl_24h ?? "?"}%`,
           `  bins: lower=${p.lower_bin} upper=${p.upper_bin} active=${p.active_bin} | oor_minutes: ${p.minutes_out_of_range ?? 0}`,
           p.instruction ? `  instruction: "${p.instruction}"` : null,
@@ -498,12 +445,10 @@ MANAGEMENT ACTION REQUIRED — ${actionPositions.length} position(s)
 ${actionBlocks}
 
 RULES:
-- CLOSE: call close_position only — it handles fee claiming internally, do NOT call claim_fees first
 - CLAIM: call claim_fees with position address
 - INSTRUCTION: evaluate the instruction condition. If met → close_position. If not → HOLD, do nothing.
-- ⚡ exit alerts: close immediately, no exceptions
 
-Execute the required actions. Do NOT re-evaluate CLOSE/CLAIM — rules already applied. Just execute.
+Execute the required actions. Just execute.
 After executing, write a brief one-line result per position.
       `, config.llm.maxSteps, [], "MANAGER", config.llm.managementModel, 2048, {
         onToolStart: async ({ name }) => { await liveMessage?.toolStart(name); },
@@ -992,6 +937,11 @@ Summarize the current portfolio health, total fees earned, and performance of al
     try {
       const result = await getMyPositions({ force: true, silent: true }).catch(() => null);
       if (!result?.positions?.length) return;
+      // Clean up _closingPositions for positions that no longer exist (close succeeded)
+      const openPositionIds = new Set(result.positions.map((p) => p.position));
+      for (const posId of _closingPositions) {
+        if (!openPositionIds.has(posId)) _closingPositions.delete(posId);
+      }
       for (const p of result.positions) {
         if (
           !p.pnl_pct_suspicious &&
@@ -1009,43 +959,37 @@ Summarize the current portfolio health, total fees earned, and performance of al
             break; // stop checking other positions after hard stop
           }
 
-          // ── TRAILING TP: Instant execution if enabled ──────────────
+          // ── TRAILING TP: Fast close without management cycle ──────
           if (exit.action === "TRAILING_TP" && exit.needs_confirmation) {
-            if (config.management.trailingInstantExecution) {
-              log("state", `[PnL poll] Trailing TP triggered for ${p.pair} — instant execution enabled`);
-              await executeInstantClose(p, exit.reason);
-              break;
-            } else if (shouldUsePnlRecheck()) {
-              if (queueTrailingDropConfirmation(p.position, exit.peak_pnl_pct, exit.current_pnl_pct, config.management.trailingDropPct)) {
-                scheduleTrailingDropConfirmation(p.position);
-              }
-            }
-            continue;
+            if (_closingPositions.has(p.position)) continue;
+            _closingPositions.add(p.position);
+            log("state", `[PnL poll] Trailing TP triggered for ${p.pair} — fast close`);
+            executeTool("close_position", {
+              position_address: p.position,
+              reason: exit.reason,
+            }).catch((e) => log("cron_error", `Fast close failed for ${p.pair}: ${e.message}`));
+            break;
           }
 
-          // ── Regular exits: Trigger management cycle ────────────────
-          const cooldownMs = config.schedule.managementIntervalMin * 60 * 1000;
-          const sinceLastTrigger = Date.now() - _pollTriggeredAt;
-          if (sinceLastTrigger >= cooldownMs) {
-            _pollTriggeredAt = Date.now();
-            log("state", `[PnL poll] Exit alert: ${p.pair} — ${exit.reason} — triggering management`);
-            runManagementCycle({ silent: true }).catch((e) => log("cron_error", `Poll-triggered management failed: ${e.message}`));
-          } else {
-            log("state", `[PnL poll] Exit alert: ${p.pair} — ${exit.reason} — cooldown (${Math.round((cooldownMs - sinceLastTrigger) / 1000)}s left)`);
-          }
+          // ── Regular exits: Fast close without management cycle ─────
+          if (_closingPositions.has(p.position)) continue;
+          _closingPositions.add(p.position);
+          log("state", `[PnL poll] Exit alert: ${p.pair} — ${exit.reason} — fast close`);
+          executeTool("close_position", {
+            position_address: p.position,
+            reason: exit.reason,
+          }).catch((e) => log("cron_error", `Fast close failed for ${p.pair}: ${e.message}`));
           break;
         }
         const closeRule = getDeterministicCloseRule(p, config.management);
         if (closeRule) {
-          const cooldownMs = config.schedule.managementIntervalMin * 60 * 1000;
-          const sinceLastTrigger = Date.now() - _pollTriggeredAt;
-          if (sinceLastTrigger >= cooldownMs) {
-            _pollTriggeredAt = Date.now();
-            log("state", `[PnL poll] Deterministic close rule: ${p.pair} — Rule ${closeRule.rule}: ${closeRule.reason} — triggering management`);
-            runManagementCycle({ silent: true }).catch((e) => log("cron_error", `Poll-triggered management failed: ${e.message}`));
-          } else {
-            log("state", `[PnL poll] Deterministic close rule: ${p.pair} — Rule ${closeRule.rule}: ${closeRule.reason} — cooldown (${Math.round((cooldownMs - sinceLastTrigger) / 1000)}s left)`);
-          }
+          if (_closingPositions.has(p.position)) continue;
+          _closingPositions.add(p.position);
+          log("state", `[PnL poll] Deterministic close rule: ${p.pair} — Rule ${closeRule.rule}: ${closeRule.reason} — fast close`);
+          executeTool("close_position", {
+            position_address: p.position,
+            reason: closeRule.reason,
+          }).catch((e) => log("cron_error", `Fast close failed for ${p.pair}: ${e.message}`));
           break;
         }
       }

@@ -421,8 +421,6 @@ export async function notifyDeploy({ pair, amountSol, position, tx, priceRange, 
 }
 
 export async function notifyClose({ pair, pnlUsd, pnlPct, reason, feeUsd, deployedSol, strategy, holdTimeMinutes, peakPct, currentPct, feesSol, pnlSol }) {
-  if (hasActiveLiveMessage()) return;
-  
   // Convert to numbers — isFinite distinguishes null/missing from genuine zero
   const pnlUsdNum  = Number.isFinite(Number(pnlUsd))  ? Number(pnlUsd)  : null;
   const feeUsdNum  = Number.isFinite(Number(feeUsd)) && Number(feeUsd) > 0 ? Number(feeUsd) : null;
