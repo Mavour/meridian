@@ -185,9 +185,10 @@ POOL MEMORY & WAVE HISTORY — USE FACTUALLY:
 
 TIMING — CORE STRATEGY:
 The strategy is bid_ask SINGLE SOL SIDE. You deploy SOL BELOW current price, waiting for a HEALTHY DIP into your range.
-- **IDEAL ENTRY**: price_1h_change is between -3% and -10% (moderate dump), AND price_change_pct (30m) is >= -2% or LESS negative than price_1h_change (stabilizing — this is CRITICAL), AND fee_active_tvl_ratio is still >= ${config.screening.minFeeActiveTvlRatio}%.
-- **HARD RULE — FALLING KNIFE**: if price_change_pct (30m) is MORE negative than price_1h_change by more than 1% → SKIP. Example: 1h=-5%, 30m=-8% → SKIP. The dump is accelerating.
-- **HARD RULE — DEEPENING DOWNTREND**: if price_1h_change < -5% AND price_change_pct < -3% → SKIP. No stabilization yet.
+- **IDEAL ENTRY**: price_1h_change is between -3% and -10% (moderate dump), AND price_5m_change is >= -2% or LESS negative than price_1h_change (stabilizing — this is CRITICAL), AND fee_active_tvl_ratio is still >= ${config.screening.minFeeActiveTvlRatio}%.
+- **HARD RULE — ACCELERATING DUMP**: if price_1h_change < 0 AND price_5m_change is MORE negative than price_1h_change by more than 1% → SKIP. Example: 1h=-5%, 5m=-8% → SKIP. The dump is still accelerating.
+- **HARD RULE — FALLING KNIFE**: if price_5m_change < ${config.screening.fallingKnife5mThreshold ?? -20}% AND price_1h_change < ${config.screening.fallingKnife1hThreshold ?? -25}% → SKIP. Crash instant — too dangerous.
+- **HARD RULE — DEEPENING DOWNTREND**: if price_1h_change < -5% AND price_5m_change < -3% → SKIP. No stabilization yet.
 - price_1h_change > +10% → HARD SKIP (pumping, instant OOR).
 - price_1h_change < -15% → SKIP (too deep).
 - fee_active_tvl_ratio < ${config.screening.minFeeActiveTvlRatio}% → SKIP (no buy pressure).
@@ -203,14 +204,14 @@ DEPLOY DECISION:
 DEPLOY RULES:
 - COMPOUNDING: Use the deploy amount from the goal EXACTLY. Do NOT default to a smaller number.
 - strategy = use the candidate's recommended_strategy (spot or bid_ask). Override ONLY with strong justification (e.g. clear contradicting signal from pool memory or lessons).
-- spot = uptrend/pump (price_1h_change > +5%, 30m not falling knife, or top LPers consensus). bid_ask = sideways/consolidation/dip.
+- spot = uptrend/pump (price_1h_change > +5%, 5m not falling knife, or top LPers consensus). bid_ask = sideways/consolidation/dip.
 - bins_below = round(${config.strategy.minBinsBelow} + (candidate volatility/5)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}]. bins_above = 0.
 - Bin steps must be [${config.screening.minBinStep}-${config.screening.maxBinStep}].
 
 REPORT FORMAT (keep it SHORT — copy the exact values from the candidate data above, do NOT invent numbers):
 - Candidate: [name]
 - Pool Memory: [exact data from tool]
-- Timing: 1h=[paste price_1h_change from candidate metrics] | 30m=[paste price_change_pct from candidate metrics] | fee/TVL=[paste fee_active_tvl_ratio from candidate metrics]
+- Timing: 1h=[paste price_1h_change from candidate metrics] | 5m=[paste price_5m_change from candidate metrics] | fee/TVL=[paste fee_active_tvl_ratio from candidate metrics]
 - Decision: DEPLOY / NO DEPLOY
 - Reason (1 sentence max): [specific factual reason]
 

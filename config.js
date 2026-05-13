@@ -114,6 +114,8 @@ export const config = {
     minTokenAgeHours:   u.minTokenAgeHours   ?? null, // null = no minimum
     maxTokenAgeHours:   u.maxTokenAgeHours   ?? null, // null = no maximum
     athFilterPct:       u.athFilterPct       ?? null, // e.g. -20 = only deploy if price is >= 20% below ATH
+    fallingKnife5mThreshold: u.fallingKnife5mThreshold ?? -20,
+    fallingKnife1hThreshold: u.fallingKnife1hThreshold ?? -25,
     maxVolatility:       u.maxVolatility       ?? 7,   // max pool volatility (filters high-vol pools)
     maxDexBoosts:       u.maxDexBoosts       ?? null, // max DexScreener active boosts (null = no filter)
   },
@@ -227,7 +229,8 @@ export const config = {
     dynamicStrategyEnabled: u.dynamicStrategyEnabled ?? true,
     spotMinPrice1hChange:   u.spotMinPrice1hChange   ?? 5,
     spotMinVolatility:      u.spotMinVolatility      ?? 3,
-    spotMinPrice30mFloor:   u.spotMinPrice30mFloor   ?? -2,
+    spotMinPrice5mFloor:    u.spotMinPrice5mFloor    ?? u.spotMinPrice30mFloor ?? -2,
+    spotMinPrice30mFloor:   u.spotMinPrice30mFloor   ?? -2, // legacy alias
   },
 
   // ─── Scheduling ─────────────────────────
@@ -387,7 +390,10 @@ export function reloadScreeningThresholds() {
     if (fresh.dynamicStrategyEnabled !== undefined) config.strategy.dynamicStrategyEnabled = fresh.dynamicStrategyEnabled;
     if (fresh.spotMinPrice1hChange != null) config.strategy.spotMinPrice1hChange = fresh.spotMinPrice1hChange;
     if (fresh.spotMinVolatility != null) config.strategy.spotMinVolatility = fresh.spotMinVolatility;
+    if (fresh.spotMinPrice5mFloor != null) config.strategy.spotMinPrice5mFloor = fresh.spotMinPrice5mFloor;
     if (fresh.spotMinPrice30mFloor != null) config.strategy.spotMinPrice30mFloor = fresh.spotMinPrice30mFloor;
+    if (fresh.fallingKnife5mThreshold != null) config.screening.fallingKnife5mThreshold = fresh.fallingKnife5mThreshold;
+    if (fresh.fallingKnife1hThreshold != null) config.screening.fallingKnife1hThreshold = fresh.fallingKnife1hThreshold;
   } catch { /* ignore */ }
   try {
     const freshGmgn = readJsonIfExists(GMGN_CONFIG_PATH);

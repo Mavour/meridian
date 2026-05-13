@@ -407,7 +407,8 @@ function condenseGmgnCandidate({ token, pool, poolDetail, security, info, infoAn
     token_age_hours: token.open_timestamp ? Math.floor((Date.now() / 1000 - num(token.open_timestamp)) / 3600) : null,
     dev: info.dev?.creator_address || null,
     price: num(info.price || token.price),
-    price_change_pct: num(token.price_change_percent5m ?? token.price_change_percent),
+    price_5m_change: num(token.price_change_percent5m ?? token.price_change_percent),
+    price_change_pct: num(token.price_change_percent5m ?? token.price_change_percent), // legacy alias
     volume: num(token.volume ?? 0),
     swap_count: token.swaps ?? null,
     gmgn: true,

@@ -216,18 +216,18 @@ function resolveStrategyForPool(pool, studyResult) {
 
   // ── 2. Market heuristic fallback ───────────────────────────────────
   const price1h  = pool.price_1h_change ?? null;
-  const price30m = pool.price_change_pct ?? null;
+  const price5m  = pool.price_5m_change ?? null;
   const volatility = pool.volatility ?? null;
   const gmgnPrice = pool.gmgn_price_action || {};
 
   const minPrice1h = config.strategy.spotMinPrice1hChange ?? 5;
   const minVol     = config.strategy.spotMinVolatility      ?? 3;
-  const min30m     = config.strategy.spotMinPrice30mFloor   ?? -2;
+  const min5m      = config.strategy.spotMinPrice5mFloor   ?? config.strategy.spotMinPrice30mFloor ?? -2;
 
   // Uptrend: clear pump with stabilization
   const isUptrend =
     price1h != null && price1h > minPrice1h &&
-    price30m != null && price30m >= min30m;
+    price5m != null && price5m >= min5m;
 
   // Volatile directional pump
   const isVolatilePump =
@@ -240,13 +240,13 @@ function resolveStrategyForPool(pool, studyResult) {
   if (isUptrend || isVolatilePump || supertrendUp) {
     return {
       strategy: "spot",
-      reason: `market heuristic: uptrend (1h=${price1h}%, 30m=${price30m}%, vol=${volatility}${supertrendUp ? ", supertrend=UP" : ""})`,
+      reason: `market heuristic: uptrend (1h=${price1h}%, 5m=${price5m}%, vol=${volatility}${supertrendUp ? ", supertrend=UP" : ""})`,
     };
   }
 
   return {
     strategy: "bid_ask",
-    reason: `market heuristic: sideways/consolidation (1h=${price1h}%, 30m=${price30m}%, vol=${volatility})`,
+    reason: `market heuristic: sideways/consolidation (1h=${price1h}%, 5m=${price5m}%, vol=${volatility})`,
   };
 }
 
@@ -831,6 +831,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
             : null,
           `  smart_wallets: ${sw?.in_pool?.length ?? 0} present${sw?.in_pool?.length ? ` → CONFIDENCE BOOST (${sw.in_pool.map(w => w.name).join(", ")})` : ""}`,
           activeBin != null ? `  active_bin: ${activeBin}` : null,
+          pool.price_5m_change != null ? `  price_5m_change: ${pool.price_5m_change >= 0 ? "+" : ""}${pool.price_5m_change}%` : null,
           pool.price_1h_change != null ? `  price_1h_change: ${pool.price_1h_change >= 0 ? "+" : ""}${pool.price_1h_change}%` : null,
           priceChange != null ? `  jup_1h: price${priceChange >= 0 ? "+" : ""}${priceChange}%, net_buyers=${netBuyers ?? "?"}` : null,
           n?.narrative ? `  narrative_untrusted: ${sanitizeUntrustedPromptText(n.narrative, 500)}` : `  narrative_untrusted: none`,

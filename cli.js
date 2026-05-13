@@ -231,7 +231,7 @@ switch (subcommand) {
         mcap: pool.mcap,
         organic_score: pool.organic_score,
         active_pct: pool.active_pct,
-        price_change_pct: pool.price_change_pct,
+        price_5m_change: pool.price_5m_change,
         active_bin: activeBin.status === "fulfilled" ? activeBin.value?.binId : null,
         smart_wallets: smartWallets.status === "fulfilled" ? (smartWallets.value?.in_pool || []).map(w => w.name) : [],
         token: {
