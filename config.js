@@ -198,12 +198,9 @@ export const config = {
     gasReserve:            u.gasReserve            ?? 0.2,
     positionSizePct:       u.positionSizePct       ?? 0.35,
     // Time-aware exit parameters
-    maxHoldMinutes:        u.maxHoldMinutes        ?? 120,  // close if held > this long with thin margin
     slowBleedMinAge:       u.slowBleedMinAge        ?? 60,   // minimum age before slow bleed check activates
     slowBleedMinPnl:       u.slowBleedMinPnl        ?? -3,   // slow bleed: pnl lower bound (%)
     slowBleedMaxPnl:       u.slowBleedMaxPnl        ?? 2,    // slow bleed: pnl upper bound (%)
-    maxHoldMinPnlPct:      u.maxHoldMinPnlPct       ?? 3,    // min profit% to justify holding past maxHoldMinutes
-    maxHoldGraceMinutes:   u.maxHoldGraceMinutes    ?? 15,  // extra minutes after maxHoldMinutes to wait for BEP/profit if loss is shallow
     // Trailing take-profit
     trailingTakeProfit:    u.trailingTakeProfit    ?? true,
     trailingTriggerPct:    u.trailingTriggerPct    ?? 3,    // activate trailing at X% PnL

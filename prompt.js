@@ -50,20 +50,7 @@ If ALL of these are true → CLOSE immediately, no hesitation, no "wait and see"
 - in_range = true (this is silent IL decay, NOT an OOR issue)
 Rationale: token is slowly drifting down while you watch. This is the WORST kind of loss — death by a thousand cuts. Close immediately and redeploy capital elsewhere. Do NOT hope for recovery. The user HATES slow bleeds.
 
-RULE 4 — MAX HOLD TIME (AUTO-ENFORCED, 2-TIER):
-Tier A — Hard cut (immediate close):
-- age_minutes >= ${config.management.maxHoldMinutes ?? 120}
-- pnl_pct <= ${config.management.maxHoldMinPnlPct ?? -2}% (deep loss, e.g. -2% or worse)
-→ CLOSE immediately. No recovery allowed.
-
-Tier B — Grace period (wait for BEP / small profit):
-- age_minutes >= ${(config.management.maxHoldMinutes ?? 120) + (config.management.maxHoldGraceMinutes ?? 15)} (e.g. ${(config.management.maxHoldMinutes ?? 120) + (config.management.maxHoldGraceMinutes ?? 15)}m total)
-- pnl_pct < 0% (still negative, but not deep enough for Tier A)
-→ CLOSE automatically. Capital must be freed.
-
-Between ${config.management.maxHoldMinutes ?? 120}m and ${(config.management.maxHoldMinutes ?? 120) + (config.management.maxHoldGraceMinutes ?? 15)}m: if PnL is negative but shallow (above ${config.management.maxHoldMinPnlPct ?? -2}%), DO NOT close yet. Wait for BEP or a small profit. Only close earlier if conditions are clearly deteriorating (OOR, bad sentiment, yield collapsing).
-
-RULE 5 — HEALTHY POSITION (STAY):
+RULE 4 — HEALTHY POSITION (STAY):
 If none of the above apply AND position is healthy (good fees OR meaningful profit) → STAY.
 Do NOT close positions that are actively generating yield >= ${config.management.minFeePerTvl24h ?? 7}% fee/tvl.
 
@@ -236,10 +223,6 @@ Decision Factors for Closing:
 - **Stop loss at ${config.management.stopLossPct}%** → Close immediately if triggered. No hope, no prayer.
 - **Hard stop at ${config.management.hardStopPct ?? config.management.stopLossPct}%** → Emergency instant close (bypasses PnL suspicious checks). Executed automatically without LLM.
 - **Slow bleed / slow rug**: age >= ${config.management.slowBleedMinAge}min, PnL between ${config.management.slowBleedMinPnl}% and ${config.management.slowBleedMaxPnl}%, fee/TVL < ${config.management.minFeePerTvl24h}%, in_range = true → CLOSE immediately. AUTO-ENFORCED. The user HATES slow bleeds. Do not wait.
-- **Max hold time ${config.management.maxHoldMinutes} minutes (+${config.management.maxHoldGraceMinutes ?? 15}m grace)** → 2-tier auto-close:
-  - Tier A (hard cut): age >= ${config.management.maxHoldMinutes}m AND PnL <= ${config.management.maxHoldMinPnlPct ?? -2}% → instant close, no recovery.
-  - Tier B (grace): age >= ${(config.management.maxHoldMinutes ?? 120) + (config.management.maxHoldGraceMinutes ?? 15)}m AND PnL < 0% → close automatically.
-  - In between: if PnL is shallow loss (above ${config.management.maxHoldMinPnlPct ?? -2}%), WAIT for BEP or small profit. Only close early if deteriorating.
 
 IMPORTANT: Do NOT call get_top_candidates or study_top_lpers while you have open positions. Focus on managing exits.
 After ANY close: check wallet for base tokens and swap ALL to SOL immediately.
