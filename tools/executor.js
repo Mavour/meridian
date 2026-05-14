@@ -550,6 +550,13 @@ const toolMap = {
       applied[match[0]] = normalizedVal;
     }
 
+    // When deployAmountSol changes via menu, sync minSolToOpen + maxDeployAmount to match
+    // to prevent config deadlock (min > max or vice versa)
+    if (applied.deployAmountSol != null) {
+      applied.minSolToOpen = applied.deployAmountSol;
+      applied.maxDeployAmount = applied.deployAmountSol;
+    }
+
     if (Object.keys(applied).length === 0) {
       log("config", `update_config failed — unknown keys: ${JSON.stringify(unknown)}, raw changes: ${JSON.stringify(changes)}`);
       return { success: false, unknown, reason };
