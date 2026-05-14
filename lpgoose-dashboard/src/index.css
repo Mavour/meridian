@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+:root {
+  --bg-page:    #0a0a0a;
+  --bg-card:    #111111;
+  --bg-input:   #161616;
+  --bg-terminal:#0d0d0d;
+  --border-dim: #1a1a1a;
+  --border-card:#222222;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-dim:   #475569;
+  --green: #22c55e; --green-bg: #052e16; --green-border: #166534;
+  --red:   #ef4444; --red-bg:   #1a0000; --red-border:   #7f1d1d;
+  --yellow:#f59e0b; --yellow-bg:#1c1400; --yellow-border:#78350f;
+  --purple:#a5b4fc; --purple-bg:#1e1b4b;
+}
+
+body { background: var(--bg-page); color: var(--text-primary); font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
+
+.text-green { color: var(--green); }
+.text-red   { color: var(--red); }
+.text-yellow{ color: var(--yellow); }
+.text-dim   { color: var(--text-dim); }
+.text-secondary { color: var(--text-secondary); }
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+@keyframes slide-in { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }

@@ -1,296 +1,204 @@
-import "dotenv/config";
-import express from "express";
-import { WebSocketServer } from "ws";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-import { createServer } from "http";
-import chokidar from "chokidar";
-import {
-  readState,
-  readLessons,
-  readWaves,
-  readPoolMemory,
-  readUserConfig,
-  getLogFilePath,
-  listLogDates,
-} from "./lib/dataReader.js";
-import { parseLogLines } from "./lib/logParser.js";
-import { createLogWatcher } from "./lib/logWatcher.js";
+import express from 'express';
+import { WebSocketServer } from 'ws';
+import { createServer } from 'http';
+import { readFileSync, existsSync, createReadStream, statSync } from 'fs';
+import { createInterface } from 'readline';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import chokidar from 'chokidar';
+import cors from 'cors';
 
-const PORT = parseInt(process.env.DASHBOARD_PORT, 10) || 3001;
-const MERIDIAN_PATH = process.env.MERIDIAN_PATH || ".";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const MERIDIAN_PATH = process.env.MERIDIAN_PATH || path.join(__dirname, '../meridian');
+const PORT = parseInt(process.env.DASHBOARD_PORT || '3001');
 
+// ── helpers ──────────────────────────────────────────
+function readJson(file) {
+  try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return null; }
+}
+
+function parseLogLine(raw) {
+  const m = raw.match(/^\[(\d{4}-\d{2}-\d{2}T[\d:.]+Z)\] \[([^\]]+)\] (.+)$/);
+  if (!m) return null;
+  const [, iso, tag, msg] = m;
+  return { iso, time: new Date(iso).toLocaleTimeString('en-GB',{hour12:false}), tag: tag.trim(), msg: msg.trim() };
+}
+
+const MASK_KEYS = ['telegramBotToken','apiKey','privateKey','LLM_API_KEY','OPENROUTER_API_KEY','GMGN_API_KEY','password','token','secret'];
+function maskConfig(obj) {
+  return JSON.parse(JSON.stringify(obj), (k, v) =>
+    MASK_KEYS.some(mk => k.toLowerCase().includes(mk.toLowerCase())) ? '••••••••' : v
+  );
+}
+
+function todayLog() {
+  const d = new Date().toISOString().slice(0,10);
+  return path.join(MERIDIAN_PATH, 'logs', `agent-${d}.log`);
+}
+
+// ── Express ───────────────────────────────────────────
 const app = express();
+app.use(cors());
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// Optional basic auth
+if (process.env.DASHBOARD_USER) {
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api') || req.path === '/ws') {
+      const b64 = (req.headers.authorization||'').split(' ')[1]||'';
+      const [u, p] = Buffer.from(b64,'base64').toString().split(':');
+      if (u === process.env.DASHBOARD_USER && p === process.env.DASHBOARD_PASS) return next();
+      res.set('WWW-Authenticate','Basic realm="Meridian"');
+      return res.status(401).send('Unauthorized');
+    }
+    next();
+  });
+}
+
+// ── API routes ────────────────────────────────────────
+app.get('/api/status', (req, res) => {
+  res.json({ alive: true, uptime_s: Math.floor(process.uptime()), pid: process.pid });
+});
+
+app.get('/api/positions', (req, res) => {
+  const state = readJson(path.join(MERIDIAN_PATH, 'state.json')) || {};
+  const positions = Object.values(state.positions || {}).filter(p => !p.closed);
+  res.json({ positions, total: positions.length });
+});
+
+app.get('/api/performance', (req, res) => {
+  const data = readJson(path.join(MERIDIAN_PATH, 'lessons.json')) || {};
+  const perf = data.performance || [];
+  const wins = perf.filter(p => (p.pnl_usd||0) > 0);
+  const losses = perf.filter(p => (p.pnl_usd||0) < 0);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayPerf = perf.filter(p => new Date(p.recorded_at) >= today);
+  const todayFees = todayPerf.reduce((s,p) => s + (p.fees_earned_usd||0), 0);
+  const todayFeesSol = todayPerf.reduce((s,p) => s + (p.fees_earned_sol||0), 0);
+  res.json({
+    total: perf.length,
+    wins: wins.length,
+    losses: losses.length,
+    win_rate: perf.length ? Math.round(wins.length/perf.length*100*10)/10 : 0,
+    avg_win: wins.length ? wins.reduce((s,p)=>s+(p.pnl_usd||0),0)/wins.length : 0,
+    avg_loss: losses.length ? losses.reduce((s,p)=>s+(p.pnl_usd||0),0)/losses.length : 0,
+    total_pnl: perf.reduce((s,p)=>s+(p.pnl_usd||0),0),
+    today_fees_usd: todayFees,
+    today_fees_sol: todayFeesSol,
+    recent: perf.slice(-20).reverse(),
+  });
+});
+
+app.get('/api/waves', (req, res) => {
+  const data = readJson(path.join(MERIDIAN_PATH, 'wave-history.json')) || {};
+  res.json(data.waves || {});
+});
+
+app.get('/api/config', (req, res) => {
+  const cfg = readJson(path.join(MERIDIAN_PATH, 'user-config.json')) || {};
+  res.json(maskConfig(cfg));
+});
+
+app.get('/api/pools', (req, res) => {
+  const data = readJson(path.join(MERIDIAN_PATH, 'pool-memory.json')) || {};
+  const pools = Object.entries(data).map(([id, p]) => ({
+    id,
+    name: p.pool_name || p.name || id.slice(0,8),
+    deploys: (p.deploys||[]).length,
+    wins: (p.deploys||[]).filter(d=>(d.pnl_pct||0)>0).length,
+    losses: (p.deploys||[]).filter(d=>(d.pnl_pct||0)<0).length,
+    avg_pnl: (p.deploys||[]).length ? (p.deploys||[]).reduce((s,d)=>s+(d.pnl_pct||0),0)/(p.deploys||[]).length : 0,
+    last_deploy: (p.deploys||[]).slice(-1)[0]?.deployed_at || null,
+    cooldown_until: p.base_mint_cooldown_until || null,
+  }));
+  res.json(pools);
+});
+
+app.get('/api/logs', (req, res) => {
+  const n = parseInt(req.query.n || '300');
+  const tagFilter = req.query.tag ? req.query.tag.split(',') : null;
+  const logFile = todayLog();
+  if (!existsSync(logFile)) return res.json({ lines: [] });
+  const lines = [];
+  const rl = createInterface({ input: createReadStream(logFile), crlfDelay: Infinity });
+  rl.on('line', raw => {
+    const parsed = parseLogLine(raw);
+    if (parsed && (!tagFilter || tagFilter.includes(parsed.tag))) lines.push(parsed);
+  });
+  rl.on('close', () => res.json({ lines: lines.slice(-n) }));
+});
+
+// SPA fallback
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));
+
+// ── WebSocket ─────────────────────────────────────────
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
-// Static files
-app.use(express.static(path.join(__dirname, "public")));
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-app.use(express.json());
-
-// ─── Helpers ────────────────────────────────────────────────────
-
-function sanitizeConfig(cfg) {
-  const sensitive = [
-    "rpcUrl",
-    "walletKey",
-    "llmApiKey",
-    "hiveMindApiKey",
-    "publicApiKey",
-    "agentId",
-    "hiveMindAgentId",
-    "gmgnApiKey",
-    "telegramChatId",
-    "llmBaseUrl",
-  ];
-  const out = {};
-  for (const [k, v] of Object.entries(cfg)) {
-    out[k] = sensitive.includes(k) && v ? "***" : v;
-  }
-  return out;
-}
-
-function calcPerformance(lessons) {
-  const perf = lessons.lessons || [];
-  const trades = perf.filter((p) => p.pnl_pct != null);
-  const wins = trades.filter((p) => Number(p.pnl_pct) > 0);
-  const losses = trades.filter((p) => Number(p.pnl_pct) < 0);
-  const avgWin =
-    wins.length > 0
-      ? wins.reduce((s, p) => s + Number(p.pnl_pct), 0) / wins.length
-      : 0;
-  const avgLoss =
-    losses.length > 0
-      ? losses.reduce((s, p) => s + Number(p.pnl_pct), 0) / losses.length
-      : 0;
-  const totalPnl = trades.reduce((s, p) => s + Number(p.pnl_usd || 0), 0);
-  return {
-    total_trades: trades.length,
-    win_count: wins.length,
-    loss_count: losses.length,
-    win_rate: trades.length > 0 ? ((wins.length / trades.length) * 100).toFixed(1) : 0,
-    avg_win_pct: avgWin.toFixed(2),
-    avg_loss_pct: avgLoss.toFixed(2),
-    total_pnl_usd: totalPnl.toFixed(2),
-  };
-}
-
-function getOpenPositions(state) {
-  const pos = state.positions || {};
-  return Object.values(pos).filter((p) => !p.closed);
-}
-
-function getClosedPositions(state, lessons) {
-  const pos = state.positions || {};
-  const lessonList = lessons?.lessons || [];
-
-  // Build lookups
-  const pnlByPool = {};     // match by pool address
-  const pnlBySymbol = {};   // fallback: match by token symbol (pool_name)
-
-  for (const l of lessonList) {
-    if (l.pnl_pct == null) continue;
-    // by pool address
-    if (l.pool) {
-      if (!pnlByPool[l.pool] || new Date(l.created_at) > new Date(pnlByPool[l.pool].created_at)) {
-        pnlByPool[l.pool] = l;
-      }
-    }
-    // by symbol parsed from context
-    const symbolMatch = (l.context || "").match(/^([A-Z0-9-]+)/);
-    if (symbolMatch) {
-      const sym = symbolMatch[1];
-      if (!pnlBySymbol[sym] || new Date(l.created_at) > new Date(pnlBySymbol[sym].created_at)) {
-        pnlBySymbol[sym] = l;
-      }
-    }
-  }
-
-  return Object.values(pos)
-    .filter((p) => p.closed)
-    .sort((a, b) => new Date(b.closed_at || 0) - new Date(a.closed_at || 0))
-    .slice(0, 20)
-    .map((p) => {
-      // Try match by pool address first
-      let lesson = pnlByPool[p.pool];
-      // Fallback: match by pool_name symbol
-      if (!lesson && p.pool_name) {
-        lesson = pnlBySymbol[p.pool_name];
-      }
-      if (lesson) {
-        const pnlPct = Number(lesson.pnl_pct);
-        const initial = Number(lesson.initial_value_usd || 20); // fallback $20
-        const pnlUsd = initial * pnlPct / 100;
-        return {
-          ...p,
-          pnl_pct: pnlPct,
-          pnl_usd: pnlUsd,
-          close_reason: lesson.close_reason || p.notes?.[0] || "—",
-        };
-      }
-      return p;
-    });
-}
-
-// ─── API Routes ─────────────────────────────────────────────────
-
-app.get("/api/status", (req, res) => {
-  const today = new Date().toISOString().split("T")[0];
-  const logFile = getLogFilePath(today);
-  const alive = fs.existsSync(logFile);
-  const stats = alive ? fs.statSync(logFile) : null;
-  res.json({
-    bot_alive: alive,
-    last_log_time: stats ? new Date(stats.mtime).toISOString() : null,
-    meridian_path: MERIDIAN_PATH,
-    timestamp: new Date().toISOString(),
-  });
-});
-
-app.get("/api/positions", (req, res) => {
-  const state = readState();
-  res.json(getOpenPositions(state));
-});
-
-app.get("/api/positions/closed", (req, res) => {
-  const state = readState();
-  const lessons = readLessons();
-  res.json(getClosedPositions(state, lessons));
-});
-
-app.get("/api/performance", (req, res) => {
-  const lessons = readLessons();
-  const perf = calcPerformance(lessons);
-
-  // Calculate today fees from lessons created today
-  const today = new Date().toISOString().split("T")[0];
-  const todayLessons = (lessons.lessons || []).filter((l) =>
-    l.created_at && l.created_at.startsWith(today)
-  );
-  const todayFeesUsd = todayLessons.reduce((s, l) => s + Number(l.fees_earned_usd || 0), 0);
-  const solPrice = 150; // approximate SOL price
-  perf.today_fees_sol = (todayFeesUsd / solPrice).toFixed(4);
-  perf.today_fees_usd = todayFeesUsd.toFixed(2);
-
-  res.json(perf);
-});
-
-app.get("/api/lessons", (req, res) => {
-  const lessons = readLessons();
-  res.json(lessons.lessons?.slice(-50) || []);
-});
-
-app.get("/api/waves", (req, res) => {
-  const waves = readWaves();
-  res.json(waves.waves || {});
-});
-
-app.get("/api/pools", (req, res) => {
-  const pools = readPoolMemory();
-  res.json(pools.pools || {});
-});
-
-app.get("/api/config", (req, res) => {
-  const cfg = readUserConfig();
-  res.json(sanitizeConfig(cfg));
-});
-
-app.get("/api/logs", (req, res) => {
-  const today = new Date().toISOString().split("T")[0];
-  const date = req.query.date || today;
-  const limit = parseInt(req.query.limit, 10) || 500;
-  const offset = parseInt(req.query.offset, 10) || 0;
-
-  const logFile = getLogFilePath(date);
-  if (!fs.existsSync(logFile)) {
-    return res.json({ lines: [], total: 0, date });
-  }
-
-  const allLines = fs.readFileSync(logFile, "utf8").split("\n").filter(Boolean);
-  const paginated = allLines.slice(offset, offset + limit);
-  const parsed = parseLogLines(paginated);
-
-  res.json({
-    lines: parsed,
-    total: allLines.length,
-    date,
-    offset,
-    limit,
-  });
-});
-
-app.get("/api/log-dates", (req, res) => {
-  res.json(listLogDates());
-});
-
-app.get("/api/snapshots", (req, res) => {
-  const today = new Date().toISOString().split("T")[0];
-  const date = req.query.date || today;
-  const fp = path.join(MERIDIAN_PATH, "logs", `snapshots-${date}.jsonl`);
-  if (!fs.existsSync(fp)) return res.json([]);
-  const lines = fs.readFileSync(fp, "utf8").split("\n").filter(Boolean);
-  const parsed = lines.map((l) => {
-    try { return JSON.parse(l); } catch { return null; }
-  }).filter(Boolean);
-  res.json(parsed);
-});
-
-// ─── WebSocket ──────────────────────────────────────────────────
-
 function broadcast(type, data) {
   const msg = JSON.stringify({ type, data, ts: Date.now() });
-  wss.clients.forEach((client) => {
-    if (client.readyState === 1) {
-      client.send(msg);
-    }
-  });
+  wss.clients.forEach(c => { if (c.readyState === 1) c.send(msg); });
 }
 
-wss.on("connection", (ws) => {
-  ws.send(JSON.stringify({ type: "connected", data: "LPGoose Dashboard" }));
-  // Send last 20 log lines on connect so client sees something immediately
-  const today = new Date().toISOString().split("T")[0];
-  const logFile = getLogFilePath(today);
-  if (fs.existsSync(logFile)) {
-    const allLines = fs.readFileSync(logFile, "utf8").split("\n").filter(Boolean);
-    const lastLines = allLines.slice(-20);
-    const parsed = parseLogLines(lastLines);
-    for (const line of parsed) {
-      if (ws.readyState === 1) {
-        ws.send(JSON.stringify({ type: "log", data: line, ts: Date.now() }));
+wss.on('connection', async (ws) => {
+  const logFile = todayLog();
+  if (existsSync(logFile)) {
+    const lines = [];
+    const rl = createInterface({ input: createReadStream(logFile), crlfDelay: Infinity });
+    rl.on('line', raw => { const p = parseLogLine(raw); if (p) lines.push(p); });
+    rl.on('close', () => {
+      lines.slice(-200).forEach(line => ws.send(JSON.stringify({ type: 'log', data: line })));
+    });
+  }
+});
+
+// ── File watchers ─────────────────────────────────────
+let logFilePos = existsSync(todayLog()) ? statSync(todayLog()).size : 0;
+
+chokidar.watch(todayLog(), { usePolling: false }).on('change', (filePath) => {
+  const size = statSync(filePath).size;
+  if (size <= logFilePos) return;
+  const stream = createReadStream(filePath, { start: logFilePos, encoding: 'utf8' });
+  let buf = '';
+  stream.on('data', chunk => { buf += chunk; });
+  stream.on('end', () => {
+    logFilePos = size;
+    buf.split('\n').filter(Boolean).forEach(raw => {
+      const parsed = parseLogLine(raw);
+      if (!parsed) return;
+      broadcast('log', parsed);
+      if (parsed.tag === 'DEPLOY' && parsed.msg.includes('SUCCESS')) {
+        broadcast('alert', { kind: 'deploy', msg: parsed.msg });
       }
-    }
-  }
+      if (parsed.tag === 'STATE' && parsed.msg.includes('Stop loss')) {
+        broadcast('alert', { kind: 'sl', msg: parsed.msg });
+      }
+      if (parsed.tag === 'STATE' && parsed.msg.includes('Trailing TP')) {
+        broadcast('alert', { kind: 'tp', msg: parsed.msg });
+      }
+    });
+  });
 });
 
-// ─── File Watchers ──────────────────────────────────────────────
-
-const stateWatcher = chokidar.watch(
-  ["state.json", "wave-history.json", "lessons.json", "pool-memory.json"],
-  { cwd: MERIDIAN_PATH, ignoreInitial: true }
-);
-
-stateWatcher.on("change", (file) => {
-  if (file === "state.json") {
-    const state = readState();
-    broadcast("positions", getOpenPositions(state));
-    broadcast("closed", getClosedPositions(state));
-  }
-  if (file === "wave-history.json") {
-    broadcast("waves", readWaves());
-  }
+chokidar.watch([
+  path.join(MERIDIAN_PATH, 'state.json'),
+  path.join(MERIDIAN_PATH, 'lessons.json'),
+  path.join(MERIDIAN_PATH, 'wave-history.json'),
+], { usePolling: false }).on('change', (filePath) => {
+  const name = path.basename(filePath);
+  if (name === 'state.json') broadcast('state_update', { file: name });
+  if (name === 'lessons.json') broadcast('perf_update', { file: name });
+  if (name === 'wave-history.json') broadcast('wave_update', { file: name });
 });
 
-// Log tail
-const logWatcher = createLogWatcher(broadcast);
+setInterval(() => {
+  const logFile = todayLog();
+  if (!existsSync(logFile)) return broadcast('bot_status', { alive: false });
+  const age = Date.now() - statSync(logFile).mtimeMs;
+  broadcast('bot_status', { alive: age < 5 * 60 * 1000 });
+}, 15000);
 
-// ─── Start ──────────────────────────────────────────────────────
-
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`LPGoose Dashboard running on http://0.0.0.0:${PORT}`);
+server.listen(PORT, '127.0.0.1', () => {
+  console.log(`Meridian Dashboard running at http://127.0.0.1:${PORT}`);
+  console.log(`MERIDIAN_PATH: ${MERIDIAN_PATH}`);
 });
