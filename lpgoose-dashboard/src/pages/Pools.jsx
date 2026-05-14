@@ -9,7 +9,7 @@ export default function Pools() {
 
   return (
     <div style={{ padding:'12px 16px', maxWidth:1400 }}>
-      <div style={{ background:'#111', border:'0.5px solid #222', borderRadius:8, overflow:'hidden' }}>
+      <div className="table-wrap" style={{ background:'#111', border:'0.5px solid #222', borderRadius:8, overflow:'auto' }}>
         <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
           <thead>
             <tr>

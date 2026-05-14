@@ -33,7 +33,7 @@ export default function Dashboard() {
 
   return (
     <div style={page}>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:0 }}>
+      <div className="stat-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:0 }}>
         <StatCard label="Open Positions" value={`${positions.length} / 1`} color="#a5b4fc" sub="max positions" />
         <StatCard label="Win Rate" value={perf ? `${perf.win_rate}%` : '—'} color="#22c55e" sub={`${perf?.total||0} closed`} />
         <StatCard label="All-time PnL" value={perf ? `${perf.total_pnl>=0?'+':''}$${perf.total_pnl.toFixed(2)}` : '—'} color={perf?.total_pnl>=0?'#22c55e':'#ef4444'} sub={`avg ${perf?.avg_win>=0?'+':''}$${perf?.avg_win?.toFixed(2)||'0.00'}`} />
@@ -43,7 +43,7 @@ export default function Dashboard() {
       <div style={sectionLabel}>Open Positions</div>
       {positions.length === 0
         ? <div style={{ color:'#334155', fontSize:12, padding:'8px 0' }}>No open positions</div>
-        : <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+        : <div className="pos-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
             {positions.map(p => <PositionCard key={p.position} pos={p} />)}
           </div>
       }

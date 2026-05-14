@@ -14,7 +14,7 @@ export default function Topbar({ botAlive }) {
   });
 
   return (
-    <div style={{ height:48, background:'#111', borderBottom:'0.5px solid #222', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px', position:'sticky', top:0, zIndex:100 }}>
+    <div className="topbar" style={{ height:48, background:'#111', borderBottom:'0.5px solid #222', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px', position:'sticky', top:0, zIndex:100 }}>
       <div style={{ fontSize:14, fontWeight:600, color:'#818cf8', display:'flex', alignItems:'center', gap:8 }}>
         ⬡ LPGoose
       </div>
