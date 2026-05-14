@@ -483,8 +483,47 @@ const toolMap = {
       xSentimentEnabled: ["xSentiment", "enabled"],
       xSentimentLookbackDays: ["xSentiment", "lookbackDays"],
       xSentimentMinScore: ["xSentiment", "minScore"],
+      minSentimentScore: ["xSentiment", "minScore"],
+      xLookbackDays: ["xSentiment", "lookbackDays"],
       // screening extended
       maxVolatility: ["screening", "maxVolatility"],
+      blockedSymbols: ["screening", "blockedSymbols"],
+      cgBlockRank: ["screening", "cgBlockRank"],
+      postCloseReentryCooldownMin: ["screening", "postCloseReentryCooldownMin"],
+      maxWavesPerToken: ["screening", "maxWavesPerToken"],
+      maxLossesPerToken: ["screening", "maxLossesPerToken"],
+      waveBlockHours: ["screening", "waveBlockHours"],
+      fallingKnife5mThreshold: ["screening", "fallingKnife5mThreshold"],
+      fallingKnife1hThreshold: ["screening", "fallingKnife1hThreshold"],
+      maxDexBoosts: ["screening", "maxDexBoosts"],
+      // management extended
+      positionSizePct: ["management", "positionSizePct"],
+      outOfRangeWaitMinutes: ["management", "outOfRangeWaitMinutes"],
+      slowBleedMinAge: ["management", "slowBleedMinAge"],
+      slowBleedMinPnl: ["management", "slowBleedMinPnl"],
+      slowBleedMaxPnl: ["management", "slowBleedMaxPnl"],
+      outOfRangeBinsToClose: ["management", "outOfRangeBinsToClose"],
+      minSolToOpen: ["management", "minSolToOpen"],
+      // strategy extended
+      spotMinPrice5mFloor: ["strategy", "spotMinPrice5mFloor"],
+      spotMinPrice30mFloor: ["strategy", "spotMinPrice30mFloor"],
+      // darwin
+      darwinEnabled: ["darwin", "enabled"],
+      darwinWindowDays: ["darwin", "windowDays"],
+      darwinRecalcEvery: ["darwin", "recalcEvery"],
+      darwinBoost: ["darwin", "boostFactor"],
+      darwinDecay: ["darwin", "decayFactor"],
+      darwinFloor: ["darwin", "weightFloor"],
+      darwinCeiling: ["darwin", "weightCeiling"],
+      darwinMinSamples: ["darwin", "minSamples"],
+      // indicators extended
+      indicatorCandles: ["indicators", "candles", ["chartIndicators", "candles"]],
+      rsiOversold: ["indicators", "rsiOversold", ["chartIndicators", "rsiOversold"]],
+      rsiOverbought: ["indicators", "rsiOverbought", ["chartIndicators", "rsiOverbought"]],
+      // gmgn extended
+      gmgnMaxTop10HolderRate: ["gmgn", "maxTop10HolderRate"],
+      gmgnMinMcap: ["gmgn", "minMcap"],
+      gmgnMaxMcap: ["gmgn", "maxMcap"],
     };
 
     const applied = {};

@@ -1319,13 +1319,88 @@ function parseConfigValue(raw) {
 
 function settingValue(key) {
   const values = {
+    // ── Quick toggles ──
     solMode: config.management.solMode,
     lpAgentRelayEnabled: config.api.lpAgentRelayEnabled,
-    chartIndicatorsEnabled: config.indicators.enabled,
     trailingTakeProfit: config.management.trailingTakeProfit,
-    useDiscordSignals: config.screening.useDiscordSignals,
-    blockPvpSymbols: config.screening.blockPvpSymbols,
+    // ── Quick numeric ──
+    maxPositions: config.risk.maxPositions,
+    deployAmountSol: config.management.deployAmountSol,
+    gasReserve: config.management.gasReserve,
+    positionSizePct: config.management.positionSizePct,
+    takeProfitPct: config.management.takeProfitPct,
+    stopLossPct: config.management.stopLossPct,
+    trailingTriggerPct: config.management.trailingTriggerPct,
+    trailingDropPct: config.management.trailingDropPct,
+    managementIntervalMin: config.schedule.managementIntervalMin,
+    screeningIntervalMin: config.schedule.screeningIntervalMin,
+    // ── Screen ──
     screeningSource: config.screening.source,
+    minTvl: config.screening.minTvl,
+    maxTvl: config.screening.maxTvl,
+    minVolume: config.screening.minVolume,
+    minOrganic: config.screening.minOrganic,
+    minHolders: config.screening.minHolders,
+    minMcap: config.screening.minMcap,
+    maxMcap: config.screening.maxMcap,
+    minBinStep: config.screening.minBinStep,
+    maxBinStep: config.screening.maxBinStep,
+    timeframe: config.screening.timeframe,
+    category: config.screening.category,
+    minFeeActiveTvlRatio: config.screening.minFeeActiveTvlRatio,
+    minTokenFeesSol: config.screening.minTokenFeesSol,
+    maxBundlePct: config.screening.maxBundlePct,
+    maxBotHoldersPct: config.screening.maxBotHoldersPct,
+    maxTop10Pct: config.screening.maxTop10Pct,
+    avoidPvpSymbols: config.screening.avoidPvpSymbols,
+    blockPvpSymbols: config.screening.blockPvpSymbols,
+    minTokenAgeHours: config.screening.minTokenAgeHours,
+    maxTokenAgeHours: config.screening.maxTokenAgeHours,
+    athFilterPct: config.screening.athFilterPct,
+    maxVolatility: config.screening.maxVolatility,
+    maxDexBoosts: config.screening.maxDexBoosts,
+    blockedLaunchpads: config.screening.blockedLaunchpads,
+    allowedLaunchpads: config.screening.allowedLaunchpads,
+    cgBlockRank: config.screening.cgBlockRank,
+    blockedSymbols: config.screening.blockedSymbols,
+    postCloseReentryCooldownMin: config.screening.postCloseReentryCooldownMin,
+    maxWavesPerToken: config.screening.maxWavesPerToken,
+    maxLossesPerToken: config.screening.maxLossesPerToken,
+    waveBlockHours: config.screening.waveBlockHours,
+    fallingKnife5mThreshold: config.screening.fallingKnife5mThreshold,
+    fallingKnife1hThreshold: config.screening.fallingKnife1hThreshold,
+    useDiscordSignals: config.screening.useDiscordSignals,
+    discordSignalMode: config.screening.discordSignalMode,
+    // ── Strategy ──
+    strategy: config.strategy.strategy,
+    minBinsBelow: config.strategy.minBinsBelow,
+    maxBinsBelow: config.strategy.maxBinsBelow,
+    defaultBinsBelow: config.strategy.defaultBinsBelow,
+    dynamicStrategyEnabled: config.strategy.dynamicStrategyEnabled,
+    spotMinPrice1hChange: config.strategy.spotMinPrice1hChange,
+    spotMinVolatility: config.strategy.spotMinVolatility,
+    spotMinPrice5mFloor: config.strategy.spotMinPrice5mFloor,
+    spotMinPrice30mFloor: config.strategy.spotMinPrice30mFloor,
+    // ── Management ──
+    outOfRangeWaitMinutes: config.management.outOfRangeWaitMinutes,
+    outOfRangeBinsToClose: config.management.outOfRangeBinsToClose,
+    minFeePerTvl24h: config.management.minFeePerTvl24h,
+    minAgeBeforeYieldCheck: config.management.minAgeBeforeYieldCheck,
+    minClaimAmount: config.management.minClaimAmount,
+    autoSwapAfterClaim: config.management.autoSwapAfterClaim,
+    slowBleedMinAge: config.management.slowBleedMinAge,
+    slowBleedMinPnl: config.management.slowBleedMinPnl,
+    slowBleedMaxPnl: config.management.slowBleedMaxPnl,
+    hardStopPct: config.management.hardStopPct,
+    hardStopBypassSuspicious: config.management.hardStopBypassSuspicious,
+    trailingConfirmDelaySec: config.management.trailingConfirmDelaySec,
+    pnlPollIntervalSec: config.management.pnlPollIntervalSec,
+    minSolToOpen: config.management.minSolToOpen,
+    repeatDeployCooldownEnabled: config.management.repeatDeployCooldownEnabled,
+    repeatDeployCooldownTriggerCount: config.management.repeatDeployCooldownTriggerCount,
+    repeatDeployCooldownHours: config.management.repeatDeployCooldownHours,
+    repeatDeployCooldownMinFeeEarnedPct: config.management.repeatDeployCooldownMinFeeEarnedPct,
+    // ── GMGN ──
     gmgnRequireKol: config.gmgn.requireKol,
     gmgnInterval: config.gmgn.interval,
     gmgnIndicatorFilter: config.gmgn.indicatorFilter,
@@ -1333,6 +1408,7 @@ function settingValue(key) {
     gmgnMinTokenAgeHours: config.gmgn.minTokenAgeHours,
     gmgnMaxTokenAgeHours: config.gmgn.maxTokenAgeHours,
     gmgnMaxBundlerRate: config.gmgn.maxBundlerRate,
+    gmgnMaxTop10HolderRate: config.gmgn.maxTop10HolderRate,
     gmgnPreferredKolNames: config.gmgn.preferredKolNames,
     gmgnPreferredKolMinHoldPct: config.gmgn.preferredKolMinHoldPct,
     gmgnDumpKolNames: config.gmgn.dumpKolNames,
@@ -1346,31 +1422,23 @@ function settingValue(key) {
     gmgnMinKolCount: config.gmgn.minKolCount,
     gmgnMinTotalFeeSol: config.gmgn.minTotalFeeSol,
     gmgnMinHolders: config.gmgn.minHolders,
-    strategy: config.strategy.strategy,
-    minBinsBelow: config.strategy.minBinsBelow,
-    maxBinsBelow: config.strategy.maxBinsBelow,
-    deployAmountSol: config.management.deployAmountSol,
-    gasReserve: config.management.gasReserve,
-    maxPositions: config.risk.maxPositions,
-    maxDeployAmount: config.risk.maxDeployAmount,
-    takeProfitPct: config.management.takeProfitPct,
-    stopLossPct: config.management.stopLossPct,
-    slowBleedMinAge: config.management.slowBleedMinAge,
-    slowBleedMinPnl: config.management.slowBleedMinPnl,
-    slowBleedMaxPnl: config.management.slowBleedMaxPnl,
-    trailingTriggerPct: config.management.trailingTriggerPct,
-    trailingDropPct: config.management.trailingDropPct,
-    repeatDeployCooldownEnabled: config.management.repeatDeployCooldownEnabled,
-    repeatDeployCooldownTriggerCount: config.management.repeatDeployCooldownTriggerCount,
-    repeatDeployCooldownHours: config.management.repeatDeployCooldownHours,
-    repeatDeployCooldownMinFeeEarnedPct: config.management.repeatDeployCooldownMinFeeEarnedPct,
-    managementIntervalMin: config.schedule.managementIntervalMin,
-    screeningIntervalMin: config.schedule.screeningIntervalMin,
+    gmgnMinMcap: config.gmgn.minMcap,
+    gmgnMaxMcap: config.gmgn.maxMcap,
+    // ── Indicators ──
+    chartIndicatorsEnabled: config.indicators.enabled,
     indicatorEntryPreset: config.indicators.entryPreset,
     indicatorExitPreset: config.indicators.exitPreset,
     rsiLength: config.indicators.rsiLength,
     indicatorIntervals: config.indicators.intervals,
     requireAllIntervals: config.indicators.requireAllIntervals,
+    indicatorCandles: config.indicators.candles,
+    rsiOversold: config.indicators.rsiOversold,
+    rsiOverbought: config.indicators.rsiOverbought,
+    // ── Advanced ──
+    darwinEnabled: config.darwin.enabled,
+    xSentimentEnabled: config.xSentiment.enabled,
+    minSentimentScore: config.xSentiment.minScore,
+    xLookbackDays: config.xSentiment.lookbackDays,
   };
   return values[key];
 }
@@ -1405,84 +1473,92 @@ function inputButton(key, label, { digits = 0 } = {}) {
   return [settingButton(`${label}: ${shown} ✏`, `cfg:input:${key}`)];
 }
 
-function renderSettingsMenu(page = "main") {
-  const title = page === "main" ? "Settings menu" : `Settings: ${page}`;
+function renderSettingsMenu(page = "quick") {
+  const tabLabels = {
+    quick: "⚡ Quick",
+    screen: "🔍 Screen",
+    strategy: "📐 Strat",
+    mgmt: "🛡️ Mgmt",
+    gmgn: "📡 GMGN",
+    indicators: "📊 Indic",
+    adv: "🔧 Adv",
+  };
+
   const summary = [
-    title,
+    `${tabLabels[page] || "Settings"}`,
     "",
-    `Mode: ${config.management.solMode ? "SOL" : "USD"} | Relay: ${config.api.lpAgentRelayEnabled ? "on" : "off"}`,
-    `Screening: ${config.screening.source} | GMGN KOL ${config.gmgn.requireKol ? "required" : "preferred"}`,
-    `Strategy: ${config.strategy.strategy} | deploy ${config.management.deployAmountSol} SOL | max pos ${config.risk.maxPositions}`,
-    `TP/SL: ${config.management.takeProfitPct}% / ${config.management.stopLossPct}% | trailing ${config.management.trailingTakeProfit ? "on" : "off"}`,
-    `Indicators: ${config.indicators.enabled ? "on" : "off"} | entry ${config.indicators.entryPreset} | ${fmtSettingValue(config.indicators.intervals)}`,
+    `Mode: ${config.management.solMode ? "SOL" : "USD"} | Source: ${config.screening.source} | Strat: ${config.strategy.strategy}`,
+    `Deploy: ${config.management.deployAmountSol} SOL | MaxPos: ${config.risk.maxPositions} | Gas: ${config.management.gasReserve}`,
+    `TP/SL: ${config.management.takeProfitPct}% / ${config.management.stopLossPct}% | Trailing: ${config.management.trailingTakeProfit ? "ON" : "OFF"}`,
+    `Bins: [${config.strategy.minBinsBelow}–${config.strategy.maxBinsBelow}] | Indicators: ${config.indicators.enabled ? "ON" : "OFF"}`,
   ].join("\n");
 
   const nav = [
     [
-      settingButton("Main", "cfg:page:main"),
-      settingButton("Risk", "cfg:page:risk"),
-      settingButton("Strategy", "cfg:page:strategy"),
+      settingButton("⚡ Quick", "cfg:page:quick"),
+      settingButton("🔍 Screen", "cfg:page:screen"),
+      settingButton("📐 Strat", "cfg:page:strategy"),
     ],
     [
-      settingButton("Screen", "cfg:page:screen"),
-      settingButton("Indicators", "cfg:page:indicators"),
-      settingButton("GMGN", "cfg:page:gmgn"),
-      settingButton("KOL", "cfg:page:kol"),
+      settingButton("🛡️ Mgmt", "cfg:page:mgmt"),
+      settingButton("📡 GMGN", "cfg:page:gmgn"),
+      settingButton("📊 Indic", "cfg:page:indicators"),
+      settingButton("🔧 Adv", "cfg:page:adv"),
     ],
   ];
 
   const footer = [
     [
-      settingButton("Refresh", `cfg:page:${page}`),
-      settingButton("Close", "cfg:close"),
+      settingButton("🔄 Refresh", `cfg:page:${page}`),
+      settingButton("📋 Raw cfg", "cfg:show"),
+      settingButton("❌ Close", "cfg:close"),
     ],
   ];
 
-  let rows;
-  if (page === "risk") {
+  let rows = [];
+  if (page === "quick") {
     rows = [
-      inputButton("deployAmountSol", "Deploy SOL", { digits: 2 }),
-      inputButton("gasReserve", "Gas reserve", { digits: 2 }),
-      inputButton("maxPositions", "Max positions"),
-      inputButton("maxDeployAmount", "Max SOL"),
-      inputButton("takeProfitPct", "TP %"),
-      inputButton("stopLossPct", "SL %"),
-      inputButton("slowBleedMinAge", "Slow bleed age", { digits: 0 }),
-      inputButton("slowBleedMinPnl", "Slow bleed min PnL", { digits: 1 }),
-      inputButton("slowBleedMaxPnl", "Slow bleed max PnL", { digits: 1 }),
-      [toggleButton("trailingTakeProfit", "Trailing TP")],
-      inputButton("trailingTriggerPct", "Trail trigger", { digits: 1 }),
-      inputButton("trailingDropPct", "Trail drop", { digits: 1 }),
-      [toggleButton("repeatDeployCooldownEnabled", "Repeat cooldown")],
-      inputButton("repeatDeployCooldownTriggerCount", "Repeat count"),
-      inputButton("repeatDeployCooldownHours", "Repeat hrs"),
-      inputButton("repeatDeployCooldownMinFeeEarnedPct", "Min fee earned %", { digits: 1 }),
+      [toggleButton("solMode", "🟢 SOL mode")],
+      stepButtons("maxPositions", "Max positions", 1, { digits: 0 }),
+      stepButtons("deployAmountSol", "Deploy SOL", 0.1, { digits: 2 }),
+      stepButtons("gasReserve", "Gas reserve", 0.05, { digits: 2 }),
+      stepButtons("positionSizePct", "Size %", 0.05, { digits: 2 }),
+      stepButtons("takeProfitPct", "TP %", 1, { digits: 0 }),
+      stepButtons("stopLossPct", "SL %", 1, { digits: 0 }),
+      [toggleButton("trailingTakeProfit", "🟢 Trailing TP")],
+      stepButtons("trailingTriggerPct", "Trail trigger", 0.5, { digits: 1 }),
+      stepButtons("trailingDropPct", "Trail drop", 0.5, { digits: 1 }),
+      stepButtons("managementIntervalMin", "Mgmt interval", 1, { digits: 0 }),
+      stepButtons("screeningIntervalMin", "Screen interval", 5, { digits: 0 }),
     ];
   } else if (page === "screen") {
     rows = [
       [
-        settingButton("Source: Meteora", "cfg:set:screeningSource:meteora"),
-        settingButton("Source: GMGN", "cfg:set:screeningSource:gmgn"),
+        settingButton("Meteora", "cfg:set:screeningSource:meteora"),
+        settingButton("GMGN", "cfg:set:screeningSource:gmgn"),
       ],
-      [toggleButton("gmgnRequireKol", "GMGN require KOL")],
-      [toggleButton("useDiscordSignals", "Discord signals"), toggleButton("blockPvpSymbols", "PVP hard block")],
-      [
-        settingButton("5m", "cfg:set:gmgnInterval:5m"),
-        settingButton("1h", "cfg:set:gmgnInterval:1h"),
-        settingButton("6h", "cfg:set:gmgnInterval:6h"),
-        settingButton("24h", "cfg:set:gmgnInterval:24h"),
-      ],
-      [
-        inputButton("gmgnMinVolume", "Min volume")[0],
-        inputButton("gmgnMinTokenAgeHours", "Min token age (h)")[0],
-      ],
-      [
-        inputButton("gmgnMaxTokenAgeHours", "Max token age (h)")[0],
-        inputButton("gmgnMaxBundlerRate", "Max bundler %")[0],
-      ],
-      [settingButton("KOL settings", "cfg:page:kol")],
-      inputButton("managementIntervalMin", "Manage interval (min)"),
-      inputButton("screeningIntervalMin", "Screen interval (min)"),
+      stepButtons("minTvl", "Min TVL", 5000, { digits: 0 }),
+      stepButtons("maxTvl", "Max TVL", 50000, { digits: 0 }),
+      stepButtons("minVolume", "Min vol", 500, { digits: 0 }),
+      stepButtons("minOrganic", "Min organic", 5, { digits: 0 }),
+      stepButtons("minHolders", "Min holders", 250, { digits: 0 }),
+      stepButtons("minMcap", "Min mcap", 50000, { digits: 0 }),
+      stepButtons("maxMcap", "Max mcap", 1000000, { digits: 0 }),
+      stepButtons("minBinStep", "Min binStep", 10, { digits: 0 }),
+      stepButtons("maxBinStep", "Max binStep", 10, { digits: 0 }),
+      stepButtons("minFeeActiveTvlRatio", "Min fee/TVL", 0.05, { digits: 2 }),
+      stepButtons("minTokenFeesSol", "Min fees SOL", 10, { digits: 0 }),
+      stepButtons("maxBotHoldersPct", "Max bot %", 5, { digits: 0 }),
+      stepButtons("maxTop10Pct", "Max top10 %", 5, { digits: 0 }),
+      stepButtons("maxBundlePct", "Max bundle %", 5, { digits: 0 }),
+      [toggleButton("avoidPvpSymbols", "🟢 Avoid PVP"), toggleButton("blockPvpSymbols", "🟢 Hard block PVP")],
+      stepButtons("minTokenAgeHours", "Min age h", 1, { digits: 0 }),
+      stepButtons("maxTokenAgeHours", "Max age h", 12, { digits: 0 }),
+      stepButtons("athFilterPct", "ATH filter %", 5, { digits: 0 }),
+      stepButtons("maxVolatility", "Max vol", 1, { digits: 0 }),
+      stepButtons("maxDexBoosts", "Max boosts", 10, { digits: 0 }),
+      inputButton("blockedLaunchpads", "Blocked launchpads"),
+      inputButton("allowedLaunchpads", "Allowed launchpads"),
     ];
   } else if (page === "strategy") {
     rows = [
@@ -1490,75 +1566,107 @@ function renderSettingsMenu(page = "main") {
         settingButton("spot", "cfg:set:strategy:spot"),
         settingButton("bid_ask", "cfg:set:strategy:bid_ask"),
       ],
-      inputButton("minBinsBelow", "Min bins"),
-      inputButton("maxBinsBelow", "Max bins"),
+      [toggleButton("dynamicStrategyEnabled", "🟢 Dynamic strat")],
+      stepButtons("minBinsBelow", "Min bins", 5, { digits: 0 }),
+      stepButtons("maxBinsBelow", "Max bins", 5, { digits: 0 }),
+      stepButtons("spotMinPrice1hChange", "Spot 1h %", 1, { digits: 0 }),
+      stepButtons("spotMinVolatility", "Spot min vol", 1, { digits: 0 }),
+      stepButtons("spotMinPrice5mFloor", "Spot 5m floor", 1, { digits: 1 }),
+    ];
+  } else if (page === "mgmt") {
+    rows = [
+      stepButtons("outOfRangeWaitMinutes", "OOR wait min", 5, { digits: 0 }),
+      stepButtons("outOfRangeBinsToClose", "OOR bins close", 2, { digits: 0 }),
+      stepButtons("minFeePerTvl24h", "Min yield %", 1, { digits: 1 }),
+      stepButtons("minAgeBeforeYieldCheck", "Min age yield", 10, { digits: 0 }),
+      stepButtons("minClaimAmount", "Min claim $", 5, { digits: 0 }),
+      [toggleButton("autoSwapAfterClaim", "🟢 Auto swap claim")],
+      stepButtons("slowBleedMinAge", "Slow bleed age", 5, { digits: 0 }),
+      stepButtons("slowBleedMinPnl", "Slow bleed min", 1, { digits: 1 }),
+      stepButtons("slowBleedMaxPnl", "Slow bleed max", 1, { digits: 1 }),
+      stepButtons("hardStopPct", "Hard stop %", 5, { digits: 0 }),
+      stepButtons("postCloseReentryCooldownMin", "Reentry cooldown", 5, { digits: 0 }),
+      stepButtons("maxWavesPerToken", "Max waves", 1, { digits: 0 }),
+      stepButtons("maxLossesPerToken", "Max losses", 1, { digits: 0 }),
+      stepButtons("waveBlockHours", "Wave block h", 6, { digits: 0 }),
+      [toggleButton("repeatDeployCooldownEnabled", "🟢 Repeat cooldown")],
+      stepButtons("repeatDeployCooldownTriggerCount", "Repeat count", 1, { digits: 0 }),
+      stepButtons("repeatDeployCooldownHours", "Repeat hrs", 1, { digits: 1 }),
+      stepButtons("repeatDeployCooldownMinFeeEarnedPct", "Repeat min fee %", 1, { digits: 1 }),
     ];
   } else if (page === "gmgn") {
     rows = [
-      [toggleButton("gmgnIndicatorFilter", "Indicator filter"), toggleButton("gmgnRequireKol", "Require KOL")],
+      [toggleButton("gmgnRequireKol", "🟢 Require KOL")],
       [
-        settingButton("TF: 5m", "cfg:set:gmgnIndicatorInterval:5_MINUTE"),
-        settingButton("TF: 15m", "cfg:set:gmgnIndicatorInterval:15_MINUTE"),
-        settingButton("TF: 1h", "cfg:set:gmgnIndicatorInterval:1h"),
+        settingButton("5m", "cfg:set:gmgnInterval:5m"),
+        settingButton("1h", "cfg:set:gmgnInterval:1h"),
+        settingButton("6h", "cfg:set:gmgnInterval:6h"),
+        settingButton("24h", "cfg:set:gmgnInterval:24h"),
       ],
-      [toggleButton("gmgnRequireBullishSt", "Bullish ST"), toggleButton("gmgnRejectAtBottom", "Reject at bottom"), toggleButton("gmgnRequireAboveSt", "Above ST")],
-      inputButton("gmgnMinRsi", "Min RSI"),
-      inputButton("gmgnMaxRsi", "Max RSI"),
-      inputButton("gmgnMinKolCount", "Min KOL"),
-      inputButton("gmgnMinTotalFeeSol", "Min fee SOL"),
-      inputButton("gmgnMinHolders", "Min holders"),
-      [settingButton("KOL settings", "cfg:page:kol")],
-    ];
-  } else if (page === "kol") {
-    rows = [
-      inputButton("gmgnPreferredKolNames", "Preferred KOL (comma-sep)"),
-      inputButton("gmgnPreferredKolMinHoldPct", "Preferred KOL min hold %"),
-      inputButton("gmgnDumpKolNames", "Dump KOL (comma-sep)"),
-      inputButton("gmgnDumpKolMinHoldPct", "Dump KOL min hold %"),
+      [toggleButton("gmgnIndicatorFilter", "🟢 Indicator filter")],
+      [
+        settingButton("5m TF", "cfg:set:gmgnIndicatorInterval:5_MINUTE"),
+        settingButton("15m TF", "cfg:set:gmgnIndicatorInterval:15_MINUTE"),
+        settingButton("1h TF", "cfg:set:gmgnIndicatorInterval:1_HOUR"),
+      ],
+      [toggleButton("gmgnRequireBullishSt", "🟢 Bullish ST"), toggleButton("gmgnRejectAtBottom", "🟢 Reject bottom"), toggleButton("gmgnRequireAboveSt", "🟢 Above ST")],
+      stepButtons("gmgnMinRsi", "Min RSI", 5, { digits: 0 }),
+      stepButtons("gmgnMaxRsi", "Max RSI", 5, { digits: 0 }),
+      stepButtons("gmgnMinKolCount", "Min KOL", 1, { digits: 0 }),
+      stepButtons("gmgnMinTotalFeeSol", "Min fee SOL", 10, { digits: 0 }),
+      stepButtons("gmgnMinHolders", "Min holders", 100, { digits: 0 }),
+      stepButtons("gmgnMinVolume", "Min vol", 500, { digits: 0 }),
+      stepButtons("gmgnMinTokenAgeHours", "Min age h", 1, { digits: 0 }),
+      stepButtons("gmgnMaxTokenAgeHours", "Max age h", 12, { digits: 0 }),
+      stepButtons("gmgnMaxBundlerRate", "Max bundler %", 5, { digits: 2 }),
+      stepButtons("gmgnMaxTop10HolderRate", "Max top10 %", 5, { digits: 2 }),
+      inputButton("gmgnPreferredKolNames", "Preferred KOLs"),
+      inputButton("gmgnDumpKolNames", "Dump KOLs"),
     ];
   } else if (page === "indicators") {
     rows = [
-      [toggleButton("chartIndicatorsEnabled", "Chart indicators"), toggleButton("requireAllIntervals", "Require all TF")],
+      [toggleButton("chartIndicatorsEnabled", "🟢 Chart indicators"), toggleButton("requireAllIntervals", "🟢 All TF")],
       [
-        settingButton("TF: 5m", "cfg:set:indicatorIntervals:5_MINUTE"),
-        settingButton("TF: 15m", "cfg:set:indicatorIntervals:15_MINUTE"),
-        settingButton("TF: both", "cfg:set:indicatorIntervals:both"),
+        settingButton("5m", "cfg:set:indicatorIntervals:5_MINUTE"),
+        settingButton("15m", "cfg:set:indicatorIntervals:15_MINUTE"),
+        settingButton("both", "cfg:set:indicatorIntervals:both"),
       ],
       [
-        settingButton("Entry: ST", "cfg:set:indicatorEntryPreset:supertrend_break"),
-        settingButton("Entry: RSI", "cfg:set:indicatorEntryPreset:rsi_reversal"),
-        settingButton("Entry: ST/RSI", "cfg:set:indicatorEntryPreset:supertrend_or_rsi"),
+        settingButton("Entry ST", "cfg:set:indicatorEntryPreset:supertrend_break"),
+        settingButton("Entry RSI", "cfg:set:indicatorEntryPreset:rsi_reversal"),
+        settingButton("Entry ST/RSI", "cfg:set:indicatorEntryPreset:supertrend_or_rsi"),
       ],
       [
-        settingButton("Exit: ST", "cfg:set:indicatorExitPreset:supertrend_break"),
-        settingButton("Exit: RSI", "cfg:set:indicatorExitPreset:rsi_reversal"),
-        settingButton("Exit: BB+RSI", "cfg:set:indicatorExitPreset:bb_plus_rsi"),
+        settingButton("Exit ST", "cfg:set:indicatorExitPreset:supertrend_break"),
+        settingButton("Exit RSI", "cfg:set:indicatorExitPreset:rsi_reversal"),
+        settingButton("Exit BB+RSI", "cfg:set:indicatorExitPreset:bb_plus_rsi"),
       ],
-      inputButton("rsiLength", "RSI length"),
+      stepButtons("rsiLength", "RSI length", 1, { digits: 0 }),
+      stepButtons("indicatorCandles", "Candles", 50, { digits: 0 }),
+      stepButtons("rsiOversold", "RSI oversold", 5, { digits: 0 }),
+      stepButtons("rsiOverbought", "RSI overbought", 5, { digits: 0 }),
     ];
-  } else {
+  } else if (page === "adv") {
     rows = [
+      [toggleButton("darwinEnabled", "🟢 Darwin signals")],
+      [toggleButton("useDiscordSignals", "🟢 Discord signals")],
       [
-        settingButton("Source: Meteora", "cfg:set:screeningSource:meteora"),
-        settingButton("Source: GMGN", "cfg:set:screeningSource:gmgn"),
+        settingButton("Merge", "cfg:set:discordSignalMode:merge"),
+        settingButton("Only", "cfg:set:discordSignalMode:only"),
       ],
-      [toggleButton("solMode", "SOL mode"), toggleButton("lpAgentRelayEnabled", "LPAgent relay")],
-      [toggleButton("chartIndicatorsEnabled", "Chart indicators"), toggleButton("trailingTakeProfit", "Trailing TP")],
-      [
-        settingButton("Risk / deploy", "cfg:page:risk"),
-        settingButton("Screening", "cfg:page:screen"),
-      ],
-      [
-        settingButton("Indicators", "cfg:page:indicators"),
-        settingButton("Show config", "cfg:show"),
-      ],
+      [toggleButton("xSentimentEnabled", "🟢 X sentiment")],
+      stepButtons("minSentimentScore", "Min X score", 5, { digits: 0 }),
+      stepButtons("xLookbackDays", "X lookback d", 1, { digits: 0 }),
+      stepButtons("pnlPollIntervalSec", "PnL poll s", 5, { digits: 0 }),
+      stepButtons("trailingConfirmDelaySec", "Trail confirm s", 5, { digits: 0 }),
+      [toggleButton("lpAgentRelayEnabled", "🟢 LPAgent relay")],
     ];
   }
 
   return { text: summary, keyboard: [...nav, ...rows, ...footer] };
 }
 
-async function showSettingsMenu({ messageId = null, page = "main" } = {}) {
+async function showSettingsMenu({ messageId = null, page = "quick" } = {}) {
   const menu = renderSettingsMenu(page);
   if (messageId) {
     await editMessageWithButtons(menu.text, messageId, menu.keyboard);
@@ -1572,17 +1680,27 @@ function normalizeMenuValue(key, raw) {
     if (raw === "both") return ["5_MINUTE", "15_MINUTE"];
     return [raw];
   }
-  if (key === "gmgnPreferredKolNames" || key === "gmgnDumpKolNames") {
-    return raw.split(",").map((s) => s.trim()).filter(Boolean);
+  if (key === "gmgnPreferredKolNames" || key === "gmgnDumpKolNames" || key === "blockedLaunchpads" || key === "allowedLaunchpads" || key === "blockedSymbols") {
+    return String(raw).split(",").map((s) => s.trim()).filter(Boolean);
   }
   return parseConfigValue(raw);
+}
+
+function resolveSettingPage(key) {
+  if (["deployAmountSol", "gasReserve", "maxPositions", "maxDeployAmount", "takeProfitPct", "stopLossPct", "trailingTakeProfit", "trailingTriggerPct", "trailingDropPct", "positionSizePct", "managementIntervalMin", "screeningIntervalMin", "solMode"].includes(key)) return "quick";
+  if (["minTvl", "maxTvl", "minVolume", "minOrganic", "minHolders", "minMcap", "maxMcap", "minBinStep", "maxBinStep", "timeframe", "category", "minFeeActiveTvlRatio", "minTokenFeesSol", "maxBotHoldersPct", "maxTop10Pct", "maxBundlePct", "avoidPvpSymbols", "blockPvpSymbols", "minTokenAgeHours", "maxTokenAgeHours", "athFilterPct", "maxVolatility", "maxDexBoosts", "blockedLaunchpads", "allowedLaunchpads", "screeningSource", "blockedSymbols", "cgBlockRank", "postCloseReentryCooldownMin", "fallingKnife5mThreshold", "fallingKnife1hThreshold"].includes(key)) return "screen";
+  if (["strategy", "minBinsBelow", "maxBinsBelow", "dynamicStrategyEnabled", "spotMinPrice1hChange", "spotMinVolatility", "spotMinPrice5mFloor", "spotMinPrice30mFloor", "defaultBinsBelow"].includes(key)) return "strategy";
+  if (["outOfRangeWaitMinutes", "outOfRangeBinsToClose", "minFeePerTvl24h", "minAgeBeforeYieldCheck", "minClaimAmount", "autoSwapAfterClaim", "slowBleedMinAge", "slowBleedMinPnl", "slowBleedMaxPnl", "hardStopPct", "hardStopBypassSuspicious", "repeatDeployCooldownEnabled", "repeatDeployCooldownTriggerCount", "repeatDeployCooldownHours", "repeatDeployCooldownMinFeeEarnedPct", "maxWavesPerToken", "maxLossesPerToken", "waveBlockHours", "postCloseReentryCooldownMin", "minSolToOpen"].includes(key)) return "mgmt";
+  if (["gmgnRequireKol", "gmgnInterval", "gmgnIndicatorFilter", "gmgnIndicatorInterval", "gmgnRequireBullishSt", "gmgnRejectAtBottom", "gmgnRequireAboveSt", "gmgnMinRsi", "gmgnMaxRsi", "gmgnMinKolCount", "gmgnMinTotalFeeSol", "gmgnMinHolders", "gmgnMinVolume", "gmgnMinTokenAgeHours", "gmgnMaxTokenAgeHours", "gmgnMaxBundlerRate", "gmgnMaxTop10HolderRate", "gmgnPreferredKolNames", "gmgnPreferredKolMinHoldPct", "gmgnDumpKolNames", "gmgnDumpKolMinHoldPct", "gmgnMinMcap", "gmgnMaxMcap"].includes(key)) return "gmgn";
+  if (["chartIndicatorsEnabled", "indicatorEntryPreset", "indicatorExitPreset", "rsiLength", "indicatorIntervals", "requireAllIntervals", "indicatorCandles", "rsiOversold", "rsiOverbought"].includes(key)) return "indicators";
+  if (["darwinEnabled", "useDiscordSignals", "discordSignalMode", "xSentimentEnabled", "minSentimentScore", "xLookbackDays", "pnlPollIntervalSec", "trailingConfirmDelaySec", "lpAgentRelayEnabled"].includes(key)) return "adv";
+  return "quick";
 }
 
 async function applySettingsMenuCallback(msg) {
   const data = msg.callbackData || msg.text || "";
   const parts = data.split(":");
   const action = parts[1];
-  let page = "main";
 
   if (action === "noop") {
     await answerCallbackQuery(msg.callbackQueryId);
@@ -1591,13 +1709,7 @@ async function applySettingsMenuCallback(msg) {
   if (action === "input") {
     const inputKey = parts[2];
     const currentVal = settingValue(inputKey);
-    const inputPage = ["gmgnPreferredKolNames", "gmgnPreferredKolMinHoldPct", "gmgnDumpKolNames", "gmgnDumpKolMinHoldPct"].includes(inputKey) ? "kol"
-      : ["gmgnMinVolume", "gmgnMaxBundlerRate", "gmgnMinTokenAgeHours", "gmgnMaxTokenAgeHours"].includes(inputKey) ? "screen"
-      : inputKey.startsWith("gmgn") && inputKey !== "gmgnRequireKol" ? "gmgn"
-      : inputKey.startsWith("indicator") || inputKey === "chartIndicatorsEnabled" || inputKey === "rsiLength" || inputKey === "requireAllIntervals" ? "indicators"
-      : ["minBinsBelow", "maxBinsBelow"].includes(inputKey) ? "strategy"
-      : ["useDiscordSignals", "blockPvpSymbols", "managementIntervalMin", "screeningIntervalMin", "screeningSource", "gmgnRequireKol"].includes(inputKey) ? "screen"
-      : "risk";
+    const inputPage = resolveSettingPage(inputKey);
     _pendingInput = { key: inputKey, page: inputPage, menuMsgId: msg.messageId };
     await answerCallbackQuery(msg.callbackQueryId);
     await sendMessage(`Enter new value for ${inputKey} (current: ${currentVal ?? "off"}):\nSend a number, or "off" to clear.`);
@@ -1610,11 +1722,11 @@ async function applySettingsMenuCallback(msg) {
   }
   if (action === "show") {
     await answerCallbackQuery(msg.callbackQueryId);
-    await editMessageWithButtons(formatConfigSnapshot(), msg.messageId, [[settingButton("Back", "cfg:page:main")]]);
+    await editMessageWithButtons(formatConfigSnapshot(), msg.messageId, [[settingButton("Back", "cfg:page:quick")]]);
     return;
   }
   if (action === "page") {
-    page = parts[2] || "main";
+    const page = parts[2] || "quick";
     await answerCallbackQuery(msg.callbackQueryId);
     await showSettingsMenu({ messageId: msg.messageId, page });
     return;
@@ -1638,6 +1750,8 @@ async function applySettingsMenuCallback(msg) {
     if (key === "repeatDeployCooldownHours") value = Math.max(0, Math.round(value));
     if (key === "repeatDeployCooldownMinFeeEarnedPct") value = Math.max(0, value);
     if (["deployAmountSol", "gasReserve", "maxDeployAmount"].includes(key)) value = Math.max(0, value);
+    if (key === "minBinsBelow") value = Math.max(35, Math.round(value));
+    if (key === "maxBinsBelow") value = Math.max(35, Math.round(value));
   } else if (action === "set") {
     value = normalizeMenuValue(key, parts.slice(3).join(":"));
   } else {
@@ -1653,17 +1767,7 @@ async function applySettingsMenuCallback(msg) {
     await answerCallbackQuery(msg.callbackQueryId, "Config update failed");
     return;
   }
-  page = ["gmgnPreferredKolNames", "gmgnPreferredKolMinHoldPct", "gmgnDumpKolNames", "gmgnDumpKolMinHoldPct"].includes(key) ? "kol"
-    : ["gmgnMinVolume", "gmgnMaxBundlerRate", "gmgnMinTokenAgeHours", "gmgnMaxTokenAgeHours"].includes(key) ? "screen"
-    : key.startsWith("gmgn") && key !== "gmgnRequireKol"
-      ? "gmgn"
-      : key.startsWith("indicator") || key === "chartIndicatorsEnabled" || key === "rsiLength" || key === "requireAllIntervals"
-        ? "indicators"
-        : ["minBinsBelow", "maxBinsBelow"].includes(key)
-          ? "strategy"
-          : ["useDiscordSignals", "blockPvpSymbols", "managementIntervalMin", "screeningIntervalMin", "screeningSource", "gmgnRequireKol"].includes(key)
-            ? "screen"
-            : "risk";
+  const page = resolveSettingPage(key);
   await answerCallbackQuery(msg.callbackQueryId, `Updated ${key}`);
   await showSettingsMenu({ messageId: msg.messageId, page });
 }
@@ -1777,10 +1881,10 @@ async function telegramHandler(msg) {
     if (text.toLowerCase() === "off" || text.toLowerCase() === "null") {
       value = null;
     } else {
-      value = Number(text);
-      if (!Number.isFinite(value)) {
-        await sendMessage(`Invalid value "${text}" — must be a number or "off".`);
-        return;
+      value = normalizeMenuValue(key, text);
+      if (value === text && !Number.isNaN(Number(text)) && text.trim() !== "") {
+        const num = Number(text);
+        if (Number.isFinite(num)) value = num;
       }
     }
     const result = await executeTool("update_config", { changes: { [key]: value }, reason: "Telegram input field" });
