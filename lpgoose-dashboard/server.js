@@ -36,6 +36,308 @@ function todayLog() {
   return path.join(MERIDIAN_PATH, 'logs', `agent-${d}.log`);
 }
 
+const SOL_MINT = 'So11111111111111111111111111111111111111112';
+const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+const USDT_MINT = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
+const PRICE_CACHE_MS = 30_000;
+const priceCache = new Map();
+const decimalsCache = new Map([[SOL_MINT, 9], [USDC_MINT, 6], [USDT_MINT, 6]]);
+const poolCache = new Map();
+let sdkPromise = null;
+let connectionPromise = null;
+
+function asNumber(value) {
+  if (value == null) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value?.toNumber === 'function') return value.toNumber();
+  if (typeof value?.toString === 'function') {
+    const n = Number(value.toString());
+    return Number.isFinite(n) ? n : null;
+  }
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function firstNumber(...values) {
+  for (const value of values) {
+    const n = asNumber(value);
+    if (n != null) return n;
+  }
+  return null;
+}
+
+function round(value, digits = 4) {
+  const n = asNumber(value);
+  if (n == null) return null;
+  const factor = 10 ** digits;
+  return Math.round(n * factor) / factor;
+}
+
+function uiAmount(raw, decimals = 0) {
+  const n = asNumber(raw);
+  if (n == null) return null;
+  return n / (10 ** Number(decimals || 0));
+}
+
+function pairSymbols(pair) {
+  const parts = String(pair || '').split(/[/-]/).map((p) => p.trim()).filter(Boolean);
+  return { x: parts[0] || 'Token', y: parts[1] || 'SOL' };
+}
+
+function readState() {
+  return readJson(path.join(MERIDIAN_PATH, 'state.json')) || {};
+}
+
+function getRpcUrl() {
+  const cfg = readJson(path.join(MERIDIAN_PATH, 'user-config.json')) || {};
+  return process.env.RPC_URL || cfg.rpcUrl || null;
+}
+
+async function loadSdk() {
+  if (!sdkPromise) {
+    sdkPromise = Promise.all([
+      import('@meteora-ag/dlmm'),
+      import('@solana/web3.js'),
+    ]).then(([dlmmMod, web3]) => ({
+      DLMM: dlmmMod.default,
+      getPriceOfBinByBinId: dlmmMod.getPriceOfBinByBinId,
+      PublicKey: web3.PublicKey,
+      Connection: web3.Connection,
+    }));
+  }
+  return sdkPromise;
+}
+
+async function getConnection() {
+  if (!connectionPromise) {
+    connectionPromise = (async () => {
+      const rpcUrl = getRpcUrl();
+      if (!rpcUrl) throw new Error('RPC_URL/rpcUrl not configured');
+      const { Connection } = await loadSdk();
+      return new Connection(rpcUrl, 'confirmed');
+    })();
+  }
+  return connectionPromise;
+}
+
+async function getPool(poolAddress) {
+  if (!poolAddress) return null;
+  if (poolCache.has(poolAddress)) return poolCache.get(poolAddress);
+  const { DLMM, PublicKey } = await loadSdk();
+  const pool = await DLMM.create(await getConnection(), new PublicKey(poolAddress));
+  poolCache.set(poolAddress, pool);
+  return pool;
+}
+
+async function getMintDecimals(mint) {
+  if (!mint) return 9;
+  if (decimalsCache.has(mint)) return decimalsCache.get(mint);
+  try {
+    const { PublicKey } = await loadSdk();
+    const info = await (await getConnection()).getParsedAccountInfo(new PublicKey(mint));
+    const decimals = firstNumber(info.value?.data?.parsed?.info?.decimals) ?? 9;
+    decimalsCache.set(mint, decimals);
+    return decimals;
+  } catch {
+    decimalsCache.set(mint, 9);
+    return 9;
+  }
+}
+
+async function fetchTokenPrices(mints) {
+  const unique = [...new Set(mints.filter(Boolean))];
+  const now = Date.now();
+  const prices = {};
+  const missing = [];
+
+  for (const mint of unique) {
+    const cached = priceCache.get(mint);
+    if (cached && now - cached.ts < PRICE_CACHE_MS) prices[mint] = cached.price;
+    else missing.push(mint);
+  }
+
+  if (missing.length) {
+    try {
+      const res = await fetch(`https://api.jup.ag/price/v3?ids=${encodeURIComponent(missing.join(','))}`);
+      if (res.ok) {
+        const data = await res.json();
+        for (const mint of missing) {
+          const entry = data?.[mint] || data?.data?.[mint];
+          const price = firstNumber(entry?.usdPrice, entry?.price, entry);
+          if (price && price > 0) {
+            prices[mint] = price;
+            priceCache.set(mint, { price, ts: now });
+          }
+        }
+      }
+    } catch {
+      // Keep dashboard responsive; missing prices fall back to existing API totals.
+    }
+  }
+
+  if (prices[USDC_MINT] == null) prices[USDC_MINT] = 1;
+  if (prices[USDT_MINT] == null) prices[USDT_MINT] = 1;
+  return prices;
+}
+
+function getPositionBins(meteoraPosition) {
+  return [
+    meteoraPosition?.binData,
+    meteoraPosition?.positionData?.binData,
+    meteoraPosition?.positionData?.positionBinData,
+    meteoraPosition?.positionBinData,
+  ].find(Array.isArray) || [];
+}
+
+function fallbackBinPrice(binId, binStep) {
+  const id = asNumber(binId);
+  const step = asNumber(binStep);
+  if (id == null || step == null) return null;
+  return Math.pow(1 + step / 10_000, id);
+}
+
+function priceForBin(getPriceOfBinByBinId, binId, binStep) {
+  try {
+    const price = getPriceOfBinByBinId && binId != null && binStep != null
+      ? Number(getPriceOfBinByBinId(binId, binStep).toString())
+      : null;
+    return Number.isFinite(price) ? price : fallbackBinPrice(binId, binStep);
+  } catch {
+    return fallbackBinPrice(binId, binStep);
+  }
+}
+
+async function sdkPositionSnapshot(position, tracked) {
+  try {
+    const pool = await getPool(position.pool || tracked?.pool);
+    if (!pool) return {};
+    const { PublicKey, getPriceOfBinByBinId } = await loadSdk();
+    const meteoraPosition = await pool.getPosition(new PublicKey(position.position));
+    const positionData = meteoraPosition?.positionData || meteoraPosition || {};
+    const bins = getPositionBins(meteoraPosition);
+
+    const tokenXMint = pool.lbPair?.tokenXMint?.toString?.() || position.base_mint || tracked?.token_mint || null;
+    const tokenYMint = pool.lbPair?.tokenYMint?.toString?.() || SOL_MINT;
+    const [xDecimals, yDecimals, prices] = await Promise.all([
+      getMintDecimals(tokenXMint),
+      getMintDecimals(tokenYMint),
+      fetchTokenPrices([tokenXMint, tokenYMint]),
+    ]);
+
+    const tokenXAmount = uiAmount(positionData.totalXAmount, xDecimals) ?? null;
+    const tokenYAmount = uiAmount(positionData.totalYAmount, yDecimals) ?? null;
+    const feeXAmount = uiAmount(positionData.feeX, xDecimals) ?? null;
+    const feeYAmount = uiAmount(positionData.feeY, yDecimals) ?? null;
+    const priceX = tokenXMint ? prices[tokenXMint] : null;
+    const priceY = tokenYMint ? prices[tokenYMint] : null;
+    const computedValue = tokenXAmount != null && tokenYAmount != null && priceX != null && priceY != null
+      ? tokenXAmount * priceX + tokenYAmount * priceY
+      : null;
+    const computedFees = feeXAmount != null && feeYAmount != null && priceX != null && priceY != null
+      ? feeXAmount * priceX + feeYAmount * priceY
+      : null;
+
+    const lowerBin = firstNumber(positionData.lowerBinId, position.lower_bin, tracked?.bin_range?.min);
+    const upperBin = firstNumber(positionData.upperBinId, position.upper_bin, tracked?.bin_range?.max);
+    let activeBin = firstNumber(pool.lbPair?.activeId, position.active_bin, tracked?.bin_range?.active);
+    if (activeBin == null && typeof pool.getActiveBin === 'function') {
+      activeBin = firstNumber((await pool.getActiveBin())?.binId);
+    }
+    const binStep = firstNumber(pool.lbPair?.binStep, position.bin_step, tracked?.bin_step);
+    const symbols = pairSymbols(position.pair || tracked?.pool_name);
+    const inputUsd = firstNumber(tracked?.initial_value_usd, position.initial_value_usd);
+    const unclaimedUsd = firstNumber(computedFees, position.unclaimed_fees_true_usd, position.unclaimed_fees_usd);
+
+    return {
+      lower_bin: lowerBin,
+      upper_bin: upperBin,
+      active_bin: activeBin,
+      bin_step: binStep,
+      total_bins: bins.length || (lowerBin != null && upperBin != null ? Math.abs(upperBin - lowerBin) + 1 : null),
+      bins_below: lowerBin != null && activeBin != null ? Math.max(0, activeBin - lowerBin) : position.bins_below,
+      bins_above: upperBin != null && activeBin != null ? Math.max(0, upperBin - activeBin) : position.bins_above,
+      total_value_usd: firstNumber(computedValue, position.total_value_true_usd, position.total_value_usd),
+      unclaimed_fees_usd: unclaimedUsd,
+      claimed_fees_usd: firstNumber(tracked?.total_fees_claimed_usd, position.collected_fees_true_usd, position.collected_fees_usd, 0),
+      fee_pct_of_input: inputUsd > 0 && unclaimedUsd != null ? (unclaimedUsd / inputUsd) * 100 : null,
+      price_range: {
+        min: priceForBin(getPriceOfBinByBinId, lowerBin, binStep),
+        max: priceForBin(getPriceOfBinByBinId, upperBin, binStep),
+        current: priceForBin(getPriceOfBinByBinId, activeBin, binStep),
+      },
+      holdings: {
+        tokenX: {
+          symbol: symbols.x,
+          mint: tokenXMint,
+          amount: tokenXAmount,
+          value_usd: tokenXAmount != null && priceX != null ? tokenXAmount * priceX : null,
+        },
+        tokenY: {
+          symbol: tokenYMint === SOL_MINT ? 'SOL' : symbols.y,
+          mint: tokenYMint,
+          amount: tokenYAmount,
+          value_usd: tokenYAmount != null && priceY != null ? tokenYAmount * priceY : null,
+        },
+      },
+      fees: {
+        unclaimed_x_amount: feeXAmount,
+        unclaimed_y_amount: feeYAmount,
+        unclaimed_usd: unclaimedUsd,
+        pct_of_input: inputUsd > 0 && unclaimedUsd != null ? (unclaimedUsd / inputUsd) * 100 : null,
+        claimed_usd: firstNumber(tracked?.total_fees_claimed_usd, position.collected_fees_true_usd, position.collected_fees_usd, 0),
+      },
+    };
+  } catch {
+    return {};
+  }
+}
+
+function normalizePosition(position, tracked = {}, snapshot = {}) {
+  const merged = { ...tracked, ...position, ...snapshot };
+  const lowerBin = firstNumber(merged.lower_bin, tracked.bin_range?.min);
+  const upperBin = firstNumber(merged.upper_bin, tracked.bin_range?.max);
+  const activeBin = firstNumber(merged.active_bin, tracked.bin_range?.active);
+  const totalBins = firstNumber(merged.total_bins, lowerBin != null && upperBin != null ? Math.abs(upperBin - lowerBin) + 1 : null);
+  const binStep = firstNumber(merged.bin_step, tracked.bin_step);
+  const symbols = pairSymbols(merged.pair || tracked.pool_name);
+  const valueUsd = firstNumber(merged.total_value_usd, merged.total_value_true_usd);
+  const unclaimedFees = firstNumber(merged.unclaimed_fees_usd, merged.unclaimed_fees_true_usd);
+  const claimedFees = firstNumber(merged.claimed_fees_usd, tracked.total_fees_claimed_usd, merged.collected_fees_true_usd, merged.collected_fees_usd, 0);
+
+  return {
+    ...merged,
+    pair: merged.pair || tracked.pool_name || tracked.pool || merged.pool || 'Unknown pool',
+    strategy: merged.strategy || tracked.strategy || 'DLMM',
+    lower_bin: lowerBin,
+    upper_bin: upperBin,
+    active_bin: activeBin,
+    bin_step: binStep,
+    total_bins: totalBins,
+    bins_below: firstNumber(merged.bins_below, lowerBin != null && activeBin != null ? Math.max(0, activeBin - lowerBin) : totalBins),
+    total_value_usd: valueUsd,
+    unclaimed_fees_usd: unclaimedFees,
+    claimed_fees_usd: claimedFees,
+    fee_pct_of_input: firstNumber(merged.fee_pct_of_input, merged.fees?.pct_of_input),
+    price_range: merged.price_range || (
+      lowerBin != null && upperBin != null && activeBin != null && binStep != null
+        ? { min: fallbackBinPrice(lowerBin, binStep), max: fallbackBinPrice(upperBin, binStep), current: fallbackBinPrice(activeBin, binStep) }
+        : null
+    ),
+    holdings: merged.holdings || {
+      tokenX: { symbol: symbols.x, amount: firstNumber(merged.token_x_amount) },
+      tokenY: { symbol: symbols.y || 'SOL', amount: firstNumber(merged.token_y_amount) },
+    },
+    fees: merged.fees || {
+      unclaimed_usd: unclaimedFees,
+      pct_of_input: firstNumber(merged.fee_pct_of_input),
+      claimed_usd: claimedFees,
+    },
+    peak_pnl_pct: firstNumber(merged.peak_pnl_pct, tracked.peak_pnl_pct, 0),
+    minutes_oor: firstNumber(merged.minutes_oor, merged.minutes_out_of_range, 0),
+  };
+}
+
 // ── Express ───────────────────────────────────────────
 const app = express();
 app.use(cors());
@@ -60,10 +362,48 @@ app.get('/api/status', (req, res) => {
   res.json({ alive: true, uptime_s: Math.floor(process.uptime()), pid: process.pid });
 });
 
-app.get('/api/positions', (req, res) => {
-  const state = readJson(path.join(MERIDIAN_PATH, 'state.json')) || {};
-  const positions = Object.values(state.positions || {}).filter(p => !p.closed);
-  res.json({ positions, total: positions.length });
+function readTrackedOpenPositions() {
+  const state = readState();
+  return Object.values(state.positions || {}).filter(p => !p.closed);
+}
+
+app.get('/api/positions', async (req, res) => {
+  const fallbackPositions = readTrackedOpenPositions();
+  const trackedByPosition = Object.fromEntries(fallbackPositions.map((p) => [p.position, p]));
+  try {
+    const { getMyPositions } = await import('../tools/dlmm.js');
+    const live = await getMyPositions({ force: true, silent: true });
+    const rawPositions = Array.isArray(live?.positions) && live.positions.length > 0
+      ? live.positions
+      : fallbackPositions;
+    const positions = await Promise.all(rawPositions.map(async (position) => {
+      const tracked = trackedByPosition[position.position] || {};
+      const snapshot = await sdkPositionSnapshot(position, tracked);
+      return normalizePosition(position, tracked, snapshot);
+    }));
+    if (positions.length > 0) {
+      return res.json({
+        ...live,
+        positions,
+        total: positions.length,
+        source: Array.isArray(live?.positions) && live.positions.length > 0 ? 'onchain' : 'state',
+      });
+    }
+    return res.json({
+      positions: fallbackPositions,
+      total: fallbackPositions.length,
+      source: live?.error ? 'state_fallback' : 'state',
+      error: live?.error || null,
+    });
+  } catch (error) {
+    const positions = fallbackPositions.map((position) => normalizePosition(position, position, {}));
+    res.json({
+      positions,
+      total: positions.length,
+      source: 'state_fallback',
+      error: error.message,
+    });
+  }
 });
 
 app.get('/api/performance', (req, res) => {

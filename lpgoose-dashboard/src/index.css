@@ -171,7 +171,10 @@ button, input {
 
 .page-shell {
   max-width: 1480px;
+  width: 100%;
+  margin: 0 auto;
   padding: 18px 22px 30px;
+  overflow-x: hidden;
 }
 
 .hero-grid {
@@ -375,23 +378,141 @@ button, input {
 .position-head {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.position-head > div {
+  min-width: 0;
 }
 
 .position-head h3 {
   margin: 0;
   font-size: 16px;
+  overflow-wrap: anywhere;
 }
 
 .position-head p {
   margin: 4px 0 0;
   color: var(--text-dim);
+  overflow-wrap: anywhere;
 }
 
 .range-badge {
   height: 25px;
   padding: 0 9px;
+  flex: 0 0 auto;
+}
+
+.position-summary-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.position-summary-row div,
+.holdings-grid div {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  background: rgba(8, 9, 11, 0.42);
+}
+
+.position-summary-row span,
+.holdings-grid span {
+  display: block;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.position-summary-row b,
+.holdings-grid b {
+  display: block;
+  min-width: 0;
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.holdings-grid b.positive,
+.position-summary-row b.positive {
+  color: var(--green);
+}
+
+.position-summary-row b.negative {
+  color: var(--red);
+}
+
+.price-range-block {
+  margin: 2px 0 14px;
+}
+
+.range-values,
+.range-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-soft);
+  font-family: Consolas, "JetBrains Mono", monospace;
+  font-size: 11px;
+}
+
+.range-values {
+  margin-bottom: 8px;
+}
+
+.range-meta {
+  margin-top: 8px;
+  color: var(--text-dim);
+}
+
+.price-slider {
+  position: relative;
+  height: 9px;
+  border-radius: 999px;
+  background: #171e28;
+  border: 1px solid var(--border-soft);
+}
+
+.price-slider-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--blue), var(--green));
+  opacity: 0.76;
+}
+
+.price-marker {
+  position: absolute;
+  top: 50%;
+  width: 15px;
+  height: 15px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--bg-panel-soft);
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 0 2px rgba(245, 182, 66, 0.24);
+}
+
+.holdings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.holdings-grid em {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-style: normal;
+  overflow-wrap: anywhere;
 }
 
 .position-metrics,
@@ -715,12 +836,51 @@ button, input {
   }
 
   .position-metrics,
+  .position-summary-row,
+  .holdings-grid,
   .gate-list {
     grid-template-columns: 1fr 1fr;
   }
 }
 
 @media (max-width: 520px) {
+  body {
+    font-size: 12px;
+  }
+
+  .topbar {
+    gap: 8px;
+  }
+
+  .brand-lockup {
+    flex: 1 1 auto;
+  }
+
+  .brand-subtitle,
+  .agent-status svg {
+    display: none;
+  }
+
+  .agent-status {
+    flex: 0 0 auto;
+    min-width: 0;
+    gap: 6px;
+    font-size: 11px;
+  }
+
+  .nav-pill {
+    min-height: 32px;
+    padding: 0 9px;
+    font-size: 12px;
+  }
+
+  .panel,
+  .stat-card,
+  .capital-panel,
+  .position-card {
+    border-radius: 7px;
+  }
+
   .health-word {
     font-size: 30px;
   }
@@ -731,8 +891,23 @@ button, input {
   }
 
   .position-metrics,
+  .position-summary-row,
+  .holdings-grid,
   .gate-list {
     grid-template-columns: 1fr;
+  }
+
+  .position-head {
+    flex-direction: column;
+  }
+
+  .range-badge {
+    align-self: flex-start;
+  }
+
+  .range-values,
+  .range-meta {
+    font-size: 10px;
   }
 
   .log-row {
