@@ -24,7 +24,7 @@ function parseLogLine(raw) {
   return { iso, time: new Date(iso).toLocaleTimeString('en-GB',{hour12:false}), tag: tag.trim(), msg: msg.trim() };
 }
 
-const MASK_KEYS = ['telegramBotToken','apiKey','privateKey','LLM_API_KEY','OPENROUTER_API_KEY','GMGN_API_KEY','password','token','secret'];
+const MASK_KEYS = ['telegramBotToken','apiKey','privateKey','walletKey','LLM_API_KEY','OPENROUTER_API_KEY','GMGN_API_KEY','password','secret'];
 function maskConfig(obj) {
   return JSON.parse(JSON.stringify(obj), (k, v) =>
     MASK_KEYS.some(mk => k.toLowerCase().includes(mk.toLowerCase())) ? '••••••••' : v
@@ -87,6 +87,11 @@ app.get('/api/performance', (req, res) => {
     today_fees_sol: todayFeesSol,
     recent: perf.slice(-20).reverse(),
   });
+});
+
+app.get('/api/lessons', (req, res) => {
+  const data = readJson(path.join(MERIDIAN_PATH, 'lessons.json')) || {};
+  res.json(data.lessons || []);
 });
 
 app.get('/api/waves', (req, res) => {

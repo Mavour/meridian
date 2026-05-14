@@ -1,32 +1,31 @@
+function formatHold(minutes) {
+  if (!minutes) return '-';
+  return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
+}
+
 export default function ClosedTable({ rows = [] }) {
   return (
-    <div className="table-wrap" style={{ background:'#111', border:'0.5px solid #222', borderRadius:8, overflow:'auto' }}>
-      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+    <div className="table-card">
+      <table>
         <thead>
           <tr>
-            {['Token','PnL%','USD','Hold','Reason'].map(h => (
-              <th key={h} style={{ fontSize:10, color:'#334155', textTransform:'uppercase', letterSpacing:'0.8px', fontWeight:400, textAlign:'left', padding:'6px 10px', borderBottom:'0.5px solid #1a1a1a' }}>{h}</th>
-            ))}
+            {['Token', 'PnL%', 'USD', 'Hold', 'Reason'].map((h) => <th key={h}>{h}</th>)}
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr key={i}>
-              <td style={{ padding:'6px 10px', color:'#cbd5e1', fontWeight:500, borderBottom:'0.5px solid #111' }}>{r.pool_name||'—'}</td>
-              <td style={{ padding:'6px 10px', borderBottom:'0.5px solid #111', color:(r.pnl_pct||0)>=0?'#22c55e':'#ef4444' }}>
-                {(r.pnl_pct||0)>=0?'+':''}{(r.pnl_pct||0).toFixed(2)}%
-              </td>
-              <td style={{ padding:'6px 10px', borderBottom:'0.5px solid #111', color:(r.pnl_usd||0)>=0?'#22c55e':'#ef4444' }}>
-                {(r.pnl_usd||0)>=0?'+':''}${Math.abs(r.pnl_usd||0).toFixed(2)}
-              </td>
-              <td style={{ padding:'6px 10px', borderBottom:'0.5px solid #111', color:'#94a3b8' }}>
-                {r.minutes_held ? (r.minutes_held >= 60 ? `${Math.floor(r.minutes_held/60)}h ${r.minutes_held%60}m` : `${r.minutes_held}m`) : '—'}
-              </td>
-              <td style={{ padding:'6px 10px', borderBottom:'0.5px solid #111', color:'#475569', maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                {r.close_reason||'—'}
-              </td>
-            </tr>
-          ))}
+          {rows.map((r, i) => {
+            const pnlPct = Number(r.pnl_pct || 0);
+            const pnlUsd = Number(r.pnl_usd || 0);
+            return (
+              <tr key={`${r.position || r.pool_name || 'row'}-${i}`}>
+                <td className="token-cell">{r.pool_name || '-'}</td>
+                <td className={pnlPct >= 0 ? 'positive' : 'negative'}>{pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%</td>
+                <td className={pnlUsd >= 0 ? 'positive' : 'negative'}>{pnlUsd >= 0 ? '+' : ''}${Math.abs(pnlUsd).toFixed(2)}</td>
+                <td>{formatHold(r.minutes_held)}</td>
+                <td className="reason-cell">{r.close_reason || '-'}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
