@@ -409,6 +409,33 @@ app.get('/api/positions', async (req, res) => {
 app.get('/api/performance', (req, res) => {
   const data = readJson(path.join(MERIDIAN_PATH, 'lessons.json')) || {};
   const perf = data.performance || [];
+  const trades = perf
+    .map((p, index) => {
+      const pnlAmount = firstNumber(p.pnl_usd, p.pnl_amount, p.fees_earned_usd != null && p.final_value_usd != null && p.initial_value_usd != null
+        ? p.final_value_usd + p.fees_earned_usd - p.initial_value_usd
+        : null);
+      const timestamp = p.recorded_at || p.closed_at || p.created_at || null;
+      return {
+        position: p.position || null,
+        pool: p.pool || null,
+        pool_name: p.pool_name || p.pool || `Trade ${index + 1}`,
+        trade_index: index + 1,
+        timestamp,
+        pnl_amount: pnlAmount ?? 0,
+        pnl_usd: pnlAmount ?? 0,
+        pnl_pct: firstNumber(p.pnl_pct, p.pnl_percent, 0),
+        is_win: (pnlAmount ?? 0) > 0,
+        hold_duration: firstNumber(p.minutes_held, p.hold_duration, p.minutes_in_range, 0),
+        minutes_held: firstNumber(p.minutes_held, p.hold_duration, p.minutes_in_range, 0),
+        fees_earned_usd: firstNumber(p.fees_earned_usd, 0),
+      };
+    })
+    .sort((a, b) => {
+      const at = a.timestamp ? new Date(a.timestamp).getTime() : a.trade_index;
+      const bt = b.timestamp ? new Date(b.timestamp).getTime() : b.trade_index;
+      return at - bt;
+    })
+    .map((trade, index) => ({ ...trade, trade_index: index + 1 }));
   const wins = perf.filter(p => (p.pnl_usd||0) > 0);
   const losses = perf.filter(p => (p.pnl_usd||0) < 0);
   const today = new Date(); today.setHours(0,0,0,0);
@@ -425,6 +452,7 @@ app.get('/api/performance', (req, res) => {
     total_pnl: perf.reduce((s,p)=>s+(p.pnl_usd||0),0),
     today_fees_usd: todayFees,
     today_fees_sol: todayFeesSol,
+    trades,
     recent: perf.slice(-20).reverse(),
   });
 });

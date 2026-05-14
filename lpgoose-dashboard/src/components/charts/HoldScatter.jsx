@@ -1,11 +1,16 @@
 import { ScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
-export function HoldScatter({ data = [] }) {
+export function HoldScatter({ data = [], loading = false }) {
   const chartData = data
-    .filter(l => l.minutes_held != null && l.pnl_pct != null)
-    .map(l => ({ x: l.minutes_held, y: l.pnl_pct, name: l.pool_name }));
+    .map((trade) => ({
+      x: Number(trade.hold_duration ?? trade.minutes_held),
+      y: Number(trade.pnl_pct),
+      name: trade.pool_name,
+    }))
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
 
-  if (chartData.length === 0) return <div style={{ color:'#475569', fontSize:12 }}>No data yet</div>;
+  if (loading) return <div className="chart-empty">Loading trading history...</div>;
+  if (chartData.length === 0) return <div className="chart-empty">No closed trades with hold time yet</div>;
   return (
     <ResponsiveContainer width="100%" height={200}>
       <ScatterChart>
@@ -14,7 +19,7 @@ export function HoldScatter({ data = [] }) {
         <Tooltip
           contentStyle={{ background:'#111', border:'0.5px solid #222', borderRadius:6, fontSize:12 }}
           labelStyle={{ color:'#94a3b8' }}
-          formatter={(v, name) => [name === 'x' ? `${v}m` : `${v.toFixed(2)}%`, name === 'x' ? 'Hold' : 'PnL%']}
+          formatter={(v, name) => [name === 'x' ? `${Number(v).toFixed(0)}m` : `${Number(v).toFixed(2)}%`, name === 'x' ? 'Hold' : 'PnL%']}
         />
         <Scatter data={chartData} fill="#a5b4fc" />
       </ScatterChart>
