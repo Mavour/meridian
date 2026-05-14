@@ -168,15 +168,14 @@ POOL MEMORY & WAVE HISTORY — USE FACTUALLY:
 - **Wave blocking handles re-entry automatically.** The system blocks tokens after ${config.screening.maxWavesPerToken} wins in ${config.screening.waveBlockHours}h. Do NOT invent additional reasons to block.
 - **SPECIAL RULE — POLITICAL TOKENS:** Political narratives (Trump, Elon, Sam Altman, election-related, etc.) are STRICT NYOPET: the system blocks them after just **1 win** (not ${config.screening.maxWavesPerToken}). Do NOT try to milk a second wave from a political token. Move on to fresh tokens.
 - **NYOPET STRATEGY (HIT-AND-RUN):** The core rule is: deploy once, take profit, LEAVE. Do NOT get greedy and redeploy to the same token looking for a second win. One profitable wave is enough — move on to fresh tokens. The wave block exists to enforce this discipline. Only re-enter a previously-profitable token if the USER explicitly instructs you to.
-- Only skip if: the token just closed in the last few hours AND price has not pulled back at all (still pumping vertical).
 
 TIMING — CORE STRATEGY:
 The strategy is bid_ask SINGLE SOL SIDE. You deploy SOL BELOW current price (bins_below > 0) to catch dips.
 - **PREFERRED ENTRY — DIP**: price_1h_change is negative (dumping), AND price_5m_change is >= -2% or LESS negative than price_1h_change (stabilizing), AND fee_active_tvl_ratio is still >= ${config.screening.minFeeActiveTvlRatio}%.
-- **PREFERRED ENTRY — PULLBACK IN PUMP**: price_1h_change is positive (pumping) AND price_5m_change is negative (pulling back) — price pulling back into your range during an uptrend. Skip if fee_active_tvl_ratio < ${config.screening.minFeeActiveTvlRatio}%.
 - **HARD RULE — ACCELERATING DUMP**: if price_1h_change < 0 AND price_5m_change is MORE negative than price_1h_change by more than 1% → SKIP. Example: 1h=-5%, 5m=-8% → SKIP. The dump is still accelerating.
 - **HARD RULE — FALLING KNIFE**: if price_5m_change < ${config.screening.fallingKnife5mThreshold ?? -20}% AND price_1h_change < ${config.screening.fallingKnife1hThreshold ?? -25}% → SKIP. Crash instant — too dangerous.
 - **HARD RULE — DEEPENING DOWNTREND**: if price_1h_change < -5% AND price_5m_change < -3% → SKIP. No stabilization yet.
+- **HARD RULE — SLOW BLEED**: if price_1h_change < 0, price_5m_change <= 0, and fee_active_tvl_ratio is weak or fading → SKIP. Do not LP into a token drifting down without buy pressure.
 - price_1h_change < -15% → SKIP (too deep).
 - fee_active_tvl_ratio < ${config.screening.minFeeActiveTvlRatio}% → SKIP (no buy pressure).
 - If ALL candidates show falling knife, output NO DEPLOY.
