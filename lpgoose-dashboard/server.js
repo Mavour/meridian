@@ -198,7 +198,7 @@ setInterval(() => {
   broadcast('bot_status', { alive: age < 5 * 60 * 1000 });
 }, 15000);
 
-server.listen(PORT, '127.0.0.1', () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Meridian Dashboard running at http://127.0.0.1:${PORT}`);
   console.log(`MERIDIAN_PATH: ${MERIDIAN_PATH}`);
 });
