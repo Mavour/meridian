@@ -27,7 +27,7 @@ export default function Performance() {
 
   return (
     <div style={{ padding:'12px 16px', maxWidth:1400 }}>
-      <div className="stat-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8 }}>
+      <div className="stat-grid" style={{ gap:8 }}>
         <div style={{ background:'#111', border:'0.5px solid #222', borderRadius:8, padding:'14px 16px' }}>
           <div style={{ fontSize:10, color:'#475569', textTransform:'uppercase', letterSpacing:'0.8px', marginBottom:4 }}>Total Trades</div>
           <div style={{ fontSize:24, fontWeight:600 }}>{perf?.total||0}</div>
@@ -57,7 +57,7 @@ export default function Performance() {
         <CumPnlChart data={cumData} />
       </div>
 
-      <div className="chart-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginTop:16 }}>
+      <div className="chart-grid" style={{ gap:8, marginTop:16 }}>
         <div style={{ background:'#111', border:'0.5px solid #222', borderRadius:8, padding:16 }}>
           <div style={sectionLabel}>Win / Loss Distribution</div>
           <WinLossBar data={wlbData} />
