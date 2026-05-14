@@ -171,14 +171,15 @@ POOL MEMORY & WAVE HISTORY — USE FACTUALLY:
 - Only skip if: the token just closed in the last few hours AND price has not pulled back at all (still pumping vertical).
 
 TIMING — CORE STRATEGY:
-The strategy is bid_ask SINGLE SOL SIDE. You deploy SOL BELOW current price, waiting for a HEALTHY DIP into your range.
-- **IDEAL ENTRY**: price_1h_change is between -3% and -10% (moderate dump), AND price_5m_change is >= -2% or LESS negative than price_1h_change (stabilizing — this is CRITICAL), AND fee_active_tvl_ratio is still >= ${config.screening.minFeeActiveTvlRatio}%.
+The strategy is bid_ask SINGLE SOL SIDE. You deploy SOL BELOW current price (bins_below > 0) to catch dips.
+- **PREFERRED ENTRY — DIP**: price_1h_change is negative (dumping), AND price_5m_change is >= -2% or LESS negative than price_1h_change (stabilizing), AND fee_active_tvl_ratio is still >= ${config.screening.minFeeActiveTvlRatio}%.
+- **PREFERRED ENTRY — PULLBACK IN PUMP**: price_1h_change is positive (pumping) AND price_5m_change is negative (pulling back) — price pulling back into your range during an uptrend. Skip if fee_active_tvl_ratio < ${config.screening.minFeeActiveTvlRatio}%.
 - **HARD RULE — ACCELERATING DUMP**: if price_1h_change < 0 AND price_5m_change is MORE negative than price_1h_change by more than 1% → SKIP. Example: 1h=-5%, 5m=-8% → SKIP. The dump is still accelerating.
 - **HARD RULE — FALLING KNIFE**: if price_5m_change < ${config.screening.fallingKnife5mThreshold ?? -20}% AND price_1h_change < ${config.screening.fallingKnife1hThreshold ?? -25}% → SKIP. Crash instant — too dangerous.
 - **HARD RULE — DEEPENING DOWNTREND**: if price_1h_change < -5% AND price_5m_change < -3% → SKIP. No stabilization yet.
 - price_1h_change < -15% → SKIP (too deep).
 - fee_active_tvl_ratio < ${config.screening.minFeeActiveTvlRatio}% → SKIP (no buy pressure).
-- If ALL candidates show pump or falling knife, output NO DEPLOY.
+- If ALL candidates show falling knife, output NO DEPLOY.
 
 IMPORTANT: We are looking for a "healthy dip" — dump with buyers catching it. If dump has NO fee activity = dead cat bounce or rug. SKIP.
 
