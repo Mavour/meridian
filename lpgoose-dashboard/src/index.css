@@ -460,7 +460,17 @@ button, input {
   gap: 12px;
   color: var(--text-soft);
   font-family: Consolas, "JetBrains Mono", monospace;
-  font-size: 11px;
+  font-size: clamp(10px, 2.6vw, 11px);
+  min-width: 0;
+}
+
+.range-values span,
+.range-meta span {
+  min-width: 0;
+  max-width: 48%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .range-values {
@@ -484,8 +494,15 @@ button, input {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--blue), var(--green));
-  opacity: 0.76;
+  background: #22c55e;
+}
+
+.price-slider.confirmed-oor.oor-left .price-slider-fill {
+  background: linear-gradient(90deg, #ef4444 0 18%, #22c55e 18% 100%);
+}
+
+.price-slider.confirmed-oor.oor-right .price-slider-fill {
+  background: linear-gradient(90deg, #22c55e 0 82%, #ef4444 82% 100%);
 }
 
 .price-marker {
@@ -496,7 +513,7 @@ button, input {
   transform: translate(-50%, -50%);
   border: 2px solid var(--bg-panel-soft);
   border-radius: 50%;
-  background: var(--amber);
+  background: #f59e0b;
   box-shadow: 0 0 0 2px rgba(245, 182, 66, 0.24);
 }
 
@@ -840,6 +857,28 @@ button, input {
   .holdings-grid,
   .gate-list {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .position-card {
+    padding: 12px;
+  }
+
+  .position-summary-row,
+  .holdings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .range-values,
+  .range-meta {
+    gap: 8px;
+    font-size: clamp(9px, 2.7vw, 10px);
+  }
+
+  .position-summary-row b,
+  .holdings-grid b {
+    font-size: 13px;
   }
 }
 

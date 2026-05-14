@@ -1,3 +1,7 @@
+import { useEffect, useMemo, useState } from 'react';
+
+const POSITION_STORE_KEY = 'lpgoose.positionCardState.v1';
+
 function fmtUsd(value) {
   const n = Number(value);
   return Number.isFinite(n) ? `$${n.toFixed(2)}` : '-';
@@ -26,16 +30,62 @@ function rangeMarkerPct(range) {
   const min = Number(range?.min);
   const max = Number(range?.max);
   const current = Number(range?.current);
-  if (![min, max, current].every(Number.isFinite) || max <= min) return 50;
+  if (![min, max, current].every(Number.isFinite) || max <= min) {
+    if (Number.isFinite(current) && Number.isFinite(min) && current < min) return 0;
+    if (Number.isFinite(current) && Number.isFinite(max) && current > max) return 100;
+    return 50;
+  }
   return clamp(((current - min) / (max - min)) * 100, 0, 100);
 }
 
+function readPositionStore() {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(window.localStorage.getItem(POSITION_STORE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function writePositionStore(store) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(POSITION_STORE_KEY, JSON.stringify(store));
+}
+
+function loadStoredPosition(positionId) {
+  if (!positionId) return null;
+  return readPositionStore()[positionId] || null;
+}
+
+function saveStoredPosition(positionId, next) {
+  if (!positionId) return;
+  const store = readPositionStore();
+  store[positionId] = { ...(store[positionId] || {}), ...next };
+  writePositionStore(store);
+}
+
+function computedPnlPct(currentValue, initialValue) {
+  const current = Number(currentValue);
+  const initial = Number(initialValue);
+  if (!Number.isFinite(current) || !Number.isFinite(initial) || initial <= 0) return null;
+  return ((current - initial) / initial) * 100;
+}
+
 export default function PositionCard({ pos }) {
-  const pnl = Number(pos.pnl_pct || 0);
-  const peak = Number(pos.peak_pnl_pct || 0);
-  const inRange = pos.in_range;
+  const positionId = pos.position || pos.position_address || pos.id;
+  const currentValue = Number(pos.total_value_usd);
+  const [stored, setStored] = useState(() => loadStoredPosition(positionId));
   const range = pos.price_range || {};
   const markerPct = rangeMarkerPct(range);
+  const lowerBin = Number(pos.lower_bin);
+  const upperBin = Number(pos.upper_bin);
+  const activeBin = Number(pos.active_bin);
+  const activeBinKnown = [lowerBin, upperBin, activeBin].every(Number.isFinite);
+  const activeInRange = activeBinKnown ? activeBin >= lowerBin && activeBin <= upperBin : !!pos.in_range;
+  const minutesOor = Number(pos.minutes_oor ?? pos.minutes_out_of_range ?? 0);
+  const confirmedOor = !activeInRange && minutesOor > 0;
+  const inRange = activeInRange || !confirmedOor;
+  const oorSide = confirmedOor && activeBinKnown && activeBin < lowerBin ? 'left' : 'right';
   const tokenX = pos.holdings?.tokenX || {};
   const tokenY = pos.holdings?.tokenY || {};
   const totalBins = pos.total_bins || (
@@ -50,6 +100,40 @@ export default function PositionCard({ pos }) {
     pos.fees?.unclaimed_x_amount != null ? fmtAmount(pos.fees.unclaimed_x_amount, tokenX.symbol) : null,
     pos.fees?.unclaimed_y_amount != null ? fmtAmount(pos.fees.unclaimed_y_amount, tokenY.symbol) : null,
   ].filter(Boolean).join(' + ');
+  const initialValue = stored?.initialValue;
+  const pnl = computedPnlPct(currentValue, initialValue);
+  const peak = Number.isFinite(Number(stored?.peakPnl)) ? Number(stored.peakPnl) : pnl;
+  const pnlDisplay = pnl == null ? '-' : `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}%`;
+  const peakDisplay = peak == null || !Number.isFinite(peak) ? '-' : `${peak >= 0 ? '+' : ''}${peak.toFixed(2)}%`;
+
+  useEffect(() => {
+    if (!positionId || !Number.isFinite(currentValue) || currentValue <= 0) return;
+    const latest = loadStoredPosition(positionId);
+    if (!latest?.initialValue || latest.initialValue <= 0) {
+      const next = { initialValue: currentValue, peakPnl: 0, openedAt: Date.now() };
+      saveStoredPosition(positionId, next);
+      setStored(next);
+      return;
+    }
+
+    const nextPnl = computedPnlPct(currentValue, latest.initialValue);
+    const nextPeak = nextPnl == null
+      ? latest.peakPnl
+      : Math.max(Number(latest.peakPnl ?? nextPnl), nextPnl);
+    if (nextPeak !== latest.peakPnl) {
+      const next = { ...latest, peakPnl: nextPeak };
+      saveStoredPosition(positionId, next);
+      setStored(next);
+    } else {
+      setStored(latest);
+    }
+  }, [positionId, currentValue]);
+
+  const sliderClass = useMemo(() => {
+    const classes = ['price-slider'];
+    if (confirmedOor) classes.push('confirmed-oor', oorSide === 'left' ? 'oor-left' : 'oor-right');
+    return classes.join(' ');
+  }, [confirmedOor, oorSide]);
 
   return (
     <article className={`position-card ${inRange ? 'in-range' : 'out-range'}`}>
@@ -59,7 +143,7 @@ export default function PositionCard({ pos }) {
           <p>{pos.strategy || 'DLMM'} | {totalBins || '-'} bins | step {pos.bin_step || '-'}</p>
         </div>
         <span className={`range-badge ${inRange ? 'ok' : 'risk'}`}>
-          {inRange ? 'IN RANGE' : `OOR ${pos.minutes_oor || 0}m`}
+          {inRange ? 'IN RANGE' : `OOR ${minutesOor}m`}
         </span>
       </div>
 
@@ -70,11 +154,11 @@ export default function PositionCard({ pos }) {
         </div>
         <div>
           <span>PnL</span>
-          <b className={pnl >= 0 ? 'positive' : 'negative'}>{pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}%</b>
+          <b className={pnl == null ? '' : pnl >= 0 ? 'positive' : 'negative'}>{pnlDisplay}</b>
         </div>
         <div>
           <span>Peak</span>
-          <b>{peak >= 0 ? '+' : ''}{peak.toFixed(2)}%</b>
+          <b>{peakDisplay}</b>
         </div>
       </div>
 
@@ -83,7 +167,7 @@ export default function PositionCard({ pos }) {
           <span>{fmtPrice(range.min)}</span>
           <span>{fmtPrice(range.max)}</span>
         </div>
-        <div className="price-slider" aria-label="Position price range">
+        <div className={sliderClass} aria-label="Position price range">
           <span className="price-slider-fill" />
           <i className="price-marker" style={{ left: `${markerPct}%` }} />
         </div>
