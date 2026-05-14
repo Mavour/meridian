@@ -54,5 +54,6 @@ body { background: var(--bg-page); color: var(--text-primary); font-size: 13px; 
 }
 @media (max-width: 480px) {
   .stat-grid { grid-template-columns: 1fr; }
+  .config-row { flex-direction: column; align-items: flex-start !important; gap: 2px !important; }
 }
 .table-wrap { overflow-x: auto; }
