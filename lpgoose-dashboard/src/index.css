@@ -2,8 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+body,
+#root,
+.main-container {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 :root {
@@ -34,6 +44,8 @@
 
 html, body, #root {
   min-height: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 body {
@@ -85,6 +97,7 @@ button, input {
   justify-content: space-between;
   gap: 16px;
   padding: 0 22px;
+  max-width: 100vw;
   background: rgba(13, 16, 21, 0.94);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(14px);
@@ -124,11 +137,13 @@ button, input {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
 }
 
 .nav-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
   min-height: 34px;
   padding: 0 12px;
@@ -172,6 +187,7 @@ button, input {
 .page-shell {
   max-width: 1480px;
   width: 100%;
+  max-width: min(1480px, 100vw);
   margin: 0 auto;
   padding: 18px 22px 30px;
   overflow-x: hidden;
@@ -187,6 +203,8 @@ button, input {
 .panel,
 .stat-card,
 .capital-panel {
+  min-width: 0;
+  max-width: 100%;
   background: rgba(16, 20, 27, 0.94);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -275,6 +293,9 @@ button, input {
   display: grid;
   grid-template-columns: minmax(420px, 1.35fr) minmax(300px, 0.7fr) minmax(300px, 0.7fr);
   gap: 12px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .panel {
@@ -607,24 +628,32 @@ button, input {
 .funnel-list {
   display: grid;
   gap: 12px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .funnel-row > div {
   display: flex;
   justify-content: space-between;
+  min-width: 0;
+  gap: 10px;
   margin-bottom: 6px;
 }
 
 .funnel-row span {
+  min-width: 0;
   color: var(--text-soft);
 }
 
 .funnel-row b {
+  min-width: 0;
   color: var(--text);
 }
 
 .funnel-row i {
   display: block;
+  width: 100%;
+  max-width: 100%;
   height: 9px;
   overflow: hidden;
   border-radius: 999px;
@@ -671,6 +700,8 @@ button, input {
 }
 
 .log-terminal {
+  max-width: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid var(--border-soft);
   border-radius: 8px;
@@ -685,6 +716,8 @@ button, input {
   display: grid;
   grid-template-columns: 76px 104px minmax(0, 1fr);
   gap: 12px;
+  min-width: 0;
+  max-width: 100%;
   padding: 6px 0;
   border-bottom: 1px solid rgba(26, 34, 46, 0.62);
   font-family: Consolas, "JetBrains Mono", monospace;
@@ -692,15 +725,25 @@ button, input {
 }
 
 .log-time {
+  min-width: 0;
+  overflow: hidden;
   color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .log-tag {
+  min-width: 0;
+  max-width: 120px;
+  overflow: hidden;
   font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .log-msg {
   min-width: 0;
+  max-width: 100%;
   color: var(--text-soft);
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -806,7 +849,10 @@ button, input {
     height: auto;
     align-items: flex-start;
     flex-wrap: wrap;
-    padding: 10px 12px;
+    width: 100%;
+    max-width: 100vw;
+    padding: 10px 16px;
+    overflow-x: hidden;
   }
 
   .brand-lockup,
@@ -816,17 +862,30 @@ button, input {
 
   .topnav {
     order: 3;
+    display: flex;
     width: 100%;
-    overflow-x: auto;
-    padding-bottom: 2px;
+    min-width: 0;
+    max-width: 100%;
+    gap: 4px;
+    overflow-x: hidden;
   }
 
   .nav-pill {
-    flex: 0 0 auto;
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .nav-pill[href="/config"] {
+    display: none;
   }
 
   .page-shell {
-    padding: 12px;
+    width: 100%;
+    max-width: 100vw;
+    margin-left: 0;
+    padding: 12px 16px 24px;
+    overflow-x: hidden;
   }
 
   .hero-grid,
@@ -836,6 +895,9 @@ button, input {
   .pos-grid,
   .chart-grid {
     grid-template-columns: 1fr;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .capital-panel,
@@ -861,6 +923,20 @@ button, input {
 }
 
 @media (max-width: 768px) {
+  .topnav {
+    gap: 3px;
+  }
+
+  .nav-pill {
+    min-height: 32px;
+    padding: 8px 4px;
+    font-size: 11px;
+  }
+
+  .nav-pill svg {
+    display: none;
+  }
+
   .position-card {
     padding: 12px;
   }
@@ -880,6 +956,24 @@ button, input {
   .holdings-grid b {
     font-size: 13px;
   }
+
+  .funnel-row i {
+    max-width: 100%;
+  }
+
+  .log-terminal.compact {
+    padding: 8px 10px;
+  }
+
+  .log-row {
+    grid-template-columns: 56px 86px minmax(0, 1fr);
+    gap: 8px;
+    font-size: 10px;
+  }
+
+  .log-tag {
+    max-width: 86px;
+  }
 }
 
 @media (max-width: 520px) {
@@ -889,6 +983,7 @@ button, input {
 
   .topbar {
     gap: 8px;
+    padding: 10px 16px;
   }
 
   .brand-lockup {
@@ -909,8 +1004,8 @@ button, input {
 
   .nav-pill {
     min-height: 32px;
-    padding: 0 9px;
-    font-size: 12px;
+    padding: 8px 4px;
+    font-size: 11px;
   }
 
   .panel,
@@ -946,16 +1041,20 @@ button, input {
 
   .range-values,
   .range-meta {
-    font-size: 10px;
+    font-size: clamp(9px, 2.5vw, 10px);
   }
 
   .log-row {
-    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-columns: 52px minmax(0, 1fr);
     gap: 8px;
   }
 
   .log-tag,
   .log-msg {
     grid-column: 2;
+  }
+
+  .log-tag {
+    max-width: 120px;
   }
 }

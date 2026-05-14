@@ -29,6 +29,19 @@ function computeScreening(logs) {
   ];
 }
 
+function computePeakPnlByPosition(logs) {
+  const peaks = {};
+  const re = /Position\s+([1-9A-HJ-NP-Za-km-z]+)\s+peak PnL accepted at\s+([+-]?\d+(?:\.\d+)?)%/i;
+  logs.forEach((line) => {
+    if (line.tag !== 'STATE') return;
+    const match = String(line.msg || '').match(re);
+    if (!match) return;
+    const value = Number(match[2]);
+    if (Number.isFinite(value)) peaks[match[1]] = value;
+  });
+  return peaks;
+}
+
 export default function Dashboard() {
   const { events } = useContext(WSContext);
   const [perf, setPerf] = useState(null);
@@ -54,6 +67,7 @@ export default function Dashboard() {
   const logEvents = events.filter((e) => e.type === 'log').map((e) => e.data);
   const decisionLogs = logEvents.filter((l) => ['DEPLOY', 'CLOSE', 'STATE', 'SCREENING', 'SAFETY_BLOCK', 'WARN', 'CLOSE_WARN'].includes(l.tag)).slice(-80);
   const screeningBars = useMemo(() => computeScreening(logEvents), [logEvents]);
+  const peakPnlByPosition = useMemo(() => computePeakPnlByPosition(logEvents), [logEvents]);
   const todayFeesUsd = Number(perf?.today_fees_usd || 0);
   const maxPositions = config.maxPositions ?? '-';
   const openLimit = `${positions.length} / ${maxPositions}`;
@@ -104,7 +118,13 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="position-stack">
-              {positions.map((p) => <PositionCard key={p.position} pos={p} />)}
+              {positions.map((p) => (
+                <PositionCard
+                  key={p.position}
+                  pos={p}
+                  peakPnl={peakPnlByPosition[p.position] ?? p.peak_pnl_pct}
+                />
+              ))}
             </div>
           )}
         </div>

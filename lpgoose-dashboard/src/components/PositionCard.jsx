@@ -71,7 +71,7 @@ function computedPnlPct(currentValue, initialValue) {
   return ((current - initial) / initial) * 100;
 }
 
-export default function PositionCard({ pos }) {
+export default function PositionCard({ pos, peakPnl = null }) {
   const positionId = pos.position || pos.position_address || pos.id;
   const currentValue = Number(pos.total_value_usd);
   const [stored, setStored] = useState(() => loadStoredPosition(positionId));
@@ -102,7 +102,7 @@ export default function PositionCard({ pos }) {
   ].filter(Boolean).join(' + ');
   const initialValue = stored?.initialValue;
   const pnl = computedPnlPct(currentValue, initialValue);
-  const peak = Number.isFinite(Number(stored?.peakPnl)) ? Number(stored.peakPnl) : pnl;
+  const peak = Number.isFinite(Number(peakPnl)) ? Number(peakPnl) : null;
   const pnlDisplay = pnl == null ? '-' : `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}%`;
   const peakDisplay = peak == null || !Number.isFinite(peak) ? '-' : `${peak >= 0 ? '+' : ''}${peak.toFixed(2)}%`;
 
@@ -110,23 +110,13 @@ export default function PositionCard({ pos }) {
     if (!positionId || !Number.isFinite(currentValue) || currentValue <= 0) return;
     const latest = loadStoredPosition(positionId);
     if (!latest?.initialValue || latest.initialValue <= 0) {
-      const next = { initialValue: currentValue, peakPnl: 0, openedAt: Date.now() };
+      const next = { initialValue: currentValue, openedAt: Date.now() };
       saveStoredPosition(positionId, next);
       setStored(next);
       return;
     }
 
-    const nextPnl = computedPnlPct(currentValue, latest.initialValue);
-    const nextPeak = nextPnl == null
-      ? latest.peakPnl
-      : Math.max(Number(latest.peakPnl ?? nextPnl), nextPnl);
-    if (nextPeak !== latest.peakPnl) {
-      const next = { ...latest, peakPnl: nextPeak };
-      saveStoredPosition(positionId, next);
-      setStored(next);
-    } else {
-      setStored(latest);
-    }
+    setStored(latest);
   }, [positionId, currentValue]);
 
   const sliderClass = useMemo(() => {
@@ -148,17 +138,17 @@ export default function PositionCard({ pos }) {
       </div>
 
       <div className="position-summary-row">
-        <div>
+        <div className="value-card">
           <span>Value</span>
           <b>{fmtUsd(pos.total_value_usd)}</b>
         </div>
-        <div>
+        <div className="pnl-card">
           <span>PnL</span>
           <b className={pnl == null ? '' : pnl >= 0 ? 'positive' : 'negative'}>{pnlDisplay}</b>
         </div>
-        <div>
+        <div className="peak-card">
           <span>Peak</span>
-          <b>{peakDisplay}</b>
+          <b className={peak == null ? '' : peak >= 0 ? 'positive' : 'negative'}>{peakDisplay}</b>
         </div>
       </div>
 
