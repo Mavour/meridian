@@ -876,16 +876,19 @@ button, input {
     min-width: 0;
     max-width: 100%;
     gap: 4px;
-    overflow-x: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
   }
 
   .nav-pill {
-    flex: 1 1 0;
-    min-width: 0;
+    flex: 0 0 auto;
+    min-width: max-content;
     text-align: center;
   }
 
-  .nav-pill[href="/config"] {
+  .topnav::-webkit-scrollbar {
     display: none;
   }
 
