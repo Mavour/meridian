@@ -100,36 +100,7 @@ export default function Dashboard() {
       </section>
 
       <section className="command-grid">
-        <div className="panel wide">
-          <div className="panel-head">
-            <div>
-              <div className="card-label">Current Position View</div>
-              <h2>{positions.length ? 'Active liquidity' : 'No open position'}</h2>
-            </div>
-            <span className={`status-pill ${positions.length ? 'watch' : 'ready'}`}>{positions.length ? 'MANAGING' : 'READY'}</span>
-          </div>
-          {positions.length === 0 ? (
-            <div className="empty-command">
-              <Crosshair size={22} />
-              <div>
-                <strong>Waiting for a clean entry</strong>
-                <span>Single-side SOL deploys stay below active bin. The next position will appear here with range and exit state.</span>
-              </div>
-            </div>
-          ) : (
-            <div className="position-stack">
-              {positions.map((p) => (
-                <PositionCard
-                  key={p.position}
-                  pos={p}
-                  peakPnl={peakPnlByPosition[p.position] ?? p.peak_pnl_pct}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="panel">
+        <div className="panel risk-gates-panel">
           <div className="panel-head compact">
             <div>
               <div className="card-label">Risk Gates</div>
@@ -145,6 +116,35 @@ export default function Dashboard() {
             <div className="watch"><span>Top10</span><b>{config.maxTop10Pct ?? 65}% target</b></div>
             <div className="watch"><span>Bundle</span><b>{config.maxBundlePct ?? 35}% target</b></div>
           </div>
+        </div>
+
+        <div className="panel liquidity-panel">
+          <div className="panel-head">
+            <div>
+              <div className="card-label">Active Liquidity</div>
+              <h2>{positions.length ? 'Current position view' : 'No open position'}</h2>
+            </div>
+            <span className={`status-pill ${positions.length ? 'watch' : 'ready'}`}>{positions.length ? 'MANAGING' : 'READY'}</span>
+          </div>
+          {positions.length === 0 ? (
+            <div className="empty-command">
+              <Crosshair size={22} />
+              <div>
+                <strong>Waiting for a clean entry</strong>
+                <span>Single-side SOL deploys stay below active bin. The next position will appear here with range and exit state.</span>
+              </div>
+            </div>
+          ) : (
+            <div className={`position-stack ${positions.length === 1 ? 'single' : ''}`}>
+              {positions.map((p) => (
+                <PositionCard
+                  key={p.position}
+                  pos={p}
+                  peakPnl={peakPnlByPosition[p.position] ?? p.peak_pnl_pct}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="panel">

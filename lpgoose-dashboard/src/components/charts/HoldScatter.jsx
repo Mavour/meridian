@@ -17,8 +17,9 @@ export function HoldScatter({ data = [], loading = false }) {
         <XAxis dataKey="x" tick={{ fill:'#475569', fontSize:11 }} axisLine={{ stroke:'#1a1a1a' }} label={{ value:'Hold (min)', position:'bottom', fill:'#475569', fontSize:10 }} />
         <YAxis dataKey="y" tick={{ fill:'#475569', fontSize:11 }} axisLine={{ stroke:'#1a1a1a' }} label={{ value:'PnL%', angle:-90, position:'insideLeft', fill:'#475569', fontSize:10 }} />
         <Tooltip
-          contentStyle={{ background:'#111', border:'0.5px solid #222', borderRadius:6, fontSize:12 }}
-          labelStyle={{ color:'#94a3b8' }}
+          contentStyle={{ background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:6, padding:'8px 12px', fontSize:12 }}
+          labelStyle={{ color:'#111827' }}
+          itemStyle={{ color:'#374151' }}
           formatter={(v, name) => [name === 'x' ? `${Number(v).toFixed(0)}m` : `${Number(v).toFixed(2)}%`, name === 'x' ? 'Hold' : 'PnL%']}
         />
         <Scatter data={chartData} fill="#a5b4fc" />
