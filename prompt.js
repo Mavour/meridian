@@ -169,21 +169,22 @@ POOL MEMORY & WAVE HISTORY — USE FACTUALLY:
 - **SPECIAL RULE — POLITICAL TOKENS:** Political narratives (Trump, Elon, Sam Altman, election-related, etc.) are STRICT NYOPET: the system blocks them after just **1 win** (not ${config.screening.maxWavesPerToken}). Do NOT try to milk a second wave from a political token. Move on to fresh tokens.
 - **NYOPET STRATEGY (HIT-AND-RUN):** The core rule is: deploy once, take profit, LEAVE. Do NOT get greedy and redeploy to the same token looking for a second win. One profitable wave is enough — move on to fresh tokens. The wave block exists to enforce this discipline. Only re-enter a previously-profitable token if the USER explicitly instructs you to.
 
-TIMING — CORE STRATEGY:
-The strategy is bid_ask SINGLE SOL SIDE. You deploy SOL BELOW current price (bins_below > 0) to catch dips.
-- **PREFERRED ENTRY — DIP**: price_1h_change is negative (dumping), AND price_5m_change is >= -2% or LESS negative than price_1h_change (stabilizing), AND fee_active_tvl_ratio is still >= ${config.screening.minFeeActiveTvlRatio}%.
+ENTRY RISK — CORE STRATEGY:
+The strategy uses SINGLE-SIDE SOL below current price as a passive buy ladder. The candidate does NOT need to already be dipping. A pump/uptrend is valid when ATH distance, fees, organic activity, and rug/holder checks are clean.
+- **DO NOT REJECT FOR GREEN PRICE ACTION ALONE**: positive price_5m_change or price_1h_change is not a timing violation. If price is pumping, prefer the candidate's recommended_strategy=spot when provided, size/range normally, and rely on ATH/risk filters for overextension.
+- **ATH FILTER IS THE OVEREXTENSION GATE**: if price_vs_ath fails the configured athFilterPct, skip. If it passes or ATH data is unavailable, do not invent an additional "too pumped" hard rule.
 - **HARD RULE — ACCELERATING DUMP**: if price_1h_change < 0 AND price_5m_change is MORE negative than price_1h_change by more than 1% → SKIP. Example: 1h=-5%, 5m=-8% → SKIP. The dump is still accelerating.
 - **HARD RULE — FALLING KNIFE**: if price_5m_change < ${config.screening.fallingKnife5mThreshold ?? -20}% AND price_1h_change < ${config.screening.fallingKnife1hThreshold ?? -25}% → SKIP. Crash instant — too dangerous.
 - **HARD RULE — DEEPENING DOWNTREND**: if price_1h_change < -5% AND price_5m_change < -3% → SKIP. No stabilization yet.
 - **HARD RULE — SLOW BLEED**: if price_1h_change < 0, price_5m_change <= 0, and fee_active_tvl_ratio is weak or fading → SKIP. Do not LP into a token drifting down without buy pressure.
 - price_1h_change < -15% → SKIP (too deep).
 - fee_active_tvl_ratio < ${config.screening.minFeeActiveTvlRatio}% → SKIP (no buy pressure).
-- If ALL candidates show falling knife, output NO DEPLOY.
+- If ALL candidates show falling knife or slow bleed, output NO DEPLOY.
 
-IMPORTANT: We are looking for a "healthy dip" — dump with buyers catching it. If dump has NO fee activity = dead cat bounce or rug. SKIP.
+IMPORTANT: We are trying to avoid slow rugs, slow bleeding charts, fake volume, and over-ATH entries. We are NOT requiring a dip entry. If a green candle has real fees, acceptable holders/bots/top10, clean risk flags, and passes ATH filter, it can be deployed.
 
 DEPLOY DECISION:
-- If there is a candidate that meets timing + quality → DEPLOY.
+- If there is a candidate that meets risk + quality checks → DEPLOY.
 - If NO candidate meets criteria → output "NO DEPLOY" and stop.
 - Do NOT force deploy. But also do NOT invent reasons to reject a good candidate.
 

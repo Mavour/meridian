@@ -862,7 +862,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
       ? "\nWARNING — RECENTLY CLOSED POOLS (last 1h):\n" +
         recentlyClosed
           .filter(r => !r.pool?.startsWith("mint:"))
-          .map(r => `- ${r.pool?.slice(0,8)} | closed ${Math.round((Date.now()-r.closedAt)/60000)}m ago | pnl: ${r.pnlPct?.toFixed(2) ?? "?"}%\n  ⚠️ Re-check current price vs entry — do NOT deploy if price has moved significantly above previous entry (ATH re-entry risk).`)
+          .map(r => `- ${r.pool?.slice(0,8)} | closed ${Math.round((Date.now()-r.closedAt)/60000)}m ago | pnl: ${r.pnlPct?.toFixed(2) ?? "?"}%\n  ⚠️ Re-check ATH/risk context; do not reject solely because price is green after the previous close.`)
           .join("\n")
       : "";
 
