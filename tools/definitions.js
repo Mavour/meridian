@@ -191,7 +191,8 @@ WARNING: This executes a real on-chain transaction. Check DRY_RUN mode.`,
           volatility: { type: "number", description: "Pool volatility at deploy time, sourced from max(screening timeframe, 30m)" },
           fee_tvl_ratio: { type: "number", description: "fee/TVL ratio at deploy time" },
           organic_score: { type: "number", description: "Base token organic score at deploy time" },
-          initial_value_usd: { type: "number", description: "Estimated USD value being deployed" }
+          initial_value_usd: { type: "number", description: "Estimated USD value being deployed" },
+          fees_paid_sol: { type: "number", description: "global_fees_sol from get_token_holders — must be >= minTokenFeesSol (default 30 SOL). Fetch via get_token_holders(mint=<base_mint>) and pass the global_fees_sol field." }
         },
         required: ["pool_address"]
       }
