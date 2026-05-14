@@ -12,7 +12,24 @@ export const WSContext = createContext(null);
 export default function App() {
   const [events, setEvents] = useState([]);
   const [botAlive, setBotAlive] = useState(true);
+  const [wallet, setWallet] = useState(null);
   const ws = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadWallet() {
+      try {
+        const res = await fetch('/api/wallet');
+        const data = await res.json();
+        if (!cancelled) setWallet(data);
+      } catch {
+        if (!cancelled) setWallet(null);
+      }
+    }
+    loadWallet();
+    const id = setInterval(loadWallet, 30000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
 
   useEffect(() => {
     function connect() {
@@ -32,7 +49,7 @@ export default function App() {
   return (
     <WSContext.Provider value={{ events, botAlive }}>
       <BrowserRouter>
-        <Topbar botAlive={botAlive} />
+        <Topbar botAlive={botAlive} wallet={wallet} />
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/logs" element={<Logs />} />

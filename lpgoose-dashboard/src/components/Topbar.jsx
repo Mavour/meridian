@@ -9,7 +9,10 @@ const navItems = [
   ['/config', 'Config', Settings],
 ];
 
-export default function Topbar({ botAlive }) {
+export default function Topbar({ botAlive, wallet }) {
+  const solBalance = Number(wallet?.sol);
+  const solText = Number.isFinite(solBalance) ? `${solBalance.toFixed(3)} SOL` : 'SOL --';
+
   return (
     <header className="topbar">
       <div className="brand-lockup">
@@ -30,6 +33,7 @@ export default function Topbar({ botAlive }) {
       </nav>
 
       <div className="agent-status">
+        <span className="wallet-balance">{solText}</span>
         <span className={`status-dot ${botAlive ? 'online' : 'offline'}`} />
         <Activity size={14} strokeWidth={1.8} />
         <span>{botAlive ? 'Agent running' : 'Agent offline'}</span>

@@ -7,8 +7,13 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import chokidar from 'chokidar';
 import cors from 'cors';
+import { loadEnv } from '../envcrypt.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+loadEnv({
+  envPath: path.join(__dirname, '../.env'),
+  keyPath: path.join(__dirname, '../.envrypt'),
+});
 const MERIDIAN_PATH = process.env.MERIDIAN_PATH || path.join(__dirname, '../meridian');
 const PORT = parseInt(process.env.DASHBOARD_PORT || '3001');
 
@@ -470,6 +475,15 @@ app.get('/api/waves', (req, res) => {
 app.get('/api/config', (req, res) => {
   const cfg = readJson(path.join(MERIDIAN_PATH, 'user-config.json')) || {};
   res.json(maskConfig(cfg));
+});
+
+app.get('/api/wallet', async (req, res) => {
+  try {
+    const { getWalletBalances } = await import('../tools/wallet.js');
+    res.json(await getWalletBalances());
+  } catch (error) {
+    res.json({ wallet: null, sol: 0, sol_usd: 0, usdc: 0, total_usd: 0, tokens: [], error: error.message });
+  }
 });
 
 app.get('/api/pools', (req, res) => {

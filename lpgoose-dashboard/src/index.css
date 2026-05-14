@@ -164,9 +164,15 @@ button, input {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  min-width: 170px;
+  min-width: 240px;
   color: var(--text-soft);
   font-size: 12px;
+}
+
+.wallet-balance {
+  color: var(--text);
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .status-dot {
@@ -1012,6 +1018,10 @@ button, input {
     min-width: 0;
     gap: 6px;
     font-size: 11px;
+  }
+
+  .agent-status > span:last-child {
+    display: none;
   }
 
   .nav-pill {
