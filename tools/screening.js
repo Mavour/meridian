@@ -89,7 +89,8 @@ export function evaluateSingleSideSolEntry(pool, options = {}) {
   const isGmgn = !!pool?.gmgn;
 
   const min1h = numeric(options.min1hChange ?? config.screening.singleSideSolMin1hChange) ?? 0;
-  const minRetest1h = numeric(options.minRetest1hChange ?? config.screening.singleSideSolMinRetest1hChange) ?? -5;
+  const minRetest1h = numeric(options.minRetest1hChange ?? config.screening.singleSideSolMinRetest1hChange) ?? -7;
+  const maxRetest1h = numeric(options.maxRetest1hChange ?? config.screening.singleSideSolMaxRetest1hChange) ?? 6;
   const max5mPullback = numeric(options.max5mPullback ?? config.screening.singleSideSolMax5mPullback) ?? -2;
   const weakTrendMax1h = numeric(options.weakTrendMax1h ?? config.screening.singleSideSolWeakTrendMax1h) ?? 3;
   const maxWeakBounce5m = numeric(options.maxWeakBounce5m ?? config.screening.singleSideSolMaxWeakBounce5m) ?? 8;
@@ -102,7 +103,7 @@ export function evaluateSingleSideSolEntry(pool, options = {}) {
     price24h < 0 &&
     price6h > 0 &&
     price1h >= minRetest1h &&
-    price1h < min1h &&
+    price1h <= maxRetest1h &&
     price5m > 0 &&
     price5m <= maxWeakBounce5m;
 
@@ -112,14 +113,29 @@ export function evaluateSingleSideSolEntry(pool, options = {}) {
   if (price5m == null) {
     return { pass: false, reason: "single-side SOL timing reject: missing short-term price change" };
   }
-  if (price1h != null && price1h < min1h && !isSmartWalletRetest) {
+  if (price1h != null && !isSmartWalletRetest && price1h < min1h) {
     return { pass: false, reason: `single-side SOL timing reject: 1h ${price1h}% < ${min1h}% (no reclaim yet)` };
+  }
+  if (price1h != null && !isSmartWalletRetest && price1h > maxRetest1h && price5m > 0) {
+    return { pass: false, reason: `single-side SOL timing reject: 1h ${price1h}% > ${maxRetest1h}% with green short-term price (too extended for support retest)` };
   }
   if (price5m < max5mPullback) {
     return { pass: false, reason: `single-side SOL timing reject: short-term ${price5m}% < ${max5mPullback}% (still falling)` };
   }
   if (price5m > maxWeakBounce5m) {
     return { pass: false, reason: `single-side SOL timing reject: short-term ${price5m}% > ${maxWeakBounce5m}% (chasing pump, wait for support retest)` };
+  }
+  if (
+    !isSmartWalletRetest &&
+    price24h != null &&
+    price6h != null &&
+    price24h < 0 &&
+    price6h <= 0 &&
+    price1h != null &&
+    price1h >= min1h &&
+    price5m > 0
+  ) {
+    return { pass: false, reason: `single-side SOL timing reject: 24h red but 6h ${price6h}% has not reclaimed` };
   }
   if (price1h != null && price1h < weakTrendMax1h && price5m > maxWeakBounce5m) {
     return { pass: false, reason: `single-side SOL timing reject: weak 1h ${price1h}% with hot bounce ${price5m}% (dead-cat/lower-high risk)` };

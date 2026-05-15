@@ -120,10 +120,11 @@ export const config = {
     maxDexBoosts:       u.maxDexBoosts       ?? null, // max DexScreener active boosts (null = no filter)
     singleSideSolEntryGateEnabled: u.singleSideSolEntryGateEnabled ?? true,
     singleSideSolMin1hChange: u.singleSideSolMin1hChange ?? 0,
-    singleSideSolMinRetest1hChange: u.singleSideSolMinRetest1hChange ?? -5,
+    singleSideSolMinRetest1hChange: u.singleSideSolMinRetest1hChange ?? -7,
+    singleSideSolMaxRetest1hChange: u.singleSideSolMaxRetest1hChange ?? 6,
     singleSideSolMax5mPullback: u.singleSideSolMax5mPullback ?? -2,
     singleSideSolWeakTrendMax1h: u.singleSideSolWeakTrendMax1h ?? 3,
-    singleSideSolMaxWeakBounce5m: u.singleSideSolMaxWeakBounce5m ?? 8,
+    singleSideSolMaxWeakBounce5m: u.singleSideSolMaxWeakBounce5m ?? 4.5,
     singleSideSolMinFeeActiveTvlRatio: u.singleSideSolMinFeeActiveTvlRatio ?? 0.3,
   },
 
@@ -401,6 +402,7 @@ export function reloadScreeningThresholds() {
     if (fresh.singleSideSolEntryGateEnabled !== undefined) config.screening.singleSideSolEntryGateEnabled = fresh.singleSideSolEntryGateEnabled;
     if (fresh.singleSideSolMin1hChange != null) config.screening.singleSideSolMin1hChange = fresh.singleSideSolMin1hChange;
     if (fresh.singleSideSolMinRetest1hChange != null) config.screening.singleSideSolMinRetest1hChange = fresh.singleSideSolMinRetest1hChange;
+    if (fresh.singleSideSolMaxRetest1hChange != null) config.screening.singleSideSolMaxRetest1hChange = fresh.singleSideSolMaxRetest1hChange;
     if (fresh.singleSideSolMax5mPullback != null) config.screening.singleSideSolMax5mPullback = fresh.singleSideSolMax5mPullback;
     if (fresh.singleSideSolWeakTrendMax1h != null) config.screening.singleSideSolWeakTrendMax1h = fresh.singleSideSolWeakTrendMax1h;
     if (fresh.singleSideSolMaxWeakBounce5m != null) config.screening.singleSideSolMaxWeakBounce5m = fresh.singleSideSolMaxWeakBounce5m;

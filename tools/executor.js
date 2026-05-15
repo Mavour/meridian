@@ -542,6 +542,7 @@ const toolMap = {
       singleSideSolEntryGateEnabled: ["screening", "singleSideSolEntryGateEnabled"],
       singleSideSolMin1hChange: ["screening", "singleSideSolMin1hChange"],
       singleSideSolMinRetest1hChange: ["screening", "singleSideSolMinRetest1hChange"],
+      singleSideSolMaxRetest1hChange: ["screening", "singleSideSolMaxRetest1hChange"],
       singleSideSolMax5mPullback: ["screening", "singleSideSolMax5mPullback"],
       singleSideSolWeakTrendMax1h: ["screening", "singleSideSolWeakTrendMax1h"],
       singleSideSolMaxWeakBounce5m: ["screening", "singleSideSolMaxWeakBounce5m"],
