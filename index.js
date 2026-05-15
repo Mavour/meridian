@@ -30,7 +30,7 @@ import {
 import { generateBriefing } from "./briefing.js";
 import { getLastBriefingDate, setLastBriefingDate, getTrackedPosition, setPositionInstruction, updatePnlAndCheckExits, queuePeakConfirmation, resolvePendingPeak, queueTrailingDropConfirmation, resolvePendingTrailingDrop, isTokenWaveBlocked } from "./state.js";
 import { getActiveStrategy } from "./strategy-library.js";
-import { recordPositionSnapshot, recallForPool, addPoolNote, isBaseMintOnCooldown } from "./pool-memory.js";
+import { recordPositionSnapshot, recallForPool, addPoolNote, isBaseMintOnCooldown, isPoolOnCooldown } from "./pool-memory.js";
 import { checkSmartWalletsOnPool } from "./smart-wallets.js";
 import { getTokenNarrative, getTokenInfo } from "./tools/token.js";
 import { studyTopLPers } from "./tools/study.js";
@@ -688,6 +688,11 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
         filteredOut.push({ name: pool.name, reason: "token cooldown active" });
         return false;
       }
+      if (isPoolOnCooldown(pool.pool)) {
+        log("screening", `Filtered cooldown pool ${pool.name} (${pool.pool?.slice(0, 8)})`);
+        filteredOut.push({ name: pool.name, reason: "pool cooldown active" });
+        return false;
+      }
       if (config.screening.maxVolatility && pool.volatility != null && pool.volatility > config.screening.maxVolatility) {
         log("screening", `Filtered high volatility ${pool.name}: ${pool.volatility} > ${config.screening.maxVolatility}`);
         filteredOut.push({ name: pool.name, reason: `volatility too high (${pool.volatility} > max ${config.screening.maxVolatility})` });
@@ -777,6 +782,9 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
       const activeBin = activeBinResults[i]?.status === "fulfilled" ? activeBinResults[i].value?.binId : null;
       const studyResult = studyResults[i]?.status === "fulfilled" ? studyResults[i].value : null;
       const strategyRec = resolveStrategyForPool(pool, studyResult);
+      const minFeeTvl = Number(config.screening.minFeeActiveTvlRatio ?? 0);
+      const feeTvl = Number(pool.fee_active_tvl_ratio);
+      const feeTvlStatus = Number.isFinite(feeTvl) && feeTvl >= minFeeTvl ? "PASS" : "FAIL";
 
       // OKX signals
       const okxParts = [
@@ -805,6 +813,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
         block = [
           `POOL: ${pool.name} (${pool.pool})`,
           formatGmgnCandidateForPrompt(pool),
+          `  fee_tvl_threshold: ${feeTvlStatus} (${Number.isFinite(feeTvl) ? feeTvl : "unknown"} >= ${minFeeTvl})`,
           `  recommended_strategy: ${strategyRec.strategy} (${strategyRec.reason})`,
           pvpLine,
           `  smart_wallets: ${sw?.in_pool?.length ?? 0} present${sw?.in_pool?.length ? ` → CONFIDENCE BOOST (${sw.in_pool.map(w => w.name).join(", ")})` : ""}`,
@@ -823,6 +832,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
         block = [
           `POOL: ${pool.name} (${pool.pool})`,
           `  metrics: bin_step=${pool.bin_step}, fee_pct=${pool.fee_pct}%, fee_tvl=${pool.fee_active_tvl_ratio}, vol=$${pool.volume_window}, tvl=$${pool.tvl ?? pool.active_tvl}, volatility_${pool.volatility_timeframe || "30m"}=${pool.volatility}, mcap=$${pool.mcap}, organic=${pool.organic_score}${pool.token_age_hours != null ? `, age=${pool.token_age_hours}h` : ""}`,
+          `  fee_tvl_threshold: ${feeTvlStatus} (${Number.isFinite(feeTvl) ? feeTvl : "unknown"} >= ${minFeeTvl})`,
           `  recommended_strategy: ${strategyRec.strategy} (${strategyRec.reason})`,
           `  audit: top10=${top10Pct}%, bots=${botPct}%, fees=${feesSol}SOL${launchpad ? `, launchpad=${launchpad}` : ""}`,
           gmgnPriceLine,

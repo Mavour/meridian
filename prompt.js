@@ -125,6 +125,7 @@ TOKEN TAGS (from OKX advanced-info):
 - low_liquidity = CAUTION
 
 IMPORTANT: fee_active_tvl_ratio values are ALREADY in percentage form. 0.29 = 0.29%. Do NOT multiply by 100. A value of 1.0 = 1.0%, a value of 22 = 22%. Never convert.
+If the candidate block says fee_tvl_threshold: PASS, you MUST NOT reject that pool for fee/TVL or write that fee/TVL is below threshold.
 
 Current screening timeframe: ${config.screening.timeframe} — interpret all non-volatility metrics relative to this window. Interpret volatility using the candidate's volatility_* label.
 
