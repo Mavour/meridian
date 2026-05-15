@@ -1081,7 +1081,10 @@ export async function getPositionPnl({ pool_address, position_address }) {
           unclaimed_fee_usd: p.unclaimed_fees_usd,
           all_time_fees_usd: p.collected_fees_usd,
           fee_per_tvl_24h: p.fee_per_tvl_24h,
-          in_range: p.in_range,
+          in_range: (() => {
+            const binOOR = isBinRangeOutOfRange(p.active_bin, p.lower_bin, p.upper_bin);
+            return binOOR !== null ? !binOOR : !!p.in_range;
+          })(),
           lower_bin: p.lower_bin,
           upper_bin: p.upper_bin,
           active_bin: p.active_bin,
@@ -1108,7 +1111,10 @@ export async function getPositionPnl({ pool_address, position_address }) {
       unclaimed_fee_usd: Math.round(unclaimedUsd * 100) / 100,
       all_time_fees_usd: Math.round(parseFloat(p.allTimeFees?.total?.usd || 0) * 100) / 100,
       fee_per_tvl_24h:   Math.round(parseFloat(p.feePerTvl24h || 0) * 100) / 100,
-      in_range:    !p.isOutOfRange,
+      in_range:    (() => {
+        const binOOR = isBinRangeOutOfRange(p.poolActiveBinId, p.lowerBinId, p.upperBinId);
+        return binOOR !== null ? !binOOR : !p.isOutOfRange;
+      })(),
       lower_bin:   p.lowerBinId      ?? null,
       upper_bin:   p.upperBinId      ?? null,
       active_bin:  p.poolActiveBinId ?? null,
@@ -1118,6 +1124,11 @@ export async function getPositionPnl({ pool_address, position_address }) {
     log("pnl_error", error.message);
     return { error: error.message };
   }
+}
+
+function isBinRangeOutOfRange(activeBin, lowerBin, upperBin) {
+  if (activeBin == null || lowerBin == null || upperBin == null) return null;
+  return activeBin < lowerBin || activeBin > upperBin;
 }
 
 function safeNum(value) {
@@ -1262,9 +1273,6 @@ export async function getMyPositions({ force = false, silent = false } = {}) {
         const tracked = getTrackedPosition(positionAddress);
         const isOOR = pool.outOfRange || pool.positionsOutOfRange?.includes(positionAddress);
 
-        if (isOOR) markOutOfRange(positionAddress);
-        else markInRange(positionAddress);
-
         // Bin data: from supplemental PnL call (OOR) or tracked state (in-range)
         const binData = binDataByPool[pool.poolAddress]?.[positionAddress];
         if (!binData) {
@@ -1304,7 +1312,14 @@ export async function getMyPositions({ force = false, silent = false } = {}) {
           lower_bin:          lowerBin,
           upper_bin:          upperBin,
           active_bin:         activeBin,
-          in_range:           binData ? !binData.isOutOfRange : !isOOR,
+          in_range:           (() => {
+            const apiOOR = binData ? binData.isOutOfRange : isOOR;
+            const binOOR = isBinRangeOutOfRange(activeBin, lowerBin, upperBin);
+            const actuallyOOR = binOOR !== null ? binOOR : !!apiOOR;
+            if (actuallyOOR) markOutOfRange(positionAddress);
+            else markInRange(positionAddress);
+            return !actuallyOOR;
+          })(),
           unclaimed_fees_usd: lpData
             ? Math.round((
                 config.management.solMode
