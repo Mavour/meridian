@@ -96,6 +96,31 @@ function evaluatePreset(side, preset, payload) {
             signal: summary,
           };
     }
+    case "smart_wallet_retest": {
+      const reclaimedTrend =
+        summary.supertrendBreakUp ||
+        (isBullish && close != null && summary.supertrendValue != null && close >= summary.supertrendValue);
+      const nearSupport =
+        close != null &&
+        lowerBand != null &&
+        summary.middleBand != null &&
+        close >= lowerBand &&
+        close <= summary.middleBand;
+      const notOverheated = rsi == null || rsi < overbought;
+      return side === "entry"
+        ? {
+            confirmed: reclaimedTrend && nearSupport && notOverheated,
+            reason: nearSupport
+              ? `Smart-wallet retest confirmed: reclaimed trend, close near lower half of band, RSI ${rsi ?? "n/a"}`
+              : "Smart-wallet retest missing: price is not back near support/lower band",
+            signal: summary,
+          }
+        : {
+            confirmed: close != null && upperBand != null && close >= upperBand,
+            reason: "Smart-wallet exit: price reached upper band/resistance",
+            signal: summary,
+          };
+    }
     case "supertrend_break":
       return side === "entry"
         ? {

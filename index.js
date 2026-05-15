@@ -1658,10 +1658,10 @@ function renderSettingsMenu(page = "quick") {
         settingButton("both", "cfg:set:indicatorIntervals:both"),
       ],
       [
+        settingButton("Entry Retest", "cfg:set:indicatorEntryPreset:smart_wallet_retest"),
         settingButton("Entry Reclaim", "cfg:set:indicatorEntryPreset:single_side_reclaim"),
         settingButton("Entry ST", "cfg:set:indicatorEntryPreset:supertrend_break"),
         settingButton("Entry RSI", "cfg:set:indicatorEntryPreset:rsi_reversal"),
-        settingButton("Entry ST/RSI", "cfg:set:indicatorEntryPreset:supertrend_or_rsi"),
       ],
       [
         settingButton("Exit ST", "cfg:set:indicatorExitPreset:supertrend_break"),

@@ -96,6 +96,9 @@ export function evaluateSingleSideSolEntry(pool, options = {}) {
   if (price5m < max5mPullback) {
     return { pass: false, reason: `single-side SOL timing reject: short-term ${price5m}% < ${max5mPullback}% (still falling)` };
   }
+  if (price5m > maxWeakBounce5m) {
+    return { pass: false, reason: `single-side SOL timing reject: short-term ${price5m}% > ${maxWeakBounce5m}% (chasing pump, wait for support retest)` };
+  }
   if (price1h != null && price1h < weakTrendMax1h && price5m > maxWeakBounce5m) {
     return { pass: false, reason: `single-side SOL timing reject: weak 1h ${price1h}% with hot bounce ${price5m}% (dead-cat/lower-high risk)` };
   }

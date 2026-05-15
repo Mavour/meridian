@@ -171,19 +171,19 @@ POOL MEMORY & WAVE HISTORY — USE FACTUALLY:
 - **NYOPET STRATEGY (HIT-AND-RUN):** The core rule is: deploy once, take profit, LEAVE. Do NOT get greedy and redeploy to the same token looking for a second win. One profitable wave is enough — move on to fresh tokens. The wave block exists to enforce this discipline. Only re-enter a previously-profitable token if the USER explicitly instructs you to.
 
 ENTRY RISK — CORE STRATEGY:
-The strategy uses SINGLE-SIDE SOL below current price as a passive buy ladder. The candidate does NOT need to already be dipping. A pump/uptrend is valid when ATH distance, fees, organic activity, and rug/holder checks are clean.
-- **DO NOT REJECT FOR GREEN PRICE ACTION ALONE**: positive price_5m_change or price_1h_change is not a timing violation. If price is pumping, prefer the candidate's recommended_strategy=spot when provided, size/range normally, and rely on ATH/risk filters for overextension.
+The strategy uses SINGLE-SIDE SOL below current price as a passive buy ladder. Entry should mimic smart-wallet support timing: wait for a prior spike/reclaim to cool down, then deploy when price retests the lower half of the range/support area. Do NOT chase a live green candle.
+- **REJECT HOT GREEN 5M FOR SOL-ONLY**: positive price_1h_change can be valid, but price_5m_change must be cooled down. If price_5m_change is above ${config.screening.singleSideSolMaxWeakBounce5m ?? 3}%, SKIP and wait for retest. We want support entry, not middle-of-pump entry.
 - **ATH FILTER IS THE OVEREXTENSION GATE**: if price_vs_ath fails the configured athFilterPct, skip. If it passes or ATH data is unavailable, do not invent an additional "too pumped" hard rule.
 - **HARD RULE — ACCELERATING DUMP**: if price_1h_change < 0 AND price_5m_change is MORE negative than price_1h_change by more than 1% → SKIP. Example: 1h=-5%, 5m=-8% → SKIP. The dump is still accelerating.
 - **HARD RULE — FALLING KNIFE**: if price_5m_change < ${config.screening.fallingKnife5mThreshold ?? -20}% AND price_1h_change < ${config.screening.fallingKnife1hThreshold ?? -25}% → SKIP. Crash instant — too dangerous.
 - **HARD RULE — DEEPENING DOWNTREND**: if price_1h_change < -5% AND price_5m_change < -3% → SKIP. No stabilization yet.
 - **HARD RULE — SLOW BLEED**: if price_1h_change < 0, price_5m_change <= 0, and fee_active_tvl_ratio is weak or fading → SKIP. Do not LP into a token drifting down without buy pressure.
-- **HARD RULE — SINGLE-SIDE SOL TIMING**: this agent is SOL-only with bins_above=0. Deploy only after reclaim/rebound confirmation. If price_1h_change < ${config.screening.singleSideSolMin1hChange ?? 0}% → SKIP. If short-term price change < ${config.screening.singleSideSolMax5mPullback ?? -2}% → SKIP. If 1h is weak but 5m is a hot bounce, treat it as dead-cat/lower-high risk and SKIP.
+- **HARD RULE — SINGLE-SIDE SOL TIMING**: this agent is SOL-only with bins_above=0. Deploy only after reclaim/rebound confirmation AND a support retest. If price_1h_change < ${config.screening.singleSideSolMin1hChange ?? 0}% → SKIP. If short-term price change < ${config.screening.singleSideSolMax5mPullback ?? -2}% → SKIP. If short-term price change > ${config.screening.singleSideSolMaxWeakBounce5m ?? 3}% → SKIP because range will likely go OOR right/above immediately.
 - price_1h_change < -15% → SKIP (too deep).
 - fee_active_tvl_ratio < ${config.screening.minFeeActiveTvlRatio}% → SKIP (no buy pressure).
 - If ALL candidates show falling knife or slow bleed, output NO DEPLOY.
 
-IMPORTANT: We are trying to avoid slow rugs, slow bleeding charts, fake volume, and over-ATH entries. We are NOT requiring a dip entry. If a green candle has real fees, acceptable holders/bots/top10, clean risk flags, and passes ATH filter, it can be deployed.
+IMPORTANT: We are trying to avoid slow rugs, slow bleeding charts, fake volume, over-ATH entries, and middle-of-pump SOL-only entries. A green 1h is fine only if the 5m candle has cooled into support/retest conditions.
 
 DEPLOY DECISION:
 - If there is a candidate that meets risk + quality checks → DEPLOY.
