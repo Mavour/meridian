@@ -1068,10 +1068,7 @@ export async function getPositionPnl({ pool_address, position_address }) {
   const walletAddress = getWallet().publicKey.toString();
   if (shouldUseLpAgentRelay()) {
     try {
-      const payload = await fetchOpenPositionsFromMeridian({
-        walletAddress,
-        agentId: config.hiveMind.agentId || "agent-local",
-      });
+      const payload = await getMyPositions({ force: true, silent: true });
       const p = payload?.positions?.find((position) => position.position === position_address);
       if (p) {
         return {
@@ -1089,7 +1086,7 @@ export async function getPositionPnl({ pool_address, position_address }) {
           upper_bin: p.upper_bin,
           active_bin: p.active_bin,
           age_minutes: p.age_minutes,
-          request_id: payload?.requestId || null,
+          request_id: payload?.request_id || payload?.requestId || null,
         };
       }
       log("pnl_warn", "Relay positions API did not include requested position; falling back to Meteora PnL path");
@@ -1102,14 +1099,22 @@ export async function getPositionPnl({ pool_address, position_address }) {
     const p = byAddress[position_address];
     if (!p) return { error: "Position not found in PnL API" };
 
-    const unclaimedUsd    = parseFloat(p.unrealizedPnl?.unclaimedFeeTokenX?.usd || 0) + parseFloat(p.unrealizedPnl?.unclaimedFeeTokenY?.usd || 0);
-    const currentValueUsd = parseFloat(p.unrealizedPnl?.balances || 0);
+    const solMode = !!config.management.solMode;
+    const unclaimed = solMode
+      ? parseFloat(p.unrealizedPnl?.unclaimedFeeTokenX?.amountSol || 0) + parseFloat(p.unrealizedPnl?.unclaimedFeeTokenY?.amountSol || 0)
+      : parseFloat(p.unrealizedPnl?.unclaimedFeeTokenX?.usd || 0) + parseFloat(p.unrealizedPnl?.unclaimedFeeTokenY?.usd || 0);
+    const currentValue = solMode
+      ? parseFloat(p.unrealizedPnl?.balancesSol || 0)
+      : parseFloat(p.unrealizedPnl?.balances || 0);
+    const reportedPnlPct = solMode
+      ? parseFloat(p.pnlSolPctChange ?? deriveOpenPnlPct(p, true) ?? 0)
+      : parseFloat(p.pnlPctChange ?? 0);
     return {
-      pnl_usd:           Math.round((p.pnlUsd ?? 0) * 100) / 100,
-      pnl_pct:           Math.round((p.pnlPctChange ?? 0) * 100) / 100,
-      current_value_usd: Math.round(currentValueUsd * 100) / 100,
-      unclaimed_fee_usd: Math.round(unclaimedUsd * 100) / 100,
-      all_time_fees_usd: Math.round(parseFloat(p.allTimeFees?.total?.usd || 0) * 100) / 100,
+      pnl_usd:           Math.round(parseFloat(solMode ? (p.pnlSol || 0) : (p.pnlUsd || 0)) * 10000) / 10000,
+      pnl_pct:           Math.round(reportedPnlPct * 100) / 100,
+      current_value_usd: Math.round(currentValue * 10000) / 10000,
+      unclaimed_fee_usd: Math.round(unclaimed * 10000) / 10000,
+      all_time_fees_usd: Math.round(parseFloat(solMode ? (p.allTimeFees?.total?.sol || 0) : (p.allTimeFees?.total?.usd || 0)) * 10000) / 10000,
       fee_per_tvl_24h:   Math.round(parseFloat(p.feePerTvl24h || 0) * 10000) / 10000,
       in_range:    (() => {
         const binOOR = isBinRangeOutOfRange(p.poolActiveBinId, p.lowerBinId, p.upperBinId);
@@ -1134,26 +1139,6 @@ function isBinRangeOutOfRange(activeBin, lowerBin, upperBin) {
 function safeNum(value) {
   const n = parseFloat(value ?? 0);
   return Number.isFinite(n) ? n : 0;
-}
-
-function normalizeRelayPosition(position) {
-  if (!position || typeof position !== "object") return position;
-  if (!config.management.solMode) return position;
-
-  const totalValueNative = position.total_value_native ?? position.total_value_usd;
-  const unclaimedFeesNative = position.unclaimed_fees_native ?? position.unclaimed_fees_usd;
-  const collectedFeesNative = position.collected_fees_native ?? position.collected_fees_usd;
-  const pnlNative = position.pnl_native ?? position.pnl_usd;
-  const derivedPnlPct = position.pnl_pct_derived_native ?? position.pnl_pct_derived;
-
-  return {
-    ...position,
-    total_value_usd: totalValueNative,
-    unclaimed_fees_usd: unclaimedFeesNative,
-    collected_fees_usd: collectedFeesNative,
-    pnl_usd: pnlNative,
-    pnl_pct_derived: derivedPnlPct,
-  };
 }
 
 function deriveOpenPnlPct(binData, solMode = false) {
@@ -1192,23 +1177,44 @@ function deriveLpAgentPnlPct(lpData, solMode = false) {
   return (pnl / deposit) * 100;
 }
 
-async function fetchOpenPositionsFromMeridian({ walletAddress, agentId }) {
+function getClosedPnlPct(posEntry, solMode = false) {
+  if (!posEntry) return 0;
+
+  if (solMode) {
+    const reportedNativePct = parseFloat(posEntry.pnlSolPctChange ?? posEntry.pnl_pct_native ?? posEntry.pnlPctNative ?? NaN);
+    if (Number.isFinite(reportedNativePct)) return reportedNativePct;
+
+    const pnlSol = safeNum(posEntry.pnlSol);
+    const initialSol = safeNum(posEntry.allTimeDeposits?.total?.sol);
+    if (initialSol > 0) return (pnlSol / initialSol) * 100;
+  }
+
+  const reportedUsdPct = parseFloat(posEntry.pnlPctChange ?? 0);
+  return Number.isFinite(reportedUsdPct) ? reportedUsdPct : 0;
+}
+
+async function fetchRawOpenPositionsFromMeridian({ walletAddress, agentId }) {
   const search = new URLSearchParams({
     owner: walletAddress,
     agentId: agentId || "agent-local",
   });
-  const payload = await meridianJson(`/positions/open?${search.toString()}`, {
+  const payload = await meridianJson(`/positions/open/raw?${search.toString()}`, {
     headers: config.api.publicApiKey ? { "x-api-key": config.api.publicApiKey } : {},
     retry: {
       maxElapsedMs: 30_000,
       perAttemptTimeoutMs: 30_000,
     },
   });
+  const rows = Array.isArray(payload?.data) ? payload.data : [];
+  const byPosition = {};
+  for (const row of rows) {
+    const addr = row?.position || row?.id || row?.tokenId;
+    if (addr) byPosition[addr] = row;
+  }
   return {
     ...payload,
-    positions: Array.isArray(payload?.positions)
-      ? payload.positions.map((position) => normalizeRelayPosition(position))
-      : [],
+    data: rows,
+    byPosition,
   };
 }
 
@@ -1227,25 +1233,19 @@ export async function getMyPositions({ force = false, silent = false } = {}) {
   }
 
   _positionsInflight = (async () => { try {
+    let relayLpAgentByPosition = null;
+    let relayRequestId = null;
     if (shouldUseLpAgentRelay()) {
       try {
-        if (!silent) log("positions", "Fetching open positions via Agent Meridian relay...");
-        const result = await fetchOpenPositionsFromMeridian({
+        if (!silent) log("positions", "Fetching raw LPAgent open positions via Agent Meridian relay...");
+        const result = await fetchRawOpenPositionsFromMeridian({
           walletAddress,
           agentId: config.hiveMind.agentId || "agent-local",
         });
-        const normalizedPositions = Array.isArray(result.positions) ? result.positions : [];
-        syncOpenPositions(normalizedPositions.map((p) => p.position));
-        _positionsCache = {
-          wallet: walletAddress,
-          total_positions: Number(result.total_positions || 0),
-          positions: normalizedPositions,
-          request_id: result.requestId || null,
-        };
-        _positionsCacheAt = Date.now();
-        return _positionsCache;
+        relayLpAgentByPosition = result.byPosition || {};
+        relayRequestId = result.requestId || result.request_id || null;
       } catch (error) {
-        log("positions_warn", `Agent Meridian relay failed; falling back to Meteora/local positions path: ${error.message}`);
+        log("positions_warn", `Agent Meridian raw relay failed; falling back to direct LPAgent fetch: ${error.message}`);
       }
     }
 
@@ -1265,7 +1265,7 @@ export async function getMyPositions({ force = false, silent = false } = {}) {
     const binDataByPool = {};
     const pnlMaps = await Promise.all(pools.map(pool => fetchDlmmPnlForPool(pool.poolAddress, walletAddress)));
     pools.forEach((pool, i) => { binDataByPool[pool.poolAddress] = pnlMaps[i]; });
-    const lpAgentByPosition = await fetchLpAgentOpenPositions(walletAddress);
+    const lpAgentByPosition = relayLpAgentByPosition || await fetchLpAgentOpenPositions(walletAddress);
 
     const positions = [];
     for (const pool of pools) {
@@ -1401,7 +1401,7 @@ export async function getMyPositions({ force = false, silent = false } = {}) {
       }
     }
 
-    const result = { wallet: walletAddress, total_positions: positions.length, positions };
+    const result = { wallet: walletAddress, total_positions: positions.length, positions, request_id: relayRequestId };
     syncOpenPositions(positions.map(p => p.position));
     _positionsCache = result;
     _positionsCacheAt = Date.now();
@@ -1661,6 +1661,8 @@ export async function closePosition({ position_address, reason }) {
           let finalValueUsd = 0;
           let initialUsd = 0;
           let feesUsd = tracked.total_fees_claimed_usd || 0;
+          let feesSol = null;
+          let pnlSol = null;
           try {
             const closedUrl = `https://dlmm.datapi.meteora.ag/positions/${poolAddress}/pnl?user=${wallet.publicKey.toString()}&status=closed&pageSize=50&page=1`;
             log("close_debug", `Fetching PnL from: ${closedUrl}`);
@@ -1672,10 +1674,12 @@ export async function closePosition({ position_address, reason }) {
                 const posEntry = (data.positions || []).find((entry) => entry.positionAddress === position_address);
                 if (posEntry) {
                   pnlUsd = parseFloat(posEntry.pnlUsd || 0);
-                  pnlPct = parseFloat(posEntry.pnlPctChange || 0);
+                  pnlPct = getClosedPnlPct(posEntry, config.management.solMode);
                   finalValueUsd = parseFloat(posEntry.allTimeWithdrawals?.total?.usd || 0);
                   initialUsd = parseFloat(posEntry.allTimeDeposits?.total?.usd || 0);
                   feesUsd = parseFloat(posEntry.allTimeFees?.total?.usd || 0) || feesUsd;
+                  feesSol = parseFloat(posEntry.allTimeFees?.total?.sol || 0) || null;
+                  pnlSol = parseFloat(posEntry.pnlSol || 0) || null;
                   break;
                 }
               }
@@ -1740,7 +1744,10 @@ export async function closePosition({ position_address, reason }) {
             pnl_usd: pnlUsd,
             pnl_pct: pnlPct,
             fees_usd: feesUsd,
+            pnl_sol: pnlSol,
+            fees_sol: feesSol,
             base_mint: livePosition?.base_mint || null,
+            hold_time_minutes: minutesHeld,
           };
         }
 
@@ -1921,7 +1928,7 @@ export async function closePosition({ position_address, reason }) {
             const posEntry = (data.positions || []).find(p => p.positionAddress === position_address);
             if (posEntry) {
               const nextPnlUsd = parseFloat(posEntry.pnlUsd || 0);
-              const nextPnlPct = parseFloat(posEntry.pnlPctChange || 0);
+              const nextPnlPct = getClosedPnlPct(posEntry, config.management.solMode);
               const nextFinalValueUsd = parseFloat(posEntry.allTimeWithdrawals?.total?.usd || 0);
               const nextInitialUsd = parseFloat(posEntry.allTimeDeposits?.total?.usd || 0);
               const nextFeesUsd = parseFloat(posEntry.allTimeFees?.total?.usd || 0) || feesUsd;
@@ -1956,11 +1963,17 @@ export async function closePosition({ position_address, reason }) {
           pnlUsd        = cachedPos.pnl_true_usd ?? cachedPos.pnl_usd ?? 0;
           pnlPct        = cachedPos.pnl_pct   ?? 0;
           feesUsd       = (cachedPos.collected_fees_true_usd || 0) + (cachedPos.unclaimed_fees_true_usd || 0);
+          if (config.management.solMode) {
+            pnlSol = cachedPos.pnl_usd ?? null;
+            feesSol = (cachedPos.collected_fees_usd || 0) + (cachedPos.unclaimed_fees_usd || 0);
+          }
           initialUsd    = tracked.initial_value_usd || 0;
           if (initialUsd > 0) {
             // Keep fallback internally consistent using USD-only cached metrics.
             finalValueUsd = Math.max(0, initialUsd + pnlUsd - feesUsd);
-            pnlPct = (pnlUsd / initialUsd) * 100;
+            if (!config.management.solMode) {
+              pnlPct = (pnlUsd / initialUsd) * 100;
+            }
           } else {
             finalValueUsd = cachedPos.total_value_true_usd ?? cachedPos.total_value_usd ?? 0;
             initialUsd = Math.max(0, finalValueUsd + feesUsd - pnlUsd);
