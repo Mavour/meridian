@@ -1188,7 +1188,8 @@ function deriveLpAgentPnlPct(lpData, solMode = false) {
 
   const currentValue = solMode ? safeNum(lpData.valueNative) : safeNum(lpData.value);
   const unclaimedFees = solMode ? safeNum(lpData.unCollectedFeeNative) : safeNum(lpData.unCollectedFee);
-  const pnl = currentValue + unclaimedFees - deposit;
+  const collectedFees = solMode ? safeNum(lpData.collectedFeeNative) : safeNum(lpData.collectedFee);
+  const pnl = currentValue + unclaimedFees + collectedFees - deposit;
   return (pnl / deposit) * 100;
 }
 
