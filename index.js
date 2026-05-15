@@ -470,8 +470,8 @@ export async function runManagementCycle({ silent = false } = {}) {
     const reportLines = positionData.map((p) => {
       const act = actionMap.get(p.position);
       const inRange = p.in_range ? "🟢 IN" : `🔴 OOR ${p.minutes_out_of_range ?? 0}m`;
-      const val = config.management.solMode ? `◎${p.total_value_usd ?? "?"}` : `$${p.total_value_usd ?? "?"}`;
-      const unclaimed = config.management.solMode ? `◎${p.unclaimed_fees_usd ?? "?"}` : `$${p.unclaimed_fees_usd ?? "?"}`;
+      const val = config.management.solMode ? `◎${(p.total_value_usd ?? 0).toFixed(4)}` : `$${(p.total_value_usd ?? 0).toFixed(4)}`;
+      const unclaimed = config.management.solMode ? `◎${(p.unclaimed_fees_usd ?? 0).toFixed(4)}` : `$${(p.unclaimed_fees_usd ?? 0).toFixed(4)}`;
       const statusLabel = act.action === "INSTRUCTION" ? "HOLD (instruction)" : act.action;
       let line = `**${p.pair}** | Age: ${p.age_minutes ?? "?"}m | Val: ${val} | Unclaimed: ${unclaimed} | PnL: ${p.pnl_pct ?? "?"}% | Yield: ${p.fee_per_tvl_24h ?? "?"}% | ${inRange} | ${statusLabel}`;
       if (p.instruction) line += `\nNote: "${p.instruction}"`;

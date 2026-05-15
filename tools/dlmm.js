@@ -1380,9 +1380,11 @@ export async function getMyPositions({ force = false, silent = false } = {}) {
             : binData
             ? Math.round(parseFloat(binData.pnlUsd || 0) * 10000) / 10000
             : null,
-          pnl_pct:            (lpData || binData)
-            ? Math.round(reportedPnlPct * 100) / 100
-            : null,
+          pnl_pct:            derivedPnlPct != null
+            ? Math.round(derivedPnlPct * 100) / 100
+            : (lpData || binData)
+              ? Math.round(reportedPnlPct * 100) / 100
+              : null,
           pnl_pct_derived:    derivedPnlPct != null ? Math.round(derivedPnlPct * 100) / 100 : null,
           pnl_pct_diff:       pnlPctDiff != null ? Math.round(pnlPctDiff * 100) / 100 : null,
           pnl_pct_suspicious: !!pnlPctSuspicious,
