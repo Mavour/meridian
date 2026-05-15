@@ -22,6 +22,35 @@ function fmtPrice(value) {
   return n.toPrecision(5);
 }
 
+function fmtHoldTime(openedAt, now = Date.now()) {
+  const opened = Number(openedAt);
+  if (!Number.isFinite(opened) || opened <= 0) return '-';
+  const totalMinutes = Math.max(0, Math.floor((now - opened) / 60000));
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const totalHours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (totalHours < 24) return `${totalHours}h ${minutes}m`;
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return `${days}d ${hours}h`;
+}
+
+function getOpenedAt(pos, stored) {
+  const direct = pos.openedAt ?? pos.opened_at ?? pos.deployed_at;
+  if (direct != null) {
+    const parsed = typeof direct === 'number' ? direct : new Date(direct).getTime();
+    if (Number.isFinite(parsed) && parsed > 0) return parsed < 1e12 ? parsed * 1000 : parsed;
+  }
+
+  const createdAt = Number(pos.createdAt ?? pos.created_at);
+  if (Number.isFinite(createdAt) && createdAt > 0) return createdAt < 1e12 ? createdAt * 1000 : createdAt;
+
+  const ageMinutes = Number(pos.age_minutes);
+  if (Number.isFinite(ageMinutes) && ageMinutes >= 0) return Date.now() - ageMinutes * 60000;
+
+  return stored?.openedAt;
+}
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -75,8 +104,18 @@ export default function PositionCard({ pos, peakPnl = null }) {
   const positionId = pos.position || pos.position_address || pos.id;
   const currentValue = Number(pos.total_value_usd);
   const [stored, setStored] = useState(() => loadStoredPosition(positionId));
+  const [now, setNow] = useState(() => Date.now());
   const range = pos.price_range || {};
   const markerPct = rangeMarkerPct(range);
+  const currentPrice = Number(range.current);
+  const lowerPrice = Number(range.min);
+  const downsideRoom = Number.isFinite(currentPrice) && Number.isFinite(lowerPrice)
+    ? currentPrice - lowerPrice
+    : null;
+  const downsidePct = downsideRoom != null && Number.isFinite(currentPrice) && currentPrice > 0
+    ? (downsideRoom / currentPrice) * 100
+    : null;
+  const downsideTone = downsidePct == null ? '' : downsidePct > 30 ? 'good' : downsidePct >= 10 ? 'warn' : 'risk';
   const lowerBin = Number(pos.lower_bin);
   const upperBin = Number(pos.upper_bin);
   const activeBin = Number(pos.active_bin);
@@ -105,6 +144,18 @@ export default function PositionCard({ pos, peakPnl = null }) {
   const peak = Number.isFinite(Number(peakPnl)) ? Number(peakPnl) : null;
   const pnlDisplay = pnl == null ? '-' : `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}%`;
   const peakDisplay = peak == null || !Number.isFinite(peak) ? '-' : `${peak >= 0 ? '+' : ''}${peak.toFixed(2)}%`;
+  const openedAt = getOpenedAt(pos, stored);
+  const holdTime = fmtHoldTime(openedAt, now);
+  const downsideDisplay = downsideRoom == null || downsidePct == null
+    ? 'Downside: -'
+    : `Downside: -${fmtPrice(Math.max(0, downsideRoom))} (${Math.max(0, downsidePct).toFixed(1)}% room)`;
+  const downsideColor = downsideTone === 'good'
+    ? '#22c55e'
+    : downsideTone === 'warn'
+      ? '#f59e0b'
+      : downsideTone === 'risk'
+        ? '#ef4444'
+        : undefined;
 
   useEffect(() => {
     if (!positionId || !Number.isFinite(currentValue) || currentValue <= 0) return;
@@ -119,6 +170,11 @@ export default function PositionCard({ pos, peakPnl = null }) {
     setStored(latest);
   }, [positionId, currentValue]);
 
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 60000);
+    return () => window.clearInterval(id);
+  }, []);
+
   const sliderClass = useMemo(() => {
     const classes = ['price-slider'];
     if (confirmedOor) classes.push('confirmed-oor', oorSide === 'left' ? 'oor-left' : 'oor-right');
@@ -130,7 +186,7 @@ export default function PositionCard({ pos, peakPnl = null }) {
       <div className="position-head">
         <div>
           <h3>{pos.pair}</h3>
-          <p>{pos.strategy || 'DLMM'} | {totalBins || '-'} bins | step {pos.bin_step || '-'}</p>
+          <p>{pos.strategy || 'DLMM'} | {totalBins || '-'} bins | step {pos.bin_step || '-'} | held {holdTime}</p>
         </div>
         <span className={`range-badge ${inRange ? 'ok' : 'risk'}`}>
           {inRange ? 'IN RANGE' : `OOR ${minutesOor}m`}
@@ -165,6 +221,7 @@ export default function PositionCard({ pos, peakPnl = null }) {
           <span>Active {fmtPrice(range.current)}</span>
           <span>{pos.lower_bin ?? '-'} to {pos.upper_bin ?? '-'}</span>
         </div>
+        <div className="downside-room" style={{ color: downsideColor }}>{downsideDisplay}</div>
       </div>
 
       <div className="holdings-grid">
