@@ -1287,9 +1287,9 @@ export async function getMyPositions({ force = false, silent = false } = {}) {
           ? Math.floor((Date.now() - new Date(tracked.deployed_at).getTime()) / 60000)
           : null;
         const reportedPnlPct = lpData
-          ? parseFloat(lpData.pnl?.percent ?? lpData.pnl?.percentNative ?? 0)
+          ? parseFloat(config.management.solMode ? (lpData.pnl?.percentNative || 0) : (lpData.pnl?.percent || 0))
           : binData
-            ? parseFloat(binData.pnlPctChange ?? binData.pnlSolPctChange ?? 0)
+            ? parseFloat(config.management.solMode ? (binData.pnlSolPctChange || 0) : (binData.pnlPctChange || 0))
             : null;
         const derivedPnlPct = lpData
           ? deriveLpAgentPnlPct(lpData, config.management.solMode)
