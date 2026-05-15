@@ -6,7 +6,7 @@ import cron from "node-cron";
 import readline from "readline";
 import { agentLoop } from "./agent.js";
 import { log } from "./logger.js";
-import { getMyPositions, getActiveBin, closePosition } from "./tools/dlmm.js";
+import { getMyPositions, getActiveBin } from "./tools/dlmm.js";
 import { getWalletBalances } from "./tools/wallet.js";
 import { getTopCandidates } from "./tools/screening.js";
 import { formatGmgnCandidateForPrompt } from "./tools/gmgn.js";
@@ -286,9 +286,12 @@ async function executeInstantClose(position, reason) {
   log("state", `[Instant Close] Executing immediate close for ${position.pair} — ${reason}`);
 
   try {
-    const result = await closePosition({
+    // Use the same non-LLM tool path as Telegram /close so post-close hooks
+    // run consistently, especially auto-swapping the base token back to SOL.
+    const result = await executeTool("close_position", {
       position_address: position.position,
       reason: reason,
+      _suppress_close_notify: true,
     });
 
     const duration = Date.now() - startTime;
@@ -305,6 +308,7 @@ async function executeInstantClose(position, reason) {
 Position: <code>${position.position}</code>
 Reason: ${reason}
 PnL: ${result.pnl_pct ?? "?"}%
+Auto-swap: ${result.auto_swapped ? "DONE" : (result.auto_swap_skipped || result.auto_swap_error || "not confirmed")}
 Duration: ${duration}ms
 
 <i>Closed instantly without LLM delay</i>`;
