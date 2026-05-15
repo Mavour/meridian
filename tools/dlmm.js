@@ -1188,8 +1188,7 @@ function deriveLpAgentPnlPct(lpData, solMode = false) {
 
   const currentValue = solMode ? safeNum(lpData.valueNative) : safeNum(lpData.value);
   const unclaimedFees = solMode ? safeNum(lpData.unCollectedFeeNative) : safeNum(lpData.unCollectedFee);
-  const collectedFees = solMode ? safeNum(lpData.collectedFeeNative) : safeNum(lpData.collectedFee);
-  const pnl = currentValue + unclaimedFees + collectedFees - deposit;
+  const pnl = currentValue + unclaimedFees - deposit;
   return (pnl / deposit) * 100;
 }
 
@@ -1288,9 +1287,9 @@ export async function getMyPositions({ force = false, silent = false } = {}) {
           ? Math.floor((Date.now() - new Date(tracked.deployed_at).getTime()) / 60000)
           : null;
         const reportedPnlPct = lpData
-          ? parseFloat(lpData.pnl?.percent ?? 0)
+          ? parseFloat(config.management.solMode ? (lpData.pnl?.percentNative || 0) : (lpData.pnl?.percent || 0))
           : binData
-            ? parseFloat(binData.pnlPctChange ?? 0)
+            ? parseFloat(config.management.solMode ? (binData.pnlSolPctChange || 0) : (binData.pnlPctChange || 0))
             : null;
         const derivedPnlPct = lpData
           ? deriveLpAgentPnlPct(lpData, config.management.solMode)
@@ -1381,11 +1380,9 @@ export async function getMyPositions({ force = false, silent = false } = {}) {
             : binData
             ? Math.round(parseFloat(binData.pnlUsd || 0) * 10000) / 10000
             : null,
-          pnl_pct:            derivedPnlPct != null
-            ? Math.round(derivedPnlPct * 100) / 100
-            : (lpData || binData)
-              ? Math.round(reportedPnlPct * 100) / 100
-              : null,
+          pnl_pct:            (lpData || binData)
+            ? Math.round(reportedPnlPct * 100) / 100
+            : null,
           pnl_pct_derived:    derivedPnlPct != null ? Math.round(derivedPnlPct * 100) / 100 : null,
           pnl_pct_diff:       pnlPctDiff != null ? Math.round(pnlPctDiff * 100) / 100 : null,
           pnl_pct_suspicious: !!pnlPctSuspicious,
