@@ -100,11 +100,29 @@ function computedPnlPct(currentValue, initialValue) {
   return ((current - initial) / initial) * 100;
 }
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const query = window.matchMedia('(max-width: 768px)');
+    const onChange = () => setIsMobile(query.matches);
+    onChange();
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+
+  return isMobile;
+}
+
 export default function PositionCard({ pos, peakPnl = null }) {
   const positionId = pos.position || pos.position_address || pos.id;
   const currentValue = Number(pos.total_value_usd);
   const [stored, setStored] = useState(() => loadStoredPosition(positionId));
   const [now, setNow] = useState(() => Date.now());
+  const isMobile = useIsMobile();
   const range = pos.price_range || {};
   const markerPct = rangeMarkerPct(range);
   const currentPrice = Number(range.current);
@@ -156,6 +174,27 @@ export default function PositionCard({ pos, peakPnl = null }) {
       : downsideTone === 'risk'
         ? '#ef4444'
         : undefined;
+  const ellipsis = {
+    minWidth: 0,
+    maxWidth: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  };
+  const rangeMetaStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: isMobile ? 2 : 12,
+    flexDirection: isMobile ? 'column' : 'row',
+    alignItems: isMobile ? 'flex-start' : 'center',
+  };
+  const rangeLabelStyle = {
+    ...ellipsis,
+    fontSize: isMobile ? 9 : undefined,
+  };
+  const holdingsGridStyle = isMobile ? { gridTemplateColumns: '1fr 1fr', gap: 7 } : undefined;
+  const holdingValueStyle = isMobile ? { ...ellipsis, fontSize: 12 } : ellipsis;
+  const holdingDetailStyle = isMobile ? { ...ellipsis, fontSize: 11 } : ellipsis;
 
   useEffect(() => {
     if (!positionId || !Number.isFinite(currentValue) || currentValue <= 0) return;
@@ -182,69 +221,69 @@ export default function PositionCard({ pos, peakPnl = null }) {
   }, [confirmedOor, oorSide]);
 
   return (
-    <article className={`position-card ${inRange ? 'in-range' : 'out-range'}`}>
+    <article className={`position-card ${inRange ? 'in-range' : 'out-range'}`} style={isMobile ? { padding: 10, maxWidth: '100%', overflow: 'hidden' } : undefined}>
       <div className="position-head">
-        <div>
-          <h3>{pos.pair}</h3>
-          <p>{pos.strategy || 'DLMM'} | {totalBins || '-'} bins | step {pos.bin_step || '-'} | held {holdTime}</p>
+        <div style={{ minWidth: 0, maxWidth: '100%' }}>
+          <h3 style={ellipsis}>{pos.pair}</h3>
+          <p style={ellipsis}>{pos.strategy || 'DLMM'} | {totalBins || '-'} bins | step {pos.bin_step || '-'} | held {holdTime}</p>
         </div>
         <span className={`range-badge ${inRange ? 'ok' : 'risk'}`}>
           {inRange ? 'IN RANGE' : `OOR ${minutesOor}m`}
         </span>
       </div>
 
-      <div className="position-summary-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+      <div className="position-summary-row" style={{ gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr 1fr' }}>
         <div className="value-card">
           <span>Value</span>
-          <b>{fmtUsd(pos.total_value_usd)}</b>
+          <b style={ellipsis}>{fmtUsd(pos.total_value_usd)}</b>
         </div>
         <div className="pnl-card">
           <span>PnL</span>
-          <b className={pnl == null ? '' : pnl >= 0 ? 'positive' : 'negative'}>{pnlDisplay}</b>
+          <b className={pnl == null ? '' : pnl >= 0 ? 'positive' : 'negative'} style={ellipsis}>{pnlDisplay}</b>
         </div>
         <div className="peak-card">
           <span>Peak</span>
-          <b className={peak == null ? '' : peak >= 0 ? 'positive' : 'negative'}>{peakDisplay}</b>
+          <b className={peak == null ? '' : peak >= 0 ? 'positive' : 'negative'} style={ellipsis}>{peakDisplay}</b>
         </div>
         <div className="hold-time-card">
           <span>Hold time</span>
-          <b style={{ color: '#f59e0b' }}>{holdTime}</b>
+          <b style={{ ...ellipsis, color: '#f59e0b' }}>{holdTime}</b>
         </div>
       </div>
 
       <div className="price-range-block">
         <div className="range-values">
-          <span>{fmtPrice(range.min)}</span>
-          <span>{fmtPrice(range.max)}</span>
+          <span style={rangeLabelStyle}>{fmtPrice(range.min)}</span>
+          <span style={{ ...rangeLabelStyle, textAlign: 'right' }}>{fmtPrice(range.max)}</span>
         </div>
         <div className={sliderClass} aria-label="Position price range">
           <span className="price-slider-fill" />
           <i className="price-marker" style={{ left: `${markerPct}%` }} />
         </div>
-        <div className="range-meta" style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>Active {fmtPrice(range.current)} {'\u00b7'} {pos.lower_bin ?? '-'} to {pos.upper_bin ?? '-'}</span>
-          <span style={{ color: downsideColor, textAlign: 'right' }}>{downsideDisplay}</span>
+        <div className="range-meta" style={rangeMetaStyle}>
+          <span style={ellipsis}>Active {fmtPrice(range.current)} {'\u00b7'} {pos.lower_bin ?? '-'} to {pos.upper_bin ?? '-'}</span>
+          <span style={{ ...ellipsis, color: downsideColor, textAlign: isMobile ? 'left' : 'right' }}>{downsideDisplay}</span>
         </div>
       </div>
 
-      <div className="holdings-grid">
+      <div className="holdings-grid" style={holdingsGridStyle}>
         <div>
           <span>{tokenX.symbol || 'Token'}</span>
-          <b>{fmtAmount(tokenX.amount, tokenX.symbol)}</b>
+          <b style={holdingValueStyle}>{fmtAmount(tokenX.amount, tokenX.symbol)}</b>
         </div>
         <div>
           <span>{tokenY.symbol || 'SOL'}</span>
-          <b>{fmtAmount(tokenY.amount, tokenY.symbol || 'SOL')}</b>
+          <b style={holdingValueStyle}>{fmtAmount(tokenY.amount, tokenY.symbol || 'SOL')}</b>
         </div>
-        <div>
+        <div style={isMobile ? { gridColumn: '1 / -1' } : undefined}>
           <span>Unclaimed fees</span>
-          <b className="positive">{fmtUsd(unclaimedUsd)}</b>
-          <em>{Number.isFinite(Number(feePct)) ? `${Number(feePct).toFixed(2)}% of input` : feeDetail || '-'}</em>
+          <b className="positive" style={holdingValueStyle}>{fmtUsd(unclaimedUsd)}</b>
+          <em style={holdingDetailStyle}>{Number.isFinite(Number(feePct)) ? `${Number(feePct).toFixed(2)}% of input` : feeDetail || '-'}</em>
         </div>
-        <div>
+        <div style={isMobile ? { gridColumn: '1 / -1' } : undefined}>
           <span>Claimed total</span>
-          <b>{fmtUsd(claimedUsd)}</b>
-          <em>{feeDetail || 'Harvested fees'}</em>
+          <b style={holdingValueStyle}>{fmtUsd(claimedUsd)}</b>
+          <em style={holdingDetailStyle}>{feeDetail || 'Harvested fees'}</em>
         </div>
       </div>
     </article>

@@ -49,7 +49,7 @@ export default function Logs() {
   const tags = ['DEPLOY','CLOSE','STATE','SCREENING','AGENT','WARN','SAFETY_BLOCK','EXECUTOR','LESSONS','SHUTDOWN','SWAP'];
 
   return (
-    <div style={{ padding:'12px 16px', maxWidth:1400 }}>
+    <div style={{ padding:'12px 16px', maxWidth:1400, minHeight:'calc(100vh - 58px)', overflow:'visible' }}>
       <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap', alignItems:'center' }}>
         <input
           placeholder="Search logs..."
@@ -70,7 +70,18 @@ export default function Logs() {
         <span style={{ fontSize:11, color:'#475569', marginLeft:'auto' }}>{filtered.length} lines</span>
       </div>
 
-      <div style={{ background:'#0d0d0d', border:'0.5px solid #1a1a1a', borderRadius:8, padding:'10px 12px', height:'calc(100vh - 160px)', overflowY:'auto', scrollbarWidth:'thin', scrollbarColor:'#222 transparent' }}
+      <div style={{
+        background:'#0d0d0d',
+        border:'0.5px solid #1a1a1a',
+        borderRadius:8,
+        padding:'10px 12px',
+        maxHeight:'calc(100vh - 120px)',
+        overflowY:'scroll',
+        WebkitOverflowScrolling:'touch',
+        overscrollBehavior:'contain',
+        scrollbarWidth:'thin',
+        scrollbarColor:'#222 transparent',
+      }}
         onScroll={e => { const el = e.currentTarget; autoScroll.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 40; }}>
         {filtered.map((l, i) => (
           <div key={i} style={{ display:'grid', gridTemplateColumns:'80px 130px 1fr', gap:10, padding:'2px 0', borderBottom:'0.5px solid #111', fontSize:11, lineHeight:1.7 }}>
