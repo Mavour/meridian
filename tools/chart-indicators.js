@@ -76,6 +76,26 @@ function evaluatePreset(side, preset, payload) {
     close <= level;
 
   switch (preset) {
+    case "single_side_reclaim": {
+      const reclaimedTrend =
+        summary.supertrendBreakUp ||
+        (isBullish && close != null && summary.supertrendValue != null && close >= summary.supertrendValue);
+      const noLongerOversold = rsi == null || rsi > oversold;
+      const notUnderLowerBand = close == null || lowerBand == null || close >= lowerBand;
+      return side === "entry"
+        ? {
+            confirmed: reclaimedTrend && noLongerOversold && notUnderLowerBand,
+            reason: reclaimedTrend
+              ? `Single-side reclaim confirmed: bullish Supertrend, RSI ${rsi ?? "n/a"}, not below lower band`
+              : `Single-side reclaim missing: price has not reclaimed bullish Supertrend`,
+            signal: summary,
+          }
+        : {
+            confirmed: summary.supertrendBreakDown || (isBearish && close != null && summary.supertrendValue != null && close <= summary.supertrendValue),
+            reason: "Single-side exit: bearish Supertrend break",
+            signal: summary,
+          };
+    }
     case "supertrend_break":
       return side === "entry"
         ? {

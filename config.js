@@ -118,6 +118,12 @@ export const config = {
     fallingKnife1hThreshold: u.fallingKnife1hThreshold ?? -25,
     maxVolatility:       u.maxVolatility       ?? 7,   // max pool volatility (filters high-vol pools)
     maxDexBoosts:       u.maxDexBoosts       ?? null, // max DexScreener active boosts (null = no filter)
+    singleSideSolEntryGateEnabled: u.singleSideSolEntryGateEnabled ?? true,
+    singleSideSolMin1hChange: u.singleSideSolMin1hChange ?? 0,
+    singleSideSolMax5mPullback: u.singleSideSolMax5mPullback ?? -2,
+    singleSideSolWeakTrendMax1h: u.singleSideSolWeakTrendMax1h ?? 3,
+    singleSideSolMaxWeakBounce5m: u.singleSideSolMaxWeakBounce5m ?? 8,
+    singleSideSolMinFeeActiveTvlRatio: u.singleSideSolMinFeeActiveTvlRatio ?? 0.3,
   },
 
   gmgn: {
@@ -391,6 +397,12 @@ export function reloadScreeningThresholds() {
     if (fresh.spotMinPrice30mFloor != null) config.strategy.spotMinPrice30mFloor = fresh.spotMinPrice30mFloor;
     if (fresh.fallingKnife5mThreshold != null) config.screening.fallingKnife5mThreshold = fresh.fallingKnife5mThreshold;
     if (fresh.fallingKnife1hThreshold != null) config.screening.fallingKnife1hThreshold = fresh.fallingKnife1hThreshold;
+    if (fresh.singleSideSolEntryGateEnabled !== undefined) config.screening.singleSideSolEntryGateEnabled = fresh.singleSideSolEntryGateEnabled;
+    if (fresh.singleSideSolMin1hChange != null) config.screening.singleSideSolMin1hChange = fresh.singleSideSolMin1hChange;
+    if (fresh.singleSideSolMax5mPullback != null) config.screening.singleSideSolMax5mPullback = fresh.singleSideSolMax5mPullback;
+    if (fresh.singleSideSolWeakTrendMax1h != null) config.screening.singleSideSolWeakTrendMax1h = fresh.singleSideSolWeakTrendMax1h;
+    if (fresh.singleSideSolMaxWeakBounce5m != null) config.screening.singleSideSolMaxWeakBounce5m = fresh.singleSideSolMaxWeakBounce5m;
+    if (fresh.singleSideSolMinFeeActiveTvlRatio != null) config.screening.singleSideSolMinFeeActiveTvlRatio = fresh.singleSideSolMinFeeActiveTvlRatio;
   } catch { /* ignore */ }
   try {
     const freshGmgn = readJsonIfExists(GMGN_CONFIG_PATH);

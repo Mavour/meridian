@@ -820,6 +820,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
           `  fee_tvl_threshold: ${feeTvlStatus} (${Number.isFinite(feeTvl) ? feeTvl : "unknown"} >= ${minFeeTvl})`,
           `  recommended_strategy: ${strategyRec.strategy} (${strategyRec.reason})`,
           pvpLine,
+          pool.single_side_entry?.reason ? `  single_side_sol_entry: ${pool.single_side_entry.reason}` : null,
           `  smart_wallets: ${sw?.in_pool?.length ?? 0} present${sw?.in_pool?.length ? ` → CONFIDENCE BOOST (${sw.in_pool.map(w => w.name).join(", ")})` : ""}`,
           activeBin != null ? `  active_bin: ${activeBin}` : null,
           n?.narrative ? `  narrative_untrusted: ${sanitizeUntrustedPromptText(n.narrative, 500)}` : `  narrative_untrusted: none`,
@@ -853,6 +854,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
           activeBin != null ? `  active_bin: ${activeBin}` : null,
           pool.price_5m_change != null ? `  price_5m_change: ${pool.price_5m_change >= 0 ? "+" : ""}${pool.price_5m_change}%` : null,
           pool.price_1h_change != null ? `  price_1h_change: ${pool.price_1h_change >= 0 ? "+" : ""}${pool.price_1h_change}%` : null,
+          pool.single_side_entry?.reason ? `  single_side_sol_entry: ${pool.single_side_entry.reason}` : null,
           priceChange != null ? `  jup_1h: price${priceChange >= 0 ? "+" : ""}${priceChange}%, net_buyers=${netBuyers ?? "?"}` : null,
           n?.narrative ? `  narrative_untrusted: ${sanitizeUntrustedPromptText(n.narrative, 500)}` : `  narrative_untrusted: none`,
           mem ? `  memory_untrusted: ${sanitizeUntrustedPromptText(mem, 500)}` : null,
@@ -1656,6 +1658,7 @@ function renderSettingsMenu(page = "quick") {
         settingButton("both", "cfg:set:indicatorIntervals:both"),
       ],
       [
+        settingButton("Entry Reclaim", "cfg:set:indicatorEntryPreset:single_side_reclaim"),
         settingButton("Entry ST", "cfg:set:indicatorEntryPreset:supertrend_break"),
         settingButton("Entry RSI", "cfg:set:indicatorEntryPreset:rsi_reversal"),
         settingButton("Entry ST/RSI", "cfg:set:indicatorEntryPreset:supertrend_or_rsi"),
@@ -1712,7 +1715,7 @@ function normalizeMenuValue(key, raw) {
 
 function resolveSettingPage(key) {
   if (["deployAmountSol", "gasReserve", "maxPositions", "maxDeployAmount", "takeProfitPct", "stopLossPct", "trailingTakeProfit", "trailingTriggerPct", "trailingDropPct", "positionSizePct", "managementIntervalMin", "screeningIntervalMin", "solMode"].includes(key)) return "quick";
-  if (["minTvl", "maxTvl", "minVolume", "minOrganic", "minHolders", "minMcap", "maxMcap", "minBinStep", "maxBinStep", "timeframe", "category", "minFeeActiveTvlRatio", "minTokenFeesSol", "maxBotHoldersPct", "maxTop10Pct", "maxBundlePct", "avoidPvpSymbols", "blockPvpSymbols", "minTokenAgeHours", "maxTokenAgeHours", "athFilterPct", "maxVolatility", "maxDexBoosts", "blockedLaunchpads", "allowedLaunchpads", "screeningSource", "blockedSymbols", "cgBlockRank", "postCloseReentryCooldownMin", "fallingKnife5mThreshold", "fallingKnife1hThreshold"].includes(key)) return "screen";
+  if (["minTvl", "maxTvl", "minVolume", "minOrganic", "minHolders", "minMcap", "maxMcap", "minBinStep", "maxBinStep", "timeframe", "category", "minFeeActiveTvlRatio", "minTokenFeesSol", "maxBotHoldersPct", "maxTop10Pct", "maxBundlePct", "avoidPvpSymbols", "blockPvpSymbols", "minTokenAgeHours", "maxTokenAgeHours", "athFilterPct", "maxVolatility", "maxDexBoosts", "blockedLaunchpads", "allowedLaunchpads", "screeningSource", "blockedSymbols", "cgBlockRank", "postCloseReentryCooldownMin", "fallingKnife5mThreshold", "fallingKnife1hThreshold", "singleSideSolEntryGateEnabled", "singleSideSolMin1hChange", "singleSideSolMax5mPullback", "singleSideSolWeakTrendMax1h", "singleSideSolMaxWeakBounce5m", "singleSideSolMinFeeActiveTvlRatio"].includes(key)) return "screen";
   if (["strategy", "minBinsBelow", "maxBinsBelow", "dynamicStrategyEnabled", "spotMinPrice1hChange", "spotMinVolatility", "spotMinPrice5mFloor", "spotMinPrice30mFloor", "defaultBinsBelow"].includes(key)) return "strategy";
   if (["outOfRangeWaitMinutes", "outOfRangeBinsToClose", "minFeePerTvl24h", "minAgeBeforeYieldCheck", "minClaimAmount", "autoSwapAfterClaim", "slowBleedMinAge", "slowBleedMinPnl", "slowBleedMaxPnl", "hardStopPct", "hardStopBypassSuspicious", "repeatDeployCooldownEnabled", "repeatDeployCooldownTriggerCount", "repeatDeployCooldownHours", "repeatDeployCooldownMinFeeEarnedPct", "maxWavesPerToken", "maxLossesPerToken", "waveBlockHours", "postCloseReentryCooldownMin", "minSolToOpen"].includes(key)) return "mgmt";
   if (["gmgnRequireKol", "gmgnInterval", "gmgnIndicatorFilter", "gmgnIndicatorInterval", "gmgnRequireBullishSt", "gmgnRejectAtBottom", "gmgnRequireAboveSt", "gmgnMinRsi", "gmgnMaxRsi", "gmgnMinKolCount", "gmgnMinTotalFeeSol", "gmgnMinHolders", "gmgnMinVolume", "gmgnMinTokenAgeHours", "gmgnMaxTokenAgeHours", "gmgnMaxBundlerRate", "gmgnMaxTop10HolderRate", "gmgnPreferredKolNames", "gmgnPreferredKolMinHoldPct", "gmgnDumpKolNames", "gmgnDumpKolMinHoldPct", "gmgnMinMcap", "gmgnMaxMcap"].includes(key)) return "gmgn";

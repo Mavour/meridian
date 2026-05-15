@@ -53,6 +53,81 @@ function isUsableVolatility(value) {
   return n != null && n > 0;
 }
 
+function getPoolShortChange(pool) {
+  return numeric(pool?.price_5m_change ?? pool?.price_change_pct ?? pool?.pool_price_change_pct);
+}
+
+function getPoolOneHourChange(pool) {
+  return numeric(
+    pool?.price_1h_change ??
+    pool?.gmgn_price_action?.priceChangePct ??
+    pool?.gmgn_price_action?.price_1h_change,
+  );
+}
+
+export function evaluateSingleSideSolEntry(pool, options = {}) {
+  if (config.screening.singleSideSolEntryGateEnabled === false) {
+    return { pass: true, reason: "single-side SOL entry gate disabled" };
+  }
+
+  const price1h = getPoolOneHourChange(pool);
+  const price5m = getPoolShortChange(pool);
+  const feeTvl = numeric(pool?.fee_active_tvl_ratio);
+  const feeChange = numeric(pool?.fee_change_pct);
+  const volumeChange = numeric(pool?.volume_change_pct);
+  const trend = String(pool?.price_trend || "").toLowerCase();
+  const isGmgn = !!pool?.gmgn;
+
+  const min1h = numeric(options.min1hChange ?? config.screening.singleSideSolMin1hChange) ?? 0;
+  const max5mPullback = numeric(options.max5mPullback ?? config.screening.singleSideSolMax5mPullback) ?? -2;
+  const weakTrendMax1h = numeric(options.weakTrendMax1h ?? config.screening.singleSideSolWeakTrendMax1h) ?? 3;
+  const maxWeakBounce5m = numeric(options.maxWeakBounce5m ?? config.screening.singleSideSolMaxWeakBounce5m) ?? 8;
+  const minWeakFeeTvl = numeric(options.minWeakFeeTvl ?? config.screening.singleSideSolMinFeeActiveTvlRatio) ?? 0.3;
+
+  if (price1h == null && !isGmgn) {
+    return { pass: false, reason: "single-side SOL timing reject: missing 1h price change" };
+  }
+  if (price5m == null) {
+    return { pass: false, reason: "single-side SOL timing reject: missing short-term price change" };
+  }
+  if (price1h != null && price1h < min1h) {
+    return { pass: false, reason: `single-side SOL timing reject: 1h ${price1h}% < ${min1h}% (no reclaim yet)` };
+  }
+  if (price5m < max5mPullback) {
+    return { pass: false, reason: `single-side SOL timing reject: short-term ${price5m}% < ${max5mPullback}% (still falling)` };
+  }
+  if (price1h != null && price1h < weakTrendMax1h && price5m > maxWeakBounce5m) {
+    return { pass: false, reason: `single-side SOL timing reject: weak 1h ${price1h}% with hot bounce ${price5m}% (dead-cat/lower-high risk)` };
+  }
+  if (price1h != null && price1h < weakTrendMax1h && price5m <= 0) {
+    return { pass: false, reason: `single-side SOL timing reject: weak 1h ${price1h}% and short-term ${price5m}% not positive` };
+  }
+  if (price1h != null && trend.includes("down") && price1h < weakTrendMax1h) {
+    return { pass: false, reason: `single-side SOL timing reject: price trend ${trend} with weak 1h ${price1h}%` };
+  }
+  if (
+    (price1h == null || price1h <= weakTrendMax1h) &&
+    price5m <= 1 &&
+    feeTvl != null &&
+    feeTvl < minWeakFeeTvl
+  ) {
+    return { pass: false, reason: `single-side SOL timing reject: weak trend with fee/TVL ${feeTvl} < ${minWeakFeeTvl}` };
+  }
+  if ((price1h == null || price1h <= weakTrendMax1h) && price5m <= 1 && feeChange != null && feeChange < -20) {
+    return { pass: false, reason: `single-side SOL timing reject: weak trend and fees fading ${feeChange}%` };
+  }
+  if ((price1h == null || price1h <= weakTrendMax1h) && price5m <= 1 && volumeChange != null && volumeChange < -30) {
+    return { pass: false, reason: `single-side SOL timing reject: weak trend and volume fading ${volumeChange}%` };
+  }
+
+  return {
+    pass: true,
+    reason: `single-side SOL timing ok: 1h=${price1h ?? "n/a"}%, short=${price5m}%`,
+    price_1h_change: price1h,
+    price_5m_change: price5m,
+  };
+}
+
 function includesCaseInsensitive(values, value) {
   if (!Array.isArray(values) || values.length === 0 || !value) return false;
   const needle = String(value).toLowerCase();
@@ -656,6 +731,13 @@ export async function getTopCandidates({ limit = 10 } = {}) {
         pushFilteredReason(filteredOut, p, `deep dump ${price1h}% in 1h`);
         return false;
       }
+      const singleSideEntry = evaluateSingleSideSolEntry(p);
+      p.single_side_entry = singleSideEntry;
+      if (!singleSideEntry.pass) {
+        log("screening", `Filtered ${p.name}: ${singleSideEntry.reason}`);
+        pushFilteredReason(filteredOut, p, singleSideEntry.reason);
+        return false;
+      }
       return true;
     })
     .sort((a, b) => scoreCandidate(b) - scoreCandidate(a))
@@ -954,6 +1036,7 @@ function condensePool(p) {
     price_1h_change: fix(p.price_1h_change, 1),
     price_change_pct: fix(p.pool_price_change_pct, 1), // legacy alias
     price_trend: p.price_trend,
+    single_side_entry: p.single_side_entry ?? null,
     min_price: p.min_price,
     max_price: p.max_price,
 

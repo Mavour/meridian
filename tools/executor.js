@@ -1,4 +1,4 @@
-import { discoverPools, getPoolDetail, getTopCandidates } from "./screening.js";
+import { discoverPools, evaluateSingleSideSolEntry, getPoolDetail, getTopCandidates } from "./screening.js";
 import {
   getActiveBin,
   deployPosition,
@@ -206,6 +206,41 @@ async function validateDeployPoolThresholds(args) {
     }
   }
   // ──────────────────────────────────────────────────────────────────────────
+
+  const deployAmountY = numberOrNull(args.amount_y ?? args.amount_sol ?? 0) ?? 0;
+  const deployAmountX = numberOrNull(args.amount_x ?? 0) ?? 0;
+  const requestedBinsAbove = numberOrNull(args.bins_above ?? 0) ?? 0;
+  const isSingleSideSolDeploy = deployAmountY > 0 && deployAmountX <= 0 && requestedBinsAbove === 0;
+  if (isSingleSideSolDeploy && config.screening.singleSideSolEntryGateEnabled !== false) {
+    let detail5m = null;
+    let detail1h = null;
+    try {
+      detail5m = await fetchFreshPoolDetail(args.pool_address, "5m");
+      detail1h = await fetchFreshPoolDetail(args.pool_address, "1h");
+    } catch (error) {
+      return {
+        pass: false,
+        reason: `Could not verify single-side SOL entry timing before deploy: ${error.message}`,
+      };
+    }
+
+    const timing = evaluateSingleSideSolEntry({
+      name: detail?.name || args.pool_name || args.pool_address,
+      pool: args.pool_address,
+      price_5m_change: detail5m?.pool_price_change_pct,
+      price_1h_change: detail1h?.pool_price_change_pct,
+      fee_active_tvl_ratio: detail?.fee_active_tvl_ratio,
+      fee_change_pct: detail5m?.fee_change_pct ?? detail?.fee_change_pct,
+      volume_change_pct: detail5m?.volume_change_pct ?? detail?.volume_change_pct,
+      price_trend: detail5m?.price_trend ?? detail?.price_trend,
+    });
+    if (!timing.pass) {
+      return {
+        pass: false,
+        reason: timing.reason,
+      };
+    }
+  }
 
   return { pass: true };
 }
@@ -496,6 +531,12 @@ const toolMap = {
       fallingKnife5mThreshold: ["screening", "fallingKnife5mThreshold"],
       fallingKnife1hThreshold: ["screening", "fallingKnife1hThreshold"],
       maxDexBoosts: ["screening", "maxDexBoosts"],
+      singleSideSolEntryGateEnabled: ["screening", "singleSideSolEntryGateEnabled"],
+      singleSideSolMin1hChange: ["screening", "singleSideSolMin1hChange"],
+      singleSideSolMax5mPullback: ["screening", "singleSideSolMax5mPullback"],
+      singleSideSolWeakTrendMax1h: ["screening", "singleSideSolWeakTrendMax1h"],
+      singleSideSolMaxWeakBounce5m: ["screening", "singleSideSolMaxWeakBounce5m"],
+      singleSideSolMinFeeActiveTvlRatio: ["screening", "singleSideSolMinFeeActiveTvlRatio"],
       // management extended
       positionSizePct: ["management", "positionSizePct"],
       outOfRangeWaitMinutes: ["management", "outOfRangeWaitMinutes"],

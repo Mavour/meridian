@@ -178,6 +178,7 @@ The strategy uses SINGLE-SIDE SOL below current price as a passive buy ladder. T
 - **HARD RULE — FALLING KNIFE**: if price_5m_change < ${config.screening.fallingKnife5mThreshold ?? -20}% AND price_1h_change < ${config.screening.fallingKnife1hThreshold ?? -25}% → SKIP. Crash instant — too dangerous.
 - **HARD RULE — DEEPENING DOWNTREND**: if price_1h_change < -5% AND price_5m_change < -3% → SKIP. No stabilization yet.
 - **HARD RULE — SLOW BLEED**: if price_1h_change < 0, price_5m_change <= 0, and fee_active_tvl_ratio is weak or fading → SKIP. Do not LP into a token drifting down without buy pressure.
+- **HARD RULE — SINGLE-SIDE SOL TIMING**: this agent is SOL-only with bins_above=0. Deploy only after reclaim/rebound confirmation. If price_1h_change < ${config.screening.singleSideSolMin1hChange ?? 0}% → SKIP. If short-term price change < ${config.screening.singleSideSolMax5mPullback ?? -2}% → SKIP. If 1h is weak but 5m is a hot bounce, treat it as dead-cat/lower-high risk and SKIP.
 - price_1h_change < -15% → SKIP (too deep).
 - fee_active_tvl_ratio < ${config.screening.minFeeActiveTvlRatio}% → SKIP (no buy pressure).
 - If ALL candidates show falling knife or slow bleed, output NO DEPLOY.
