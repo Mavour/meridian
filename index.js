@@ -259,7 +259,7 @@ function formatManagementAmount(value, { symbol = "$", precision = 4 } = {}) {
 
 function formatManagementYield(position) {
   const reported = Number(position.fee_per_tvl_24h);
-  if (Number.isFinite(reported)) return `${reported}%`;
+  if (Number.isFinite(reported) && reported > 0) return `${reported}%`;
 
   const fees = Number(position.unclaimed_fees_usd);
   const value = Number(position.total_value_usd);
