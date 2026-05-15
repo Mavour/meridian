@@ -193,7 +193,7 @@ export default function PositionCard({ pos, peakPnl = null }) {
         </span>
       </div>
 
-      <div className="position-summary-row">
+      <div className="position-summary-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
         <div className="value-card">
           <span>Value</span>
           <b>{fmtUsd(pos.total_value_usd)}</b>
@@ -206,6 +206,10 @@ export default function PositionCard({ pos, peakPnl = null }) {
           <span>Peak</span>
           <b className={peak == null ? '' : peak >= 0 ? 'positive' : 'negative'}>{peakDisplay}</b>
         </div>
+        <div className="hold-time-card">
+          <span>Hold time</span>
+          <b style={{ color: '#f59e0b' }}>{holdTime}</b>
+        </div>
       </div>
 
       <div className="price-range-block">
@@ -217,11 +221,10 @@ export default function PositionCard({ pos, peakPnl = null }) {
           <span className="price-slider-fill" />
           <i className="price-marker" style={{ left: `${markerPct}%` }} />
         </div>
-        <div className="range-meta">
-          <span>Active {fmtPrice(range.current)}</span>
-          <span>{pos.lower_bin ?? '-'} to {pos.upper_bin ?? '-'}</span>
+        <div className="range-meta" style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span>Active {fmtPrice(range.current)} {'\u00b7'} {pos.lower_bin ?? '-'} to {pos.upper_bin ?? '-'}</span>
+          <span style={{ color: downsideColor, textAlign: 'right' }}>{downsideDisplay}</span>
         </div>
-        <div className="downside-room" style={{ color: downsideColor }}>{downsideDisplay}</div>
       </div>
 
       <div className="holdings-grid">
