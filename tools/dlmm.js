@@ -1080,7 +1080,7 @@ export async function getPositionPnl({ pool_address, position_address }) {
           current_value_usd: p.total_value_usd,
           unclaimed_fee_usd: p.unclaimed_fees_usd,
           all_time_fees_usd: p.collected_fees_usd,
-          fee_per_tvl_24h: p.fee_per_tvl_24h,
+          fee_per_tvl_24h: p.fee_per_tvl_24h != null ? Math.round(p.fee_per_tvl_24h * 10000) / 10000 : null,
           in_range: (() => {
             const binOOR = isBinRangeOutOfRange(p.active_bin, p.lower_bin, p.upper_bin);
             return binOOR !== null ? !binOOR : !!p.in_range;
@@ -1110,7 +1110,7 @@ export async function getPositionPnl({ pool_address, position_address }) {
       current_value_usd: Math.round(currentValueUsd * 100) / 100,
       unclaimed_fee_usd: Math.round(unclaimedUsd * 100) / 100,
       all_time_fees_usd: Math.round(parseFloat(p.allTimeFees?.total?.usd || 0) * 100) / 100,
-      fee_per_tvl_24h:   Math.round(parseFloat(p.feePerTvl24h || 0) * 100) / 100,
+      fee_per_tvl_24h:   Math.round(parseFloat(p.feePerTvl24h || 0) * 10000) / 10000,
       in_range:    (() => {
         const binOOR = isBinRangeOutOfRange(p.poolActiveBinId, p.lowerBinId, p.upperBinId);
         return binOOR !== null ? !binOOR : !p.isOutOfRange;
@@ -1392,7 +1392,7 @@ export async function getMyPositions({ force = false, silent = false } = {}) {
             ? Math.round((parseFloat(binData.unrealizedPnl?.unclaimedFeeTokenX?.usd || 0) + parseFloat(binData.unrealizedPnl?.unclaimedFeeTokenY?.usd || 0)) * 10000) / 10000
             : null,
           fee_per_tvl_24h:    binData
-            ? Math.round(parseFloat(binData.feePerTvl24h || 0) * 100) / 100
+            ? Math.round(parseFloat(binData.feePerTvl24h || 0) * 10000) / 10000
             : null,
           age_minutes:        binData?.createdAt ? Math.floor((Date.now() - binData.createdAt * 1000) / 60000) : ageFromState,
           minutes_out_of_range: minutesOutOfRange(positionAddress),
