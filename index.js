@@ -250,6 +250,27 @@ function resolveStrategyForPool(pool, studyResult) {
   };
 }
 
+function formatManagementAmount(value, { symbol = "$", precision = 4 } = {}) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return `${symbol}?`;
+  if (symbol === "◎" && n > 0 && n < 0.0001) return `${symbol}${n.toFixed(8)}`;
+  return `${symbol}${n.toFixed(precision)}`;
+}
+
+function formatManagementYield(position) {
+  const reported = Number(position.fee_per_tvl_24h);
+  if (Number.isFinite(reported)) return `${reported}%`;
+
+  const fees = Number(position.unclaimed_fees_usd);
+  const value = Number(position.total_value_usd);
+  if (Number.isFinite(fees) && Number.isFinite(value) && value > 0) {
+    const estimated = (fees / value) * 100;
+    return `${estimated < 0.01 ? estimated.toFixed(4) : estimated.toFixed(2)}% est`;
+  }
+
+  return "?%";
+}
+
 function scheduleTrailingDropConfirmation(positionAddress) {
   if (!positionAddress || _trailingDropConfirmTimers.has(positionAddress)) return;
 
@@ -461,13 +482,15 @@ export async function runManagementCycle({ silent = false } = {}) {
     const totalValue = positionData.reduce((s, p) => s + (p.total_value_usd ?? 0), 0);
     const totalUnclaimed = positionData.reduce((s, p) => s + (p.unclaimed_fees_usd ?? 0), 0);
 
+    const cur = config.management.solMode ? "◎" : "$";
     const reportLines = positionData.map((p) => {
       const act = actionMap.get(p.position);
       const inRange = p.in_range ? "🟢 IN" : `🔴 OOR ${p.minutes_out_of_range ?? 0}m`;
-      const val = config.management.solMode ? `◎${p.total_value_usd ?? "?"}` : `$${p.total_value_usd ?? "?"}`;
-      const unclaimed = config.management.solMode ? `◎${p.unclaimed_fees_usd ?? "?"}` : `$${p.unclaimed_fees_usd ?? "?"}`;
+      const val = formatManagementAmount(p.total_value_usd, { symbol: cur, precision: 4 });
+      const unclaimed = formatManagementAmount(p.unclaimed_fees_usd, { symbol: cur, precision: 4 });
+      const yieldDisplay = formatManagementYield(p);
       const statusLabel = act.action === "INSTRUCTION" ? "HOLD (instruction)" : act.action;
-      let line = `**${p.pair}** | Age: ${p.age_minutes ?? "?"}m | Val: ${val} | Unclaimed: ${unclaimed} | PnL: ${p.pnl_pct ?? "?"}% | Yield: ${p.fee_per_tvl_24h ?? "?"}% | ${inRange} | ${statusLabel}`;
+      let line = `**${p.pair}** | Age: ${p.age_minutes ?? "?"}m | Val: ${val} | Unclaimed: ${unclaimed} | PnL: ${p.pnl_pct ?? "?"}% | Yield: ${yieldDisplay} | ${inRange} | ${statusLabel}`;
       if (p.instruction) line += `\nNote: "${p.instruction}"`;
       // Add X sentiment warning if negative
       const xs = sentimentByPosition.get(p.position);
@@ -483,9 +506,8 @@ export async function runManagementCycle({ silent = false } = {}) {
       ? needsAction.map(a => a.action === "INSTRUCTION" ? "EVAL instruction" : `${a.action}${a.reason ? ` (${a.reason})` : ""}`).join(", ")
       : "no action";
 
-    const cur = config.management.solMode ? "◎" : "$";
     mgmtReport = reportLines.join("\n\n") +
-      `\n\nSummary: 💼 ${positions.length} positions | ${cur}${totalValue.toFixed(4)} | fees: ${cur}${totalUnclaimed.toFixed(4)} | ${actionSummary}`;
+      `\n\nSummary: 💼 ${positions.length} positions | ${formatManagementAmount(totalValue, { symbol: cur, precision: 4 })} | fees: ${formatManagementAmount(totalUnclaimed, { symbol: cur, precision: 4 })} | ${actionSummary}`;
 
     // ── Call LLM only if action needed ──────────────────────────────
     const actionPositions = positionData.filter(p => {
