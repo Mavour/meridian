@@ -408,6 +408,9 @@ function condenseGmgnCandidate({ token, pool, poolDetail, security, info, infoAn
     dev: info.dev?.creator_address || null,
     price: num(info.price || token.price),
     price_5m_change: num(token.price_change_percent5m ?? token.price_change_percent),
+    price_1h_change: num(token.price_change_percent1h ?? token.price_change_percent1H),
+    price_6h_change: num(token.price_change_percent6h ?? token.price_change_percent6H),
+    price_24h_change: num(token.price_change_percent24h ?? token.price_change_percent24H),
     price_change_pct: num(token.price_change_percent5m ?? token.price_change_percent), // legacy alias
     volume: num(token.volume ?? 0),
     swap_count: token.swaps ?? null,

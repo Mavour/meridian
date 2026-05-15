@@ -214,9 +214,15 @@ async function validateDeployPoolThresholds(args) {
   if (isSingleSideSolDeploy && config.screening.singleSideSolEntryGateEnabled !== false) {
     let detail5m = null;
     let detail1h = null;
+    let detail6h = null;
+    let detail24h = null;
     try {
-      detail5m = await fetchFreshPoolDetail(args.pool_address, "5m");
-      detail1h = await fetchFreshPoolDetail(args.pool_address, "1h");
+      [detail5m, detail1h, detail6h, detail24h] = await Promise.all([
+        fetchFreshPoolDetail(args.pool_address, "5m"),
+        fetchFreshPoolDetail(args.pool_address, "1h"),
+        fetchFreshPoolDetail(args.pool_address, "6h"),
+        fetchFreshPoolDetail(args.pool_address, "24h"),
+      ]);
     } catch (error) {
       return {
         pass: false,
@@ -229,6 +235,8 @@ async function validateDeployPoolThresholds(args) {
       pool: args.pool_address,
       price_5m_change: detail5m?.pool_price_change_pct,
       price_1h_change: detail1h?.pool_price_change_pct,
+      price_6h_change: detail6h?.pool_price_change_pct,
+      price_24h_change: detail24h?.pool_price_change_pct,
       fee_active_tvl_ratio: detail?.fee_active_tvl_ratio,
       fee_change_pct: detail5m?.fee_change_pct ?? detail?.fee_change_pct,
       volume_change_pct: detail5m?.volume_change_pct ?? detail?.volume_change_pct,
@@ -533,6 +541,7 @@ const toolMap = {
       maxDexBoosts: ["screening", "maxDexBoosts"],
       singleSideSolEntryGateEnabled: ["screening", "singleSideSolEntryGateEnabled"],
       singleSideSolMin1hChange: ["screening", "singleSideSolMin1hChange"],
+      singleSideSolMinRetest1hChange: ["screening", "singleSideSolMinRetest1hChange"],
       singleSideSolMax5mPullback: ["screening", "singleSideSolMax5mPullback"],
       singleSideSolWeakTrendMax1h: ["screening", "singleSideSolWeakTrendMax1h"],
       singleSideSolMaxWeakBounce5m: ["screening", "singleSideSolMaxWeakBounce5m"],

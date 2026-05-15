@@ -178,7 +178,8 @@ The strategy uses SINGLE-SIDE SOL below current price as a passive buy ladder. E
 - **HARD RULE — FALLING KNIFE**: if price_5m_change < ${config.screening.fallingKnife5mThreshold ?? -20}% AND price_1h_change < ${config.screening.fallingKnife1hThreshold ?? -25}% → SKIP. Crash instant — too dangerous.
 - **HARD RULE — DEEPENING DOWNTREND**: if price_1h_change < -5% AND price_5m_change < -3% → SKIP. No stabilization yet.
 - **HARD RULE — SLOW BLEED**: if price_1h_change < 0, price_5m_change <= 0, and fee_active_tvl_ratio is weak or fading → SKIP. Do not LP into a token drifting down without buy pressure.
-- **HARD RULE — SINGLE-SIDE SOL TIMING**: this agent is SOL-only with bins_above=0. Deploy only after reclaim/rebound confirmation AND a support retest. If price_1h_change < ${config.screening.singleSideSolMin1hChange ?? 0}% → SKIP. If short-term price change < ${config.screening.singleSideSolMax5mPullback ?? -2}% → SKIP. If short-term price change > ${config.screening.singleSideSolMaxWeakBounce5m ?? 3}% → SKIP because range will likely go OOR right/above immediately.
+- **SMART-WALLET RETEST SETUP**: 24h red + 6h green + 1h mild red + 5m small green is VALID. It means macro cooled down, mid-term demand returned, and the latest pullback is starting to bounce.
+- **HARD RULE — SINGLE-SIDE SOL TIMING**: this agent is SOL-only with bins_above=0. Deploy only after reclaim/rebound confirmation AND a support retest. If price_1h_change < ${config.screening.singleSideSolMin1hChange ?? 0}% → SKIP unless smart-wallet retest is present: price_24h_change < 0, price_6h_change > 0, price_1h_change >= ${config.screening.singleSideSolMinRetest1hChange ?? -5}%, and price_5m_change is between 0% and ${config.screening.singleSideSolMaxWeakBounce5m ?? 3}%. If short-term price change < ${config.screening.singleSideSolMax5mPullback ?? -2}% → SKIP. If short-term price change > ${config.screening.singleSideSolMaxWeakBounce5m ?? 3}% → SKIP because range will likely go OOR right/above immediately.
 - price_1h_change < -15% → SKIP (too deep).
 - fee_active_tvl_ratio < ${config.screening.minFeeActiveTvlRatio}% → SKIP (no buy pressure).
 - If ALL candidates show falling knife or slow bleed, output NO DEPLOY.
@@ -200,7 +201,7 @@ DEPLOY RULES:
 REPORT FORMAT (keep it SHORT — copy the exact values from the candidate data above, do NOT invent numbers):
 - Candidate: [name]
 - Pool Memory: [exact data from tool]
-- Timing: 1h=[paste price_1h_change from candidate metrics] | 5m=[paste price_5m_change from candidate metrics] | fee/TVL=[paste fee_active_tvl_ratio from candidate metrics]
+- Timing: 24h=[paste price_24h_change] | 6h=[paste price_6h_change] | 1h=[paste price_1h_change] | 5m=[paste price_5m_change] | fee/TVL=[paste fee_active_tvl_ratio]
 - Decision: DEPLOY / NO DEPLOY
 - Reason (1 sentence max): [specific factual reason]
 

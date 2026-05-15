@@ -854,6 +854,8 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
           activeBin != null ? `  active_bin: ${activeBin}` : null,
           pool.price_5m_change != null ? `  price_5m_change: ${pool.price_5m_change >= 0 ? "+" : ""}${pool.price_5m_change}%` : null,
           pool.price_1h_change != null ? `  price_1h_change: ${pool.price_1h_change >= 0 ? "+" : ""}${pool.price_1h_change}%` : null,
+          pool.price_6h_change != null ? `  price_6h_change: ${pool.price_6h_change >= 0 ? "+" : ""}${pool.price_6h_change}%` : null,
+          pool.price_24h_change != null ? `  price_24h_change: ${pool.price_24h_change >= 0 ? "+" : ""}${pool.price_24h_change}%` : null,
           pool.single_side_entry?.reason ? `  single_side_sol_entry: ${pool.single_side_entry.reason}` : null,
           priceChange != null ? `  jup_1h: price${priceChange >= 0 ? "+" : ""}${priceChange}%, net_buyers=${netBuyers ?? "?"}` : null,
           n?.narrative ? `  narrative_untrusted: ${sanitizeUntrustedPromptText(n.narrative, 500)}` : `  narrative_untrusted: none`,
@@ -1715,7 +1717,7 @@ function normalizeMenuValue(key, raw) {
 
 function resolveSettingPage(key) {
   if (["deployAmountSol", "gasReserve", "maxPositions", "maxDeployAmount", "takeProfitPct", "stopLossPct", "trailingTakeProfit", "trailingTriggerPct", "trailingDropPct", "positionSizePct", "managementIntervalMin", "screeningIntervalMin", "solMode"].includes(key)) return "quick";
-  if (["minTvl", "maxTvl", "minVolume", "minOrganic", "minHolders", "minMcap", "maxMcap", "minBinStep", "maxBinStep", "timeframe", "category", "minFeeActiveTvlRatio", "minTokenFeesSol", "maxBotHoldersPct", "maxTop10Pct", "maxBundlePct", "avoidPvpSymbols", "blockPvpSymbols", "minTokenAgeHours", "maxTokenAgeHours", "athFilterPct", "maxVolatility", "maxDexBoosts", "blockedLaunchpads", "allowedLaunchpads", "screeningSource", "blockedSymbols", "cgBlockRank", "postCloseReentryCooldownMin", "fallingKnife5mThreshold", "fallingKnife1hThreshold", "singleSideSolEntryGateEnabled", "singleSideSolMin1hChange", "singleSideSolMax5mPullback", "singleSideSolWeakTrendMax1h", "singleSideSolMaxWeakBounce5m", "singleSideSolMinFeeActiveTvlRatio"].includes(key)) return "screen";
+  if (["minTvl", "maxTvl", "minVolume", "minOrganic", "minHolders", "minMcap", "maxMcap", "minBinStep", "maxBinStep", "timeframe", "category", "minFeeActiveTvlRatio", "minTokenFeesSol", "maxBotHoldersPct", "maxTop10Pct", "maxBundlePct", "avoidPvpSymbols", "blockPvpSymbols", "minTokenAgeHours", "maxTokenAgeHours", "athFilterPct", "maxVolatility", "maxDexBoosts", "blockedLaunchpads", "allowedLaunchpads", "screeningSource", "blockedSymbols", "cgBlockRank", "postCloseReentryCooldownMin", "fallingKnife5mThreshold", "fallingKnife1hThreshold", "singleSideSolEntryGateEnabled", "singleSideSolMin1hChange", "singleSideSolMinRetest1hChange", "singleSideSolMax5mPullback", "singleSideSolWeakTrendMax1h", "singleSideSolMaxWeakBounce5m", "singleSideSolMinFeeActiveTvlRatio"].includes(key)) return "screen";
   if (["strategy", "minBinsBelow", "maxBinsBelow", "dynamicStrategyEnabled", "spotMinPrice1hChange", "spotMinVolatility", "spotMinPrice5mFloor", "spotMinPrice30mFloor", "defaultBinsBelow"].includes(key)) return "strategy";
   if (["outOfRangeWaitMinutes", "outOfRangeBinsToClose", "minFeePerTvl24h", "minAgeBeforeYieldCheck", "minClaimAmount", "autoSwapAfterClaim", "slowBleedMinAge", "slowBleedMinPnl", "slowBleedMaxPnl", "hardStopPct", "hardStopBypassSuspicious", "repeatDeployCooldownEnabled", "repeatDeployCooldownTriggerCount", "repeatDeployCooldownHours", "repeatDeployCooldownMinFeeEarnedPct", "maxWavesPerToken", "maxLossesPerToken", "waveBlockHours", "postCloseReentryCooldownMin", "minSolToOpen"].includes(key)) return "mgmt";
   if (["gmgnRequireKol", "gmgnInterval", "gmgnIndicatorFilter", "gmgnIndicatorInterval", "gmgnRequireBullishSt", "gmgnRejectAtBottom", "gmgnRequireAboveSt", "gmgnMinRsi", "gmgnMaxRsi", "gmgnMinKolCount", "gmgnMinTotalFeeSol", "gmgnMinHolders", "gmgnMinVolume", "gmgnMinTokenAgeHours", "gmgnMaxTokenAgeHours", "gmgnMaxBundlerRate", "gmgnMaxTop10HolderRate", "gmgnPreferredKolNames", "gmgnPreferredKolMinHoldPct", "gmgnDumpKolNames", "gmgnDumpKolMinHoldPct", "gmgnMinMcap", "gmgnMaxMcap"].includes(key)) return "gmgn";
@@ -1769,6 +1771,7 @@ async function applySettingsMenuCallback(msg) {
       athFilterPct: "e.g. -20",
       maxVolatility: "e.g. 7",
       maxDexBoosts: "e.g. 100",
+      singleSideSolMinRetest1hChange: "e.g. -5",
       minBinsBelow: "e.g. 35",
       maxBinsBelow: "e.g. 69",
       defaultBinsBelow: "e.g. 45",

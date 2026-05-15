@@ -65,6 +65,14 @@ function getPoolOneHourChange(pool) {
   );
 }
 
+function getPoolSixHourChange(pool) {
+  return numeric(pool?.price_6h_change ?? pool?.gmgn_price_action?.price_6h_change);
+}
+
+function getPoolTwentyFourHourChange(pool) {
+  return numeric(pool?.price_24h_change ?? pool?.gmgn_price_action?.price_24h_change);
+}
+
 export function evaluateSingleSideSolEntry(pool, options = {}) {
   if (config.screening.singleSideSolEntryGateEnabled === false) {
     return { pass: true, reason: "single-side SOL entry gate disabled" };
@@ -72,6 +80,8 @@ export function evaluateSingleSideSolEntry(pool, options = {}) {
 
   const price1h = getPoolOneHourChange(pool);
   const price5m = getPoolShortChange(pool);
+  const price6h = getPoolSixHourChange(pool);
+  const price24h = getPoolTwentyFourHourChange(pool);
   const feeTvl = numeric(pool?.fee_active_tvl_ratio);
   const feeChange = numeric(pool?.fee_change_pct);
   const volumeChange = numeric(pool?.volume_change_pct);
@@ -79,10 +89,22 @@ export function evaluateSingleSideSolEntry(pool, options = {}) {
   const isGmgn = !!pool?.gmgn;
 
   const min1h = numeric(options.min1hChange ?? config.screening.singleSideSolMin1hChange) ?? 0;
+  const minRetest1h = numeric(options.minRetest1hChange ?? config.screening.singleSideSolMinRetest1hChange) ?? -5;
   const max5mPullback = numeric(options.max5mPullback ?? config.screening.singleSideSolMax5mPullback) ?? -2;
   const weakTrendMax1h = numeric(options.weakTrendMax1h ?? config.screening.singleSideSolWeakTrendMax1h) ?? 3;
   const maxWeakBounce5m = numeric(options.maxWeakBounce5m ?? config.screening.singleSideSolMaxWeakBounce5m) ?? 8;
   const minWeakFeeTvl = numeric(options.minWeakFeeTvl ?? config.screening.singleSideSolMinFeeActiveTvlRatio) ?? 0.3;
+
+  const isSmartWalletRetest =
+    price24h != null &&
+    price6h != null &&
+    price1h != null &&
+    price24h < 0 &&
+    price6h > 0 &&
+    price1h >= minRetest1h &&
+    price1h < min1h &&
+    price5m > 0 &&
+    price5m <= maxWeakBounce5m;
 
   if (price1h == null && !isGmgn) {
     return { pass: false, reason: "single-side SOL timing reject: missing 1h price change" };
@@ -90,7 +112,7 @@ export function evaluateSingleSideSolEntry(pool, options = {}) {
   if (price5m == null) {
     return { pass: false, reason: "single-side SOL timing reject: missing short-term price change" };
   }
-  if (price1h != null && price1h < min1h) {
+  if (price1h != null && price1h < min1h && !isSmartWalletRetest) {
     return { pass: false, reason: `single-side SOL timing reject: 1h ${price1h}% < ${min1h}% (no reclaim yet)` };
   }
   if (price5m < max5mPullback) {
@@ -125,8 +147,12 @@ export function evaluateSingleSideSolEntry(pool, options = {}) {
 
   return {
     pass: true,
-    reason: `single-side SOL timing ok: 1h=${price1h ?? "n/a"}%, short=${price5m}%`,
+    reason: isSmartWalletRetest
+      ? `single-side SOL timing ok: smart-wallet retest 24h=${price24h}%, 6h=${price6h}%, 1h=${price1h}%, short=${price5m}%`
+      : `single-side SOL timing ok: 1h=${price1h ?? "n/a"}%, short=${price5m}%`,
     price_1h_change: price1h,
+    price_6h_change: price6h,
+    price_24h_change: price24h,
     price_5m_change: price5m,
   };
 }
@@ -500,28 +526,35 @@ export async function discoverPools({
 
   rawPools = await applyVolatilityTimeframe(rawPools, s.timeframe);
 
-  // Fetch 1h price changes in bulk (single API call) and merge into rawPools
-  try {
-    const data1h = await fetchPoolDiscoveryPage({
-      page_size,
-      filters,
-      timeframe: "1h",
-      category: s.category,
-    });
-    const pools1h = Array.isArray(data1h.data) ? data1h.data : [];
-    const priceChange1hByPool = new Map();
-    for (const p of pools1h) {
-      const addr = p?.pool_address;
-      const pct = numeric(p?.pool_price_change_pct);
-      if (addr != null && pct != null) priceChange1hByPool.set(addr, pct);
-    }
-    for (const pool of rawPools) {
-      if (pool?.pool_address && priceChange1hByPool.has(pool.pool_address)) {
-        pool.price_1h_change = priceChange1hByPool.get(pool.pool_address);
+  // Fetch multi-timeframe price changes in bulk and merge into rawPools.
+  // 5m is the active screen window; 1h/6h/24h describe retest context.
+  for (const [timeframe, field] of [
+    ["1h", "price_1h_change"],
+    ["6h", "price_6h_change"],
+    ["24h", "price_24h_change"],
+  ]) {
+    try {
+      const dataTf = await fetchPoolDiscoveryPage({
+        page_size,
+        filters,
+        timeframe,
+        category: s.category,
+      });
+      const poolsTf = Array.isArray(dataTf.data) ? dataTf.data : [];
+      const priceChangeByPool = new Map();
+      for (const p of poolsTf) {
+        const addr = p?.pool_address;
+        const pct = numeric(p?.pool_price_change_pct);
+        if (addr != null && pct != null) priceChangeByPool.set(addr, pct);
       }
+      for (const pool of rawPools) {
+        if (pool?.pool_address && priceChangeByPool.has(pool.pool_address)) {
+          pool[field] = priceChangeByPool.get(pool.pool_address);
+        }
+      }
+    } catch (err) {
+      log("screening", `${timeframe} price change bulk fetch failed: ${err.message}`);
     }
-  } catch (err) {
-    log("screening", `1h price change bulk fetch failed: ${err.message}`);
   }
 
   await enrichDiscordSignalLaunchpads(rawPools);
@@ -1037,6 +1070,8 @@ function condensePool(p) {
     price: p.pool_price,
     price_5m_change: fix(p.pool_price_change_pct, 1),
     price_1h_change: fix(p.price_1h_change, 1),
+    price_6h_change: fix(p.price_6h_change, 1),
+    price_24h_change: fix(p.price_24h_change, 1),
     price_change_pct: fix(p.pool_price_change_pct, 1), // legacy alias
     price_trend: p.price_trend,
     single_side_entry: p.single_side_entry ?? null,
