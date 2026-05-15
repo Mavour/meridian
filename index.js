@@ -441,12 +441,17 @@ export async function runManagementCycle({ silent = false } = {}) {
     }
 
     // ── Deterministic rule checks (no LLM) ──────────────────────────
-    // Close actions are handled by the PnL poller instantly — management cycle only handles CLAIM / INSTRUCTION / STAY
     const actionMap = new Map();
     for (const p of positionData) {
       // Instruction-set — pass to LLM, can't parse in JS
       if (p.instruction) {
         actionMap.set(p.position, { action: "INSTRUCTION" });
+        continue;
+      }
+
+      const closeRule = getDeterministicCloseRule(p, config.management);
+      if (closeRule) {
+        actionMap.set(p.position, closeRule);
         continue;
       }
 
@@ -536,6 +541,7 @@ MANAGEMENT ACTION REQUIRED — ${actionPositions.length} position(s)
 ${actionBlocks}
 
 RULES:
+- CLOSE: call close_position with position address and reason
 - CLAIM: call claim_fees with position address
 - INSTRUCTION: evaluate the instruction condition. If met → close_position. If not → HOLD, do nothing.
 
@@ -1210,7 +1216,7 @@ function getDeterministicCloseRule(position, managementConfig) {
   if (
     position.fee_per_tvl_24h != null &&
     position.fee_per_tvl_24h < managementConfig.minFeePerTvl24h &&
-    (position.age_minutes ?? 0) >= 60
+    (position.age_minutes ?? 0) >= (managementConfig.minAgeBeforeYieldCheck ?? 60)
   ) {
     return { action: "CLOSE", rule: 5, reason: "low yield" };
   }
