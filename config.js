@@ -118,7 +118,7 @@ export const config = {
     fallingKnife1hThreshold: u.fallingKnife1hThreshold ?? -25,
     maxVolatility:       u.maxVolatility       ?? 7,   // max pool volatility (filters high-vol pools)
     maxDexBoosts:       u.maxDexBoosts       ?? null, // max DexScreener active boosts (null = no filter)
-    singleSideSolEntryGateEnabled: u.singleSideSolEntryGateEnabled ?? true,
+    singleSideSolEntryGateEnabled: u.singleSideSolEntryGateEnabled ?? false,
     singleSideSolMin1hChange: u.singleSideSolMin1hChange ?? 0,
     singleSideSolMinRetest1hChange: u.singleSideSolMinRetest1hChange ?? -7,
     singleSideSolMaxRetest1hChange: u.singleSideSolMaxRetest1hChange ?? 6,

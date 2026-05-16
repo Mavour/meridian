@@ -909,7 +909,7 @@ STEPS:
    strategy = use the candidate's recommended_strategy (spot or bid_ask). Override ONLY with strong justification.
    bins_below = round(${config.strategy.minBinsBelow} + (candidate volatility/4)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}].
    pass deploy_position.volatility = the candidate volatility value.
-   pass candidate timing fields too: price_5m_change, price_1h_change, price_6h_change, price_24h_change, fee_change_pct, volume_change_pct, price_trend.
+   pass candidate timing fields too: price_5m_change, price_1h_change, fee_change_pct, volume_change_pct, price_trend.
    bins_above = 0. Single-side SOL only: set amount_y, keep amount_x = 0.
 3. Report in this exact format (no tables, no extra sections):
    🚀 DEPLOYED
@@ -1793,13 +1793,6 @@ const SETTINGS_PAGES = [
     label: "Single SOL",
     fields: [
       { key: "singleSideSolEntryGateEnabled", label: "Entry gate", type: "toggle" },
-      { key: "singleSideSolMin1hChange", label: "Min 1h %", digits: 1 },
-      { key: "singleSideSolMax5mPullback", label: "Max 5m pullback", digits: 1 },
-      { key: "singleSideSolWeakTrendMax1h", label: "Weak trend max 1h", digits: 1 },
-      { key: "singleSideSolMinRetest1hChange", label: "Retest min 1h", digits: 1 },
-      { key: "singleSideSolMaxRetest1hChange", label: "Retest max 1h", digits: 1 },
-      { key: "singleSideSolMaxWeakBounce5m", label: "Max weak bounce 5m", digits: 1 },
-      { key: "singleSideSolMinFeeActiveTvlRatio", label: "Min fee/aTVL", digits: 2 },
     ],
   },
   {
@@ -2215,8 +2208,6 @@ async function deployLatestCandidate(index) {
     initial_value_usd: candidate.tvl ?? candidate.active_tvl ?? null,
     price_5m_change: candidate.price_5m_change ?? candidate.price_change_pct,
     price_1h_change: candidate.price_1h_change,
-    price_6h_change: candidate.price_6h_change,
-    price_24h_change: candidate.price_24h_change,
     fee_change_pct: candidate.fee_change_pct,
     volume_change_pct: candidate.volume_change_pct,
     price_trend: candidate.price_trend,

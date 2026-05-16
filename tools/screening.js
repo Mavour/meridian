@@ -572,13 +572,17 @@ export async function discoverPools({
 
   rawPools = await applyVolatilityTimeframe(rawPools, s.timeframe);
 
-  // Fetch multi-timeframe price changes in bulk and merge into rawPools.
-  // 5m is the active screen window; 1h/6h/24h describe retest context.
-  for (const [timeframe, field] of [
+  // Fetch only the timing fields still needed by enabled gates.
+  // 5m is already in the active screen window; 1h feeds dump protection.
+  // 6h/24h are only needed by the optional single-side retest gate.
+  const timingFrames = [
     ["1h", "price_1h_change"],
-    ["6h", "price_6h_change"],
-    ["24h", "price_24h_change"],
-  ]) {
+    ...(s.singleSideSolEntryGateEnabled === false ? [] : [
+      ["6h", "price_6h_change"],
+      ["24h", "price_24h_change"],
+    ]),
+  ];
+  for (const [timeframe, field] of timingFrames) {
     try {
       const dataTf = await fetchPoolDiscoveryPage({
         page_size,

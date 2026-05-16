@@ -193,9 +193,7 @@ WARNING: This executes a real on-chain transaction. Check DRY_RUN mode.`,
           organic_score: { type: "number", description: "Base token organic score at deploy time" },
           initial_value_usd: { type: "number", description: "Estimated USD value being deployed" },
           price_5m_change: { type: "number", description: "Candidate 5m pool price change percentage from get_top_candidates; used as timing fallback if fresh Pool Discovery detail fails." },
-          price_1h_change: { type: "number", description: "Candidate 1h pool price change percentage from get_top_candidates; used by the single-side SOL timing gate." },
-          price_6h_change: { type: "number", description: "Candidate 6h pool price change percentage from get_top_candidates; used by the smart-wallet retest timing gate." },
-          price_24h_change: { type: "number", description: "Candidate 24h pool price change percentage from get_top_candidates; used by the smart-wallet retest timing gate." },
+          price_1h_change: { type: "number", description: "Candidate 1h pool price change percentage from get_top_candidates; used by dump/deep-downtrend protection." },
           fee_change_pct: { type: "number", description: "Candidate fee change percentage; used as timing fallback if fresh Pool Discovery detail fails." },
           volume_change_pct: { type: "number", description: "Candidate volume change percentage; used as timing fallback if fresh Pool Discovery detail fails." },
           price_trend: { type: "string", description: "Candidate price trend label; used as timing fallback if fresh Pool Discovery detail fails." },
@@ -392,7 +390,7 @@ WARNING: This executes a real on-chain transaction.`,
 Changes persist to user-config.json and take effect immediately — no restart needed.
 
 VALID KEYS (use EXACTLY these key names, nothing else):
-Screening: screeningSource, minFeeActiveTvlRatio, minTvl, maxTvl, minVolume, minOrganic, minQuoteOrganic, minHolders, minMcap, maxMcap, minBinStep, maxBinStep, timeframe, category, minTokenFeesSol, excludeHighSupplyConcentration, allowedLaunchpads, blockedLaunchpads, singleSideSolEntryGateEnabled, singleSideSolMin1hChange, singleSideSolMinRetest1hChange, singleSideSolMaxRetest1hChange, singleSideSolMax5mPullback
+Screening: screeningSource, minFeeActiveTvlRatio, minTvl, maxTvl, minVolume, minOrganic, minQuoteOrganic, minHolders, minMcap, maxMcap, minBinStep, maxBinStep, timeframe, category, minTokenFeesSol, excludeHighSupplyConcentration, allowedLaunchpads, blockedLaunchpads, singleSideSolEntryGateEnabled
 GMGN (persisted to gmgn-config.json): gmgnApiKey, gmgnBaseUrl, gmgnInterval, gmgnOrderBy, gmgnDirection, gmgnLimit, gmgnEnrichLimit, gmgnRequestDelayMs, gmgnMaxRetries, gmgnFilters, gmgnPlatforms, gmgnMinMcap, gmgnMaxMcap, gmgnMinVolume, gmgnMinHolders, gmgnMinTokenAgeHours, gmgnMaxTokenAgeHours, gmgnAthFilterPct, gmgnMaxBundlerRate, gmgnMaxFreshWalletRate, gmgnMaxDevTeamHoldRate, gmgnPreferredKolNames, gmgnPreferredKolMinHoldPct, gmgnRequireKol, gmgnMinKolCount, gmgnMinSmartDegenCount, gmgnMinTotalFeeSol
 Management: minClaimAmount, outOfRangeBinsToClose, outOfRangeWaitMinutes, oorCooldownTriggerCount, oorCooldownHours, repeatDeployCooldownEnabled, repeatDeployCooldownTriggerCount, repeatDeployCooldownHours, repeatDeployCooldownScope, repeatDeployCooldownMinFeeEarnedPct, minVolumeToRebalance, stopLossPct, takeProfitPct, minSolToOpen, deployAmountSol, gasReserve, positionSizePct, whaleGuardEnabled, whaleGuardSource, whaleGuardWindowMinutes, whaleGuardCooldownMinutes, whaleGuardMinNetWithdrawUsd, whaleGuardMinQuoteDrainUsd, whaleGuardMinTvlDropUsd, whaleGuardMinLiquidityDropPct, whaleGuardRequireBaseIncreaseForQuoteDrain
 Risk: maxPositions, maxDeployAmount
