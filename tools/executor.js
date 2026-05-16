@@ -21,6 +21,7 @@ import { addToBlacklist, removeFromBlacklist, listBlacklist } from "../token-bla
 import { blockDev, unblockDev, listBlockedDevs } from "../dev-blocklist.js";
 import { addSmartWallet, removeSmartWallet, listSmartWallets, checkSmartWalletsOnPool } from "../smart-wallets.js";
 import { getTokenInfo, getTokenHolders, getTokenNarrative } from "./token.js";
+import { fetchGmgnPriceAction } from "./gmgn.js";
 import { config, reloadScreeningThresholds, MIN_SAFE_BINS_BELOW } from "../config.js";
 import { getRecentDecisions } from "../decision-log.js";
 import fs from "fs";
@@ -248,15 +249,27 @@ async function validateDeployPoolThresholds(args) {
       log("executor_warn", `Pool timing refresh partial failure for ${args.pool_address}: ${timingErrors.join("; ")}`);
     }
 
+    const gmgnPriceAction = args.base_mint
+      ? await fetchGmgnPriceAction(args.base_mint).catch(() => null)
+      : null;
+
     const fallbackFrames = [];
-    const price5m = poolDetailPriceChange(timingDetails.get("5m")) ?? numberOrNull(args.price_5m_change ?? args.price_change_pct);
-    const price1h = poolDetailPriceChange(timingDetails.get("1h")) ?? numberOrNull(args.price_1h_change);
-    const price6h = poolDetailPriceChange(timingDetails.get("6h")) ?? numberOrNull(args.price_6h_change);
-    const price24h = poolDetailPriceChange(timingDetails.get("24h")) ?? numberOrNull(args.price_24h_change);
-    if (!timingDetails.has("5m") && price5m != null) fallbackFrames.push("5m");
-    if (!timingDetails.has("1h") && price1h != null) fallbackFrames.push("1h");
-    if (!timingDetails.has("6h") && price6h != null) fallbackFrames.push("6h");
-    if (!timingDetails.has("24h") && price24h != null) fallbackFrames.push("24h");
+    const gmgnFrames = [];
+    const price5m = numberOrNull(gmgnPriceAction?.price_5m_change) ?? poolDetailPriceChange(timingDetails.get("5m")) ?? numberOrNull(args.price_5m_change ?? args.price_change_pct);
+    const price1h = numberOrNull(gmgnPriceAction?.price_1h_change) ?? poolDetailPriceChange(timingDetails.get("1h")) ?? numberOrNull(args.price_1h_change);
+    const price6h = numberOrNull(gmgnPriceAction?.price_6h_change) ?? poolDetailPriceChange(timingDetails.get("6h")) ?? numberOrNull(args.price_6h_change);
+    const price24h = numberOrNull(gmgnPriceAction?.price_24h_change) ?? poolDetailPriceChange(timingDetails.get("24h")) ?? numberOrNull(args.price_24h_change);
+    if (gmgnPriceAction?.price_5m_change != null) gmgnFrames.push("5m");
+    else if (!timingDetails.has("5m") && price5m != null) fallbackFrames.push("5m");
+    if (gmgnPriceAction?.price_1h_change != null) gmgnFrames.push("1h");
+    else if (!timingDetails.has("1h") && price1h != null) fallbackFrames.push("1h");
+    if (gmgnPriceAction?.price_6h_change != null) gmgnFrames.push("6h");
+    else if (!timingDetails.has("6h") && price6h != null) fallbackFrames.push("6h");
+    if (gmgnPriceAction?.price_24h_change != null) gmgnFrames.push("24h");
+    else if (!timingDetails.has("24h") && price24h != null) fallbackFrames.push("24h");
+    if (gmgnFrames.length > 0) {
+      log("executor", `Using GMGN timing for ${args.pool_address}: ${gmgnFrames.join(", ")}`);
+    }
 
     const timing = evaluateSingleSideSolEntry({
       name: timingDetails.get("5m")?.name || detail?.name || args.pool_name || args.pool_address,

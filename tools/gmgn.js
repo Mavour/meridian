@@ -120,6 +120,62 @@ function optionalNum(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function pickNum(source, keys) {
+  for (const key of keys) {
+    const value = source?.[key];
+    const n = optionalNum(value);
+    if (n != null) return n;
+  }
+  return null;
+}
+
+function extractGmgnPriceAction(source) {
+  const nested = source?.price_change || source?.priceChange || source?.price_changes || source?.priceChanges || {};
+  const price5m = pickNum(source, [
+    "price_change_percent5m",
+    "price_change_percent5M",
+    "price_change_percent_5m",
+    "price_change_5m",
+    "priceChange5m",
+    "priceChangeM5",
+    "price_change_percent",
+  ]) ?? pickNum(nested, ["m5", "5m", "5M"]);
+  const price1h = pickNum(source, [
+    "price_change_percent1h",
+    "price_change_percent1H",
+    "price_change_percent_1h",
+    "price_change_1h",
+    "priceChange1h",
+    "priceChangeH1",
+  ]) ?? pickNum(nested, ["h1", "1h", "1H"]);
+  const price6h = pickNum(source, [
+    "price_change_percent6h",
+    "price_change_percent6H",
+    "price_change_percent_6h",
+    "price_change_6h",
+    "priceChange6h",
+    "priceChangeH6",
+  ]) ?? pickNum(nested, ["h6", "6h", "6H"]);
+  const price24h = pickNum(source, [
+    "price_change_percent24h",
+    "price_change_percent24H",
+    "price_change_percent_24h",
+    "price_change_24h",
+    "priceChange24h",
+    "priceChangeH24",
+  ]) ?? pickNum(nested, ["h24", "24h", "24H"]);
+
+  if ([price5m, price1h, price6h, price24h].every((value) => value == null)) return null;
+  return {
+    price_5m_change: price5m,
+    price_1h_change: price1h,
+    price_6h_change: price6h,
+    price_24h_change: price24h,
+    price_change_pct: price5m,
+    source: "gmgn",
+  };
+}
+
 function boolish(value) {
   return value === true || value === 1 || value === "1" || String(value).toLowerCase() === "true" || String(value).toLowerCase() === "yes";
 }
@@ -360,6 +416,7 @@ async function pickBestPool(pools) {
 
 function condenseGmgnCandidate({ token, pool, poolDetail, security, info, infoAnalysis, holdersAnalysis, indicatorSignal }) {
   const poolAddress = pool.address || pool.pool_address;
+  const priceAction = extractGmgnPriceAction(token) || extractGmgnPriceAction(info) || {};
   // Stage 5 Pool Discovery provides active_tvl and fee_active_tvl_ratio
   // Stage 3 Meteora search provides tvl and bin_step/base_fee_pct via pool_config
   const tvl = num(poolDetail?.tvl ?? pool.tvl ?? pool.liquidity);
@@ -407,11 +464,11 @@ function condenseGmgnCandidate({ token, pool, poolDetail, security, info, infoAn
     token_age_hours: token.open_timestamp ? Math.floor((Date.now() / 1000 - num(token.open_timestamp)) / 3600) : null,
     dev: info.dev?.creator_address || null,
     price: num(info.price || token.price),
-    price_5m_change: num(token.price_change_percent5m ?? token.price_change_percent),
-    price_1h_change: num(token.price_change_percent1h ?? token.price_change_percent1H),
-    price_6h_change: num(token.price_change_percent6h ?? token.price_change_percent6H),
-    price_24h_change: num(token.price_change_percent24h ?? token.price_change_percent24H),
-    price_change_pct: num(token.price_change_percent5m ?? token.price_change_percent), // legacy alias
+    price_5m_change: priceAction.price_5m_change,
+    price_1h_change: priceAction.price_1h_change,
+    price_6h_change: priceAction.price_6h_change,
+    price_24h_change: priceAction.price_24h_change,
+    price_change_pct: priceAction.price_5m_change, // legacy alias
     volume: num(token.volume ?? 0),
     swap_count: token.swaps ?? null,
     gmgn: true,
@@ -558,6 +615,17 @@ export async function fetchGmgnTokenFees(mint) {
     return totalFee > 0 ? totalFee : null;
   } catch (e) {
     log("gmgn", `fetchGmgnTokenFees failed for ${mint?.slice(0, 8)}: ${e.message}`);
+    return null;
+  }
+}
+
+export async function fetchGmgnPriceAction(mint) {
+  try {
+    const payload = await gmgnFetch("/v1/token/info", { params: { chain: "sol", address: mint } });
+    const info = payload?.data?.data || payload?.data || payload;
+    return extractGmgnPriceAction(info);
+  } catch (e) {
+    log("gmgn", `fetchGmgnPriceAction failed for ${mint?.slice(0, 8)}: ${e.message}`);
     return null;
   }
 }

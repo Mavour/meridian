@@ -5,7 +5,7 @@ import { log } from "../logger.js";
 import { isBaseMintOnCooldown, isPoolOnCooldown } from "../pool-memory.js";
 import { isTokenWaveBlocked } from "../state.js";
 import { confirmIndicatorPreset } from "./chart-indicators.js";
-import { discoverGmgnPools, fetchGmgnTokenFees } from "./gmgn.js";
+import { discoverGmgnPools, fetchGmgnPriceAction, fetchGmgnTokenFees } from "./gmgn.js";
 import { fetchDexScreenerBoosts } from "./dexscreener.js";
 
 const DATAPI_JUP = "https://datapi.jup.ag/v1";
@@ -455,6 +455,36 @@ async function enrichPvpRisk(pools) {
   }));
 }
 
+async function enrichGmgnPriceActionForPools(pools) {
+  const candidates = (Array.isArray(pools) ? pools : [])
+    .filter((pool) => pool?.base?.mint)
+    .slice(0, 30);
+  if (candidates.length === 0) return;
+
+  const uniqueMints = [...new Set(candidates.map((pool) => pool.base.mint))];
+  const results = await Promise.allSettled(
+    uniqueMints.map(async (mint) => ({ mint, priceAction: await fetchGmgnPriceAction(mint) })),
+  );
+
+  const byMint = new Map();
+  for (const result of results) {
+    if (result.status !== "fulfilled") continue;
+    if (!result.value.priceAction) continue;
+    byMint.set(result.value.mint, result.value.priceAction);
+  }
+
+  for (const pool of candidates) {
+    const priceAction = byMint.get(pool.base.mint);
+    if (!priceAction) continue;
+    pool.gmgn_price_action = priceAction;
+    pool.price_5m_change = priceAction.price_5m_change ?? pool.price_5m_change;
+    pool.price_1h_change = priceAction.price_1h_change ?? pool.price_1h_change;
+    pool.price_6h_change = priceAction.price_6h_change ?? pool.price_6h_change;
+    pool.price_24h_change = priceAction.price_24h_change ?? pool.price_24h_change;
+    pool.price_change_pct = priceAction.price_5m_change ?? pool.price_change_pct;
+  }
+}
+
 
 
 /**
@@ -640,6 +670,8 @@ export async function discoverPools({
       });
     }
   }
+
+  await enrichGmgnPriceActionForPools(pools);
 
   return {
     total: data.total,

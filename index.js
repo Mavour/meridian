@@ -834,7 +834,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
         ].filter(Boolean).join("\n");
       } else {
         const gmgnPriceLine = pool.gmgn_price_action
-          ? `  gmgn_price: rsi2=${pool.gmgn_price_action.rsi2 ?? "?"}, supertrend=${pool.gmgn_price_action.supertrend?.direction || "?"}, price_vs_ath=${pool.gmgn_price_action.priceVsAthPct ?? "?"}%, 1h_change=${pool.gmgn_price_action.priceChangePct ?? "?"}%, max_vol_candle=${pool.gmgn_price_action.maxVolumeShare ?? "?"}%`
+          ? `  gmgn_price: 5m=${pool.gmgn_price_action.price_5m_change ?? "?"}%, 1h=${pool.gmgn_price_action.price_1h_change ?? "?"}%, 6h=${pool.gmgn_price_action.price_6h_change ?? "?"}%, 24h=${pool.gmgn_price_action.price_24h_change ?? "?"}%`
           : null;
         block = [
           `POOL: ${pool.name} (${pool.pool})`,
