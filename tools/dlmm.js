@@ -400,11 +400,22 @@ function getDlmmProgramId() {
 }
 
 function isDlmmPositionGoneError(error) {
-  const text = String(error?.message || error || "");
+  const text = getErrorTextWithLogs(error);
   return /Position account .* not found/i.test(text) ||
     /AccountOwnedByWrongProgram/i.test(text) ||
     /owned by a different program than expected/i.test(text) ||
     /custom program error:\s*0xbbf/i.test(text);
+}
+
+function getErrorTextWithLogs(error) {
+  const parts = [
+    error?.message,
+    error?.stack,
+    Array.isArray(error?.logs) ? error.logs.join("\n") : null,
+    Array.isArray(error?.transactionLogs) ? error.transactionLogs.join("\n") : null,
+    typeof error === "string" ? error : null,
+  ].filter(Boolean);
+  return parts.join("\n");
 }
 
 async function getDlmmPositionAccountStatus(positionPubKey) {
@@ -419,6 +430,34 @@ async function getDlmmPositionAccountStatus(positionPubKey) {
     isSystemOwned: owner === SystemProgram.programId.toString(),
     isClosed: !accountInfo || owner === SystemProgram.programId.toString(),
   };
+}
+
+async function finalizeIfPositionAlreadyGone({
+  positionPubKey,
+  position_address,
+  reason,
+  tracked,
+  poolAddress,
+  poolMeta,
+  pool = null,
+  baseMint = null,
+  context = "close",
+}) {
+  const accountStatus = await getDlmmPositionAccountStatus(positionPubKey);
+  if (accountStatus.isClosed) {
+    log("close_warn", `Position ${position_address} is already closed on-chain during ${context}; owner=${accountStatus.owner || "missing"}`);
+    return finalizeAlreadyClosedPosition({ position_address, reason, tracked, poolAddress, poolMeta, pool, baseMint });
+  }
+
+  _positionsCacheAt = 0;
+  const livePositions = await getMyPositions({ force: true, silent: true }).catch(() => null);
+  const stillOpen = livePositions?.positions?.some((position) => position.position === position_address);
+  if (livePositions && !livePositions.error && !stillOpen) {
+    log("close_warn", `Position ${position_address} disappeared from live positions during ${context}; treating as already closed`);
+    return finalizeAlreadyClosedPosition({ position_address, reason, tracked, poolAddress, poolMeta, pool, baseMint });
+  }
+
+  return null;
 }
 
 function formatSolFee(value) {
@@ -1700,16 +1739,35 @@ export async function closePosition({ position_address, reason }) {
   }
 
   const tracked = getTrackedPosition(position_address);
+  let poolAddress = null;
+  let poolMeta = null;
+  let positionPubKey = null;
 
   try {
     log("close", `Closing position: ${position_address}`);
     const wallet = getWallet();
-    const poolAddress = await lookupPoolForPosition(position_address, wallet.publicKey.toString());
-    const poolMeta = await getPoolMetadata(poolAddress);
+    poolAddress = await lookupPoolForPosition(position_address, wallet.publicKey.toString());
+    poolMeta = await getPoolMetadata(poolAddress);
+    positionPubKey = new PublicKey(position_address);
     if (tracked?.closed) {
       log("close_warn", `Position ${position_address} is already marked closed locally; skipping on-chain close`);
       return finalizeAlreadyClosedPosition({ position_address, reason, tracked, poolAddress, poolMeta });
     }
+
+    let accountStatus = await getDlmmPositionAccountStatus(positionPubKey);
+    if (accountStatus.isClosed) {
+      log("close_warn", `Position account ${position_address} is already closed on-chain; owner=${accountStatus.owner || "missing"}`);
+      return finalizeAlreadyClosedPosition({ position_address, reason, tracked, poolAddress, poolMeta });
+    }
+    if (!accountStatus.isDlmmOwned) {
+      return {
+        success: false,
+        error: `Position account owner mismatch: ${accountStatus.owner || "missing"}, expected ${accountStatus.expectedOwner}. Refusing blind close.`,
+        position: position_address,
+        pool: poolAddress,
+      };
+    }
+
     if (shouldUseLpAgentRelay()) {
       let relaySubmitted = false;
       try {
@@ -1948,6 +2006,18 @@ export async function closePosition({ position_address, reason }) {
           base_mint: livePosition?.base_mint || null,
         };
       } catch (relayError) {
+        if (isDlmmPositionGoneError(relayError)) {
+          const alreadyClosed = await finalizeIfPositionAlreadyGone({
+            positionPubKey,
+            position_address,
+            reason,
+            tracked,
+            poolAddress,
+            poolMeta,
+            context: "relay close simulation",
+          });
+          if (alreadyClosed) return alreadyClosed;
+        }
         if (relaySubmitted) throw relayError;
         log("close_warn", `Relay zap-out failed before submit; falling back to local close + Jupiter autoswap: ${relayError.message}`);
       }
@@ -1957,8 +2027,7 @@ export async function closePosition({ position_address, reason }) {
     poolCache.delete(poolAddress.toString());
     const pool = await getPool(poolAddress);
 
-    const positionPubKey = new PublicKey(position_address);
-    let accountStatus = await getDlmmPositionAccountStatus(positionPubKey);
+    accountStatus = await getDlmmPositionAccountStatus(positionPubKey);
     if (accountStatus.isClosed) {
       log("close_warn", `Position account ${position_address} is already closed on-chain; owner=${accountStatus.owner || "missing"}`);
       return finalizeAlreadyClosedPosition({ position_address, reason, tracked, poolAddress, poolMeta, pool });
@@ -2298,6 +2367,18 @@ export async function closePosition({ position_address, reason }) {
       base_mint: pool.lbPair.tokenXMint.toString(),
     };
   } catch (error) {
+    if (isDlmmPositionGoneError(error) && positionPubKey && poolAddress) {
+      const alreadyClosed = await finalizeIfPositionAlreadyGone({
+        positionPubKey,
+        position_address,
+        reason,
+        tracked,
+        poolAddress,
+        poolMeta,
+        context: "close error",
+      }).catch(() => null);
+      if (alreadyClosed) return alreadyClosed;
+    }
     log("close_error", error.message);
     return { success: false, error: error.message };
   }

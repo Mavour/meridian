@@ -909,7 +909,7 @@ export async function executeTool(name, args) {
           holdTimeMins = Math.floor((Date.now() - new Date(tracked.deployed_at).getTime()) / 60000);
         }
         
-        if (!args._suppress_close_notify) {
+        if (!args._suppress_close_notify && !result.already_closed) {
           notifyClose({
             pair: result.pool_name || args.position_address?.slice(0, 8),
             pnlUsd: result.pnl_usd ?? 0,
