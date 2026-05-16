@@ -47,6 +47,9 @@ const TIMEFRAME_MINUTES = {
 import { log, logAction } from "../logger.js";
 import { notifyDeploy, notifyClose, notifySwap } from "../telegram.js";
 
+const ACTIVE_CLOSES = new Set();
+const ACTIVE_TOKEN_SWAPS = new Set();
+
 const SENSITIVE_CONFIG_KEYS = new Set([
   "gmgnApiKey",
   "hiveMindApiKey",
@@ -830,6 +833,30 @@ export async function executeTool(name, args) {
   }
 
   // ─── Execute ──────────────────────────────
+  let closeLockKey = null;
+  let swapLockKey = null;
+  if (name === "close_position") {
+    closeLockKey = String(args?.position_address || "").trim();
+    if (closeLockKey && ACTIVE_CLOSES.has(closeLockKey)) {
+      return {
+        success: false,
+        in_progress: true,
+        error: `Close already in progress for ${closeLockKey.slice(0, 8)}; duplicate request skipped.`,
+      };
+    }
+    if (closeLockKey) ACTIVE_CLOSES.add(closeLockKey);
+  } else if (name === "swap_token") {
+    swapLockKey = String(args?.input_mint || "").trim();
+    if (swapLockKey && ACTIVE_TOKEN_SWAPS.has(swapLockKey)) {
+      return {
+        success: false,
+        in_progress: true,
+        error: `Swap already in progress for ${swapLockKey.slice(0, 8)}; duplicate request skipped.`,
+      };
+    }
+    if (swapLockKey) ACTIVE_TOKEN_SWAPS.add(swapLockKey);
+  }
+
   try {
     const result = await fn(args);
     const duration = Date.now() - startTime;
@@ -965,6 +992,9 @@ export async function executeTool(name, args) {
       error: error.message,
       tool: name,
     };
+  } finally {
+    if (closeLockKey) ACTIVE_CLOSES.delete(closeLockKey);
+    if (swapLockKey) ACTIVE_TOKEN_SWAPS.delete(swapLockKey);
   }
 }
 

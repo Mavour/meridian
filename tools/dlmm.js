@@ -399,6 +399,28 @@ function getDlmmProgramId() {
   return new PublicKey("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo");
 }
 
+function isDlmmPositionGoneError(error) {
+  const text = String(error?.message || error || "");
+  return /Position account .* not found/i.test(text) ||
+    /AccountOwnedByWrongProgram/i.test(text) ||
+    /owned by a different program than expected/i.test(text) ||
+    /custom program error:\s*0xbbf/i.test(text);
+}
+
+async function getDlmmPositionAccountStatus(positionPubKey) {
+  const accountInfo = await getConnection().getAccountInfo(positionPubKey, "confirmed");
+  const owner = accountInfo?.owner?.toString?.() || null;
+  const expectedOwner = getDlmmProgramId().toString();
+  return {
+    exists: !!accountInfo,
+    owner,
+    expectedOwner,
+    isDlmmOwned: owner === expectedOwner,
+    isSystemOwned: owner === SystemProgram.programId.toString(),
+    isClosed: !accountInfo || owner === SystemProgram.programId.toString(),
+  };
+}
+
 function formatSolFee(value) {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number.toFixed(8).replace(/0+$/, "").replace(/\.$/, "") : "unknown";
@@ -1632,6 +1654,45 @@ export async function claimFees({ position_address }) {
 }
 
 // ─── Close Position ────────────────────────────────────────────
+async function finalizeAlreadyClosedPosition({
+  position_address,
+  reason,
+  tracked,
+  poolAddress,
+  poolMeta,
+  pool,
+  baseMint = null,
+}) {
+  _positionsCacheAt = 0;
+  const closeBaseMint = tracked?.closed ? null : (baseMint || pool?.lbPair?.tokenXMint?.toString?.() || tracked?.token_mint || null);
+  if (tracked && !tracked.closed) {
+    recordClose(position_address, reason || "position already closed on-chain");
+  }
+
+  appendDecision({
+    type: "close",
+    actor: "MANAGER",
+    pool: poolAddress,
+    pool_name: tracked?.pool_name || poolMeta?.name || String(poolAddress).slice(0, 8),
+    position: position_address,
+    summary: "Position already closed on-chain",
+    reason: reason || "position account missing/closed before local close",
+    metrics: {},
+  });
+
+  return {
+    success: true,
+    already_closed: true,
+    position: position_address,
+    pool: poolAddress,
+    pool_name: tracked?.pool_name || poolMeta?.name || null,
+    claim_txs: [],
+    close_txs: [],
+    txs: [],
+    base_mint: closeBaseMint,
+  };
+}
+
 export async function closePosition({ position_address, reason }) {
   position_address = normalizeMint(position_address);
   if (process.env.DRY_RUN === "true") {
@@ -1645,6 +1706,10 @@ export async function closePosition({ position_address, reason }) {
     const wallet = getWallet();
     const poolAddress = await lookupPoolForPosition(position_address, wallet.publicKey.toString());
     const poolMeta = await getPoolMetadata(poolAddress);
+    if (tracked?.closed) {
+      log("close_warn", `Position ${position_address} is already marked closed locally; skipping on-chain close`);
+      return finalizeAlreadyClosedPosition({ position_address, reason, tracked, poolAddress, poolMeta });
+    }
     if (shouldUseLpAgentRelay()) {
       let relaySubmitted = false;
       try {
@@ -1893,6 +1958,19 @@ export async function closePosition({ position_address, reason }) {
     const pool = await getPool(poolAddress);
 
     const positionPubKey = new PublicKey(position_address);
+    let accountStatus = await getDlmmPositionAccountStatus(positionPubKey);
+    if (accountStatus.isClosed) {
+      log("close_warn", `Position account ${position_address} is already closed on-chain; owner=${accountStatus.owner || "missing"}`);
+      return finalizeAlreadyClosedPosition({ position_address, reason, tracked, poolAddress, poolMeta, pool });
+    }
+    if (!accountStatus.isDlmmOwned) {
+      return {
+        success: false,
+        error: `Position account owner mismatch: ${accountStatus.owner || "missing"}, expected ${accountStatus.expectedOwner}. Refusing blind close.`,
+        position: position_address,
+        pool: poolAddress,
+      };
+    }
     const claimTxHashes = [];
     const closeTxHashes = [];
 
@@ -1918,6 +1996,13 @@ export async function closePosition({ position_address, reason }) {
       }
     } catch (e) {
       log("close_warn", `Step 1 (Claim) failed or nothing to claim: ${e.message}`);
+      if (isDlmmPositionGoneError(e)) {
+        accountStatus = await getDlmmPositionAccountStatus(positionPubKey);
+        if (accountStatus.isClosed) {
+          log("close_warn", `Position ${position_address} disappeared during claim; treating as already closed`);
+          return finalizeAlreadyClosedPosition({ position_address, reason, tracked, poolAddress, poolMeta, pool });
+        }
+      }
     }
 
     // ─── Step 2: Remove Liquidity & Close ──────────────────────
@@ -1935,31 +2020,62 @@ export async function closePosition({ position_address, reason }) {
       }
     } catch (e) {
       log("close_warn", `Could not check liquidity state: ${e.message}`);
+      if (isDlmmPositionGoneError(e)) {
+        accountStatus = await getDlmmPositionAccountStatus(positionPubKey);
+        if (accountStatus.isClosed) {
+          log("close_warn", `Position ${position_address} is no longer a DLMM account before close; treating as already closed`);
+          return finalizeAlreadyClosedPosition({ position_address, reason, tracked, poolAddress, poolMeta, pool });
+        }
+      }
     }
 
-    if (hasLiquidity) {
-      log("close", `Step 2: Removing liquidity and closing account`);
-      const closeTx = await pool.removeLiquidity({
-        user: wallet.publicKey,
-        position: positionPubKey,
-        fromBinId: closeFromBinId,
-        toBinId: closeToBinId,
-        bps: new BN(10000),
-        shouldClaimAndClose: true,
-      });
+    try {
+      if (hasLiquidity) {
+        log("close", `Step 2: Removing liquidity and closing account`);
+        const closeTx = await pool.removeLiquidity({
+          user: wallet.publicKey,
+          position: positionPubKey,
+          fromBinId: closeFromBinId,
+          toBinId: closeToBinId,
+          bps: new BN(10000),
+          shouldClaimAndClose: true,
+        });
 
-      for (const tx of Array.isArray(closeTx) ? closeTx : [closeTx]) {
-        const txHash = await sendAndConfirmTransaction(getConnection(), tx, [wallet]);
+        for (const tx of Array.isArray(closeTx) ? closeTx : [closeTx]) {
+          const txHash = await sendAndConfirmTransaction(getConnection(), tx, [wallet]);
+          closeTxHashes.push(txHash);
+        }
+      } else {
+        accountStatus = await getDlmmPositionAccountStatus(positionPubKey);
+        if (accountStatus.isClosed) {
+          log("close_warn", `Position ${position_address} is not DLMM-owned before empty-account close; treating as already closed`);
+          return finalizeAlreadyClosedPosition({ position_address, reason, tracked, poolAddress, poolMeta, pool });
+        }
+        if (!accountStatus.isDlmmOwned) {
+          return {
+            success: false,
+            error: `Position account owner mismatch: ${accountStatus.owner || "missing"}, expected ${accountStatus.expectedOwner}. Refusing blind close.`,
+            position: position_address,
+            pool: poolAddress,
+          };
+        }
+        log("close", `Step 2: No position liquidity detected, closing account`);
+        const closeTx = await pool.closePosition({
+          owner: wallet.publicKey,
+          position: { publicKey: positionPubKey },
+        });
+        const txHash = await sendAndConfirmTransaction(getConnection(), closeTx, [wallet]);
         closeTxHashes.push(txHash);
       }
-    } else {
-      log("close", `Step 2: No position liquidity detected, closing account`);
-      const closeTx = await pool.closePosition({
-        owner: wallet.publicKey,
-        position: { publicKey: positionPubKey },
-      });
-      const txHash = await sendAndConfirmTransaction(getConnection(), closeTx, [wallet]);
-      closeTxHashes.push(txHash);
+    } catch (closeError) {
+      if (isDlmmPositionGoneError(closeError)) {
+        accountStatus = await getDlmmPositionAccountStatus(positionPubKey);
+        if (accountStatus.isClosed) {
+          log("close_warn", `Close tx build/send saw an already-closed position; suppressing duplicate close error`);
+          return finalizeAlreadyClosedPosition({ position_address, reason, tracked, poolAddress, poolMeta, pool });
+        }
+      }
+      throw closeError;
     }
     const txHashes = [...claimTxHashes, ...closeTxHashes];
     log("close", `Step 2 OK (close only): ${closeTxHashes.join(", ") || "none"}`);

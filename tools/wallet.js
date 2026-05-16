@@ -126,6 +126,7 @@ export async function getWalletBalances() {
  * Swap tokens via Jupiter Swap API V2 (order → sign → execute).
  */
 const SOL_MINT = "So11111111111111111111111111111111111111112";
+const ACTIVE_SWAPS = new Set();
 
 // Normalize any SOL-like address to the correct wrapped SOL mint
 export function normalizeMint(mint) {
@@ -149,6 +150,21 @@ export async function swapToken({
 }) {
   input_mint  = normalizeMint(input_mint);
   output_mint = normalizeMint(output_mint);
+  if (!input_mint || !output_mint) {
+    return { success: false, error: "Swap requires input_mint and output_mint" };
+  }
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+    return { success: false, error: `Invalid swap amount: ${amount}` };
+  }
+  const swapKey = `${input_mint}->${output_mint}`;
+  if (ACTIVE_SWAPS.has(swapKey)) {
+    return {
+      success: false,
+      in_progress: true,
+      error: `Swap already in progress for ${input_mint.slice(0, 8)} to ${output_mint.slice(0, 8)}; duplicate request skipped.`,
+    };
+  }
 
   if (process.env.DRY_RUN === "true") {
     return {
@@ -158,6 +174,7 @@ export async function swapToken({
     };
   }
 
+  ACTIVE_SWAPS.add(swapKey);
   try {
     log("swap", `${amount} of ${input_mint} → ${output_mint}`);
     const wallet = getWallet();
@@ -169,7 +186,7 @@ export async function swapToken({
       const mintInfo = await connection.getParsedAccountInfo(new PublicKey(input_mint));
       decimals = mintInfo.value?.data?.parsed?.info?.decimals ?? 9;
     }
-    const amountStr = Math.floor(amount * Math.pow(10, decimals)).toString();
+    const amountStr = Math.floor(numericAmount * Math.pow(10, decimals)).toString();
 
     // ─── Get Swap V2 order (unsigned tx + requestId) ───────────
     const search = new URLSearchParams({
@@ -247,5 +264,7 @@ export async function swapToken({
   } catch (error) {
     log("swap_error", error.message);
     return { success: false, error: error.message };
+  } finally {
+    ACTIVE_SWAPS.delete(swapKey);
   }
 }
