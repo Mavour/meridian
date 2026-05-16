@@ -35,7 +35,10 @@ import { checkSmartWalletsOnPool } from "./smart-wallets.js";
 import { getTokenNarrative, getTokenInfo } from "./tools/token.js";
 import { checkMeteoraWhaleGuard } from "./tools/whale-guard.js";
 import { studyTopLPers } from "./tools/study.js";
-import { stageSignals } from "./signal-tracker.js";
+import { fetchChartIndicatorsForMint } from "./tools/chart-indicators.js";
+import { BottomSpotLPStrategy } from "./strategies/index.js";
+import { extractCandlesFromIndicatorPayload } from "./strategies/bottomSpotLP.js";
+import { stageSignals, getAndClearStagedSignals } from "./signal-tracker.js";
 import { getWeightsSummary } from "./signal-weights.js";
 import { bootstrapHiveMind, ensureAgentId, getHiveMindPullMode, isHiveMindEnabled, pullHiveMindLessons, pullHiveMindPresets, registerHiveMindAgent, startHiveMindBackgroundSync } from "./hivemind.js";
 import { appendDecision } from "./decision-log.js";
@@ -428,11 +431,34 @@ export async function runManagementCycle({ silent = false } = {}) {
 
     // ── Deterministic rule checks (no LLM) ──────────────────────────
     const actionMap = new Map();
+    const bottomSpotStrategy = config.bottomSpotLP?.enabled
+      ? new BottomSpotLPStrategy(config.bottomSpotLP)
+      : null;
     for (const p of positionData) {
       // Instruction-set — pass to LLM, can't parse in JS
       if (p.instruction) {
         actionMap.set(p.position, { action: "INSTRUCTION" });
         continue;
+      }
+
+      const tracked = getTrackedPosition(p.position);
+      if (bottomSpotStrategy && isBottomSpotPosition(p, tracked)) {
+        const candles = await fetchBottomSpotCandles(p.base_mint || tracked?.token_mint);
+        const feesPct = bottomSpotFeesPct(p, tracked);
+        const bottomSpotAction = await bottomSpotStrategy.evaluatePosition({
+          ...p,
+          upperPrice: p.upper_price ?? p.price_range?.max ?? p.max_price,
+          lowerPrice: p.lower_price ?? p.price_range?.min ?? p.min_price,
+          ilPct: p.il_pct ?? p.impermanent_loss_pct,
+        }, candles, { accumulatedFeesPct: feesPct });
+        if (bottomSpotAction.action === "close" || bottomSpotAction.action === "reposition") {
+          actionMap.set(p.position, {
+            action: "CLOSE",
+            rule: "BOTTOM_SPOT_LP",
+            reason: `Bottom Spot LP ${bottomSpotAction.action}: ${bottomSpotAction.reason}`,
+          });
+          continue;
+        }
       }
 
       const closeRule = getDeterministicCloseRule(p, config.management);
@@ -442,7 +468,6 @@ export async function runManagementCycle({ silent = false } = {}) {
       }
 
       // 6. Negative X sentiment from trusted accounts (fetch once, show warning every cycle)
-      const tracked = getTrackedPosition(p.position);
       let xs = sentimentByPosition.get(p.position);
       let xsWarning = null;
 
@@ -580,6 +605,163 @@ After executing, write a brief one-line result per position.
     }
   }
   return mgmtReport;
+}
+
+function countBottomSpotPositions(positionsResult) {
+  const positions = Array.isArray(positionsResult?.positions) ? positionsResult.positions : [];
+  return positions.filter((position) =>
+    isBottomSpotPosition(position) ||
+    position?.strategy_tag === "bottom_spot_lp" ||
+    /bottom spot/i.test(String(position?.instruction || position?.note || "")),
+  ).length;
+}
+
+function isBottomSpotPosition(position, tracked = null) {
+  return position?.signal_snapshot?.bottom_spot_lp === true ||
+    tracked?.signal_snapshot?.bottom_spot_lp === true ||
+    position?.strategy_tag === "bottom_spot_lp" ||
+    tracked?.signal_snapshot?.strategy_tag === "bottom_spot_lp";
+}
+
+function bottomSpotFeesPct(position, tracked = null) {
+  const initial = Number(position?.initial_value_usd ?? tracked?.initial_value_usd ?? 0);
+  const fees = Number(position?.unclaimed_fees_true_usd ?? position?.unclaimed_fees_usd ?? 0) +
+    Number(position?.collected_fees_true_usd ?? position?.collected_fees_usd ?? 0) +
+    Number(tracked?.total_fees_claimed_usd ?? 0);
+  return initial > 0 && Number.isFinite(fees) ? (fees / initial) * 100 : 0;
+}
+
+async function fetchBottomSpotCandles(mint) {
+  if (!mint) return [];
+  try {
+    const lookback = Number(config.bottomSpotLP?.athLookbackCandles ?? 48);
+    const candles = Math.max(lookback + 30, 80);
+    const payload = await fetchChartIndicatorsForMint(mint, {
+      interval: config.bottomSpotLP?.candleInterval || "15_MINUTE",
+      candles,
+      rsiLength: 14,
+      refresh: false,
+    });
+    return extractCandlesFromIndicatorPayload(payload);
+  } catch (error) {
+    log("bottom_spot_lp_warn", `Candle fetch failed for ${mint.slice(0, 8)}: ${error.message}`);
+    return [];
+  }
+}
+
+function mergeBottomSpotPoolData(pool, tokenInfo) {
+  return {
+    ...pool,
+    token_info: tokenInfo || null,
+    fees_paid_sol: tokenInfo?.global_fees_sol ?? pool.gmgn_total_fee_sol ?? pool.global_fees_sol ?? null,
+  };
+}
+
+function bottomSpotTvl(pool) {
+  const tvl = Number(pool?.tvl ?? pool?.active_tvl ?? 0);
+  return Number.isFinite(tvl) ? tvl : 0;
+}
+
+async function tryBottomSpotDeploy({ passing, prePositions, deployAmount, liveMessage }) {
+  if (!config.bottomSpotLP?.enabled) return null;
+  const maxOpen = Number(config.bottomSpotLP.maxOpenPositions ?? 1);
+  if (maxOpen >= 0 && countBottomSpotPositions(prePositions) >= maxOpen) {
+    log("bottom_spot_lp", `Skipped â€” max Bottom Spot positions reached (${maxOpen})`);
+    return null;
+  }
+
+  const strategy = new BottomSpotLPStrategy(config.bottomSpotLP);
+  const signals = [];
+  for (const entry of passing) {
+    const mint = entry.pool?.base?.mint;
+    const candles = await fetchBottomSpotCandles(mint);
+    const pool = mergeBottomSpotPoolData(entry.pool, entry.ti);
+    const evaluation = await strategy.shouldDeploy(candles, [pool]);
+    if (evaluation.deploy) signals.push({ ...evaluation, source: entry, candles });
+  }
+
+  if (signals.length === 0) return null;
+  signals.sort((a, b) => bottomSpotTvl(b.pool) - bottomSpotTvl(a.pool));
+  const selected = signals[0];
+  const amountSol = Math.min(
+    Number(config.bottomSpotLP.deployAmountSol ?? deployAmount),
+    Number(deployAmount),
+  );
+  const params = strategy.buildDeployParams(selected.pool, selected.binRange, amountSol);
+  if (!params.valid) {
+    log("bottom_spot_lp_warn", `Deploy params invalid: ${params.reason}`);
+    return null;
+  }
+  if (params.fees_paid_sol == null && Number(config.screening.minTokenFeesSol ?? 0) > 0) {
+    log("bottom_spot_lp_warn", `Skipped ${params.pool_name} â€” missing fees_paid_sol`);
+    return null;
+  }
+
+  stageSignals(params.pool_address, {
+    base_mint: params.base_mint,
+    bottom_spot_lp: true,
+    bottom_spot_dump_pct: selected.entry.dumpPct,
+    bottom_spot_retrace_pct: selected.entry.retracePct,
+    bottom_spot_range_pct: Math.abs(Number(config.bottomSpotLP.rangePct ?? -45)),
+    strategy_tag: "bottom_spot_lp",
+    organic_score: params.organic_score ?? null,
+    fee_tvl_ratio: params.fee_tvl_ratio ?? null,
+    volatility: params.volatility ?? null,
+  });
+
+  await liveMessage?.toolStart("deploy_position");
+  const result = await executeTool("deploy_position", params);
+  const success = result?.success !== false && !result?.error && !result?.blocked;
+  await liveMessage?.toolFinish("deploy_position", result, success);
+
+  if (!success) {
+    getAndClearStagedSignals(params.pool_address, params.base_mint);
+    appendDecision({
+      type: "skip",
+      actor: "SCREENER",
+      pool: params.pool_address,
+      pool_name: params.pool_name,
+      summary: "Bottom Spot LP deploy blocked",
+      reason: result?.reason || result?.error || "deploy_position failed",
+      metrics: {
+        dump_pct: selected.entry.dumpPct,
+        retrace_pct: selected.entry.retracePct,
+      },
+    });
+    return null;
+  }
+  if (result?.dry_run) getAndClearStagedSignals(params.pool_address, params.base_mint);
+
+  appendDecision({
+    type: "deploy",
+    actor: "SCREENER",
+    pool: params.pool_address,
+    pool_name: params.pool_name,
+    summary: `Bottom Spot LP deployed ${amountSol} SOL`,
+    reason: `Dump ${selected.entry.dumpPct}% from ATH with ${selected.entry.retracePct}% retrace`,
+    metrics: {
+      dump_pct: selected.entry.dumpPct,
+      retrace_pct: selected.entry.retracePct,
+      bins_below: selected.binRange.binsBelow,
+      range_pct: Math.abs(Number(config.bottomSpotLP.rangePct ?? -45)),
+    },
+  });
+
+  const dryRunLine = result?.dry_run ? "DRY RUN - no transaction sent" : "DEPLOYED";
+  return [
+    "Bottom Spot LP",
+    dryRunLine,
+    "",
+    `${params.pool_name}`,
+    `${params.pool_address}`,
+    "",
+    `SOL: ${amountSol}`,
+    `Strategy: spot | single-side SOL | downside ${Math.abs(Number(config.bottomSpotLP.rangePct ?? -45))}%`,
+    `Dump: ${selected.entry.dumpPct}% | Retrace: ${selected.entry.retracePct}%`,
+    `Range bins: ${selected.binRange.binsBelow} below | warnings: ${selected.binRange.warnings.join(", ") || "none"}`,
+    result?.position ? `Position: ${result.position}` : null,
+    result?.txs?.length ? `Tx: ${result.txs[0]}` : null,
+  ].filter(Boolean).join("\n");
 }
 
 export async function runScreeningCycle({ silent = false, recentlyClosed = [] } = {}) {
@@ -762,6 +944,17 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
     if (passing.length <= 1 && gmgnStageCounts) {
       const funnelBlock = buildGmgnFunnelReport(gmgnStageCounts, gmgnAllFiltered, { fromStage: 2 });
       if (funnelBlock) log("screening", `GMGN funnel (sparse):\n${funnelBlock}`);
+    }
+
+    const bottomSpotReport = await tryBottomSpotDeploy({
+      passing,
+      prePositions,
+      deployAmount,
+      liveMessage,
+    });
+    if (bottomSpotReport) {
+      screenReport = bottomSpotReport;
+      return screenReport;
     }
 
     // Pre-fetch active_bin for all passing candidates in parallel

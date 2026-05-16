@@ -46,12 +46,21 @@ IMPORTANT: Timing retest is disabled by config. Use only hard risk filters, pool
   if (agentType === "MANAGER") {
     const portfolioCompact = JSON.stringify(portfolio);
     const mgmtConfig = JSON.stringify(config.management);
+    const bottomSpotPromptBlock = config.bottomSpotLP?.enabled
+      ? `\nACTIVE STRATEGY: Bottom Spot LP
+- Single-sided SOL, Spot shape, post-dump entry.
+- Exit triggers: RSI>${config.bottomSpotLP.rsiExitThreshold}, MACD bearish cross, BB upper break, fees>=${config.bottomSpotLP.takeProfitFeePct}%.
+- IL stop-loss at ${config.bottomSpotLP.maxILPct}% if fees < ${config.bottomSpotLP.minFeesToOverrideStopLoss}%.
+- Do not greedy-hold Bottom Spot LP positions; Spot shape can accumulate IL faster than Bid-Ask after a failed bounce.
+`
+      : "";
     return `You are an autonomous DLMM LP agent on Meteora, Solana. Role: MANAGER
 
 This is a mechanical rule-application task. All position data is pre-loaded. Apply the close/claim rules directly and output the report. No extended analysis or deliberation required.
 
 Portfolio: ${portfolioCompact}
 Management Config: ${mgmtConfig}
+${bottomSpotPromptBlock}
 
 BEHAVIORAL CORE:
 1. PATIENCE IS PROFIT: Avoid closing positions for tiny gains/losses. But do NOT confuse patience with ignoring time-based decay.
