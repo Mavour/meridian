@@ -308,16 +308,21 @@ async function executeInstantClose(position, reason) {
 
       // Telegram notification
       if (telegramEnabled()) {
-        const msg = `🚨 <b>INSTANT CLOSE EXECUTED</b>
-
-<b>${position.pair}</b>
-Position: <code>${position.position}</code>
-Reason: ${reason}
-PnL: ${result.pnl_pct ?? "?"}%
-Auto-swap: ${result.auto_swapped ? "DONE" : (result.auto_swap_skipped || result.auto_swap_error || "not confirmed")}
-Duration: ${duration}ms
-
-<i>Closed instantly without LLM delay</i>`;
+        const pnlText = result.pnl_pct != null ? `${Number(result.pnl_pct).toFixed(2)}%` : "?";
+        const swapText = result.auto_swapped ? "DONE" : (result.auto_swap_skipped || result.auto_swap_error || "not confirmed");
+        const shortPosition = `${String(position.position).slice(0, 8)}...${String(position.position).slice(-6)}`;
+        const msg = [
+          "🚨 INSTANT CLOSE EXECUTED",
+          "",
+          `${position.pair}`,
+          `Position: ${shortPosition}`,
+          `Reason: ${reason}`,
+          `PnL: ${pnlText}`,
+          `Auto-swap: ${swapText}`,
+          `Duration: ${(duration / 1000).toFixed(1)}s`,
+          "",
+          "Closed instantly without LLM delay",
+        ].join("\n");
         sendMessage(msg).catch(() => {});
       }
 

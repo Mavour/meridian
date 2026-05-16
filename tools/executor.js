@@ -99,6 +99,27 @@ function poolDetailPriceChange(pool) {
   return numberOrNull(pool?.pool_price_change_pct ?? pool?.price_change_pct);
 }
 
+function poolDetailBaseMint(pool) {
+  return pool?.token_x?.address ?? pool?.base?.mint ?? pool?.base_mint ?? null;
+}
+
+function poolDetailCreatedAt(pool) {
+  return numberOrNull(pool?.token_x?.created_at ?? pool?.base_token_created_at);
+}
+
+function percentOrNull(value) {
+  if (value == null) return null;
+  const n = Number(String(value).replace("%", ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+async function getVerifiedTokenInfo(mint) {
+  if (!mint) return null;
+  const info = await getTokenInfo({ query: mint });
+  const exact = info?.results?.find((token) => token?.mint === mint);
+  return exact ?? info?.results?.[0] ?? null;
+}
+
 function timingFallbackAffectsReason(reason, fallbackFrames) {
   if (!reason || !fallbackFrames?.length) return false;
   const text = String(reason).toLowerCase();
@@ -225,6 +246,85 @@ async function validateDeployPoolThresholds(args) {
     }
   }
   // ──────────────────────────────────────────────────────────────────────────
+
+  const baseMint = args.base_mint || poolDetailBaseMint(detail);
+  let verifiedToken = null;
+  if (baseMint) {
+    try {
+      verifiedToken = await getVerifiedTokenInfo(baseMint);
+    } catch (error) {
+      return {
+        pass: false,
+        reason: `Could not verify token audit for ${baseMint}: ${error.message}. Deploy blocked.`,
+      };
+    }
+  }
+
+  if (!verifiedToken) {
+    return {
+      pass: false,
+      reason: `Could not verify token audit for base mint ${baseMint || "unknown"}. Deploy blocked.`,
+    };
+  }
+
+  const tokenCreatedAt = numberOrNull(verifiedToken.created_at) ?? poolDetailCreatedAt(detail);
+  const minTokenAgeHours = numberOrNull(config.screening.minTokenAgeHours);
+  if (minTokenAgeHours != null && minTokenAgeHours > 0) {
+    const minCreatedAt = Date.now() - minTokenAgeHours * 3_600_000;
+    if (tokenCreatedAt == null || tokenCreatedAt > minCreatedAt) {
+      const ageText = tokenCreatedAt == null
+        ? "unknown"
+        : `${((Date.now() - tokenCreatedAt) / 3_600_000).toFixed(1)}h`;
+      return {
+        pass: false,
+        reason: `Token age ${ageText} is below configured minTokenAgeHours ${minTokenAgeHours}. Deploy blocked.`,
+      };
+    }
+  }
+
+  const audit = verifiedToken.audit;
+  if (!audit || typeof audit !== "object") {
+    return { pass: false, reason: "Token audit data is unavailable. Deploy blocked." };
+  }
+  if (audit.mint_disabled !== true) {
+    return { pass: false, reason: "Token mint authority is not verified as disabled. Deploy blocked." };
+  }
+  if (audit.freeze_disabled !== true) {
+    return { pass: false, reason: "Token freeze authority is not verified as disabled. Deploy blocked." };
+  }
+
+  const maxTop10Pct = numberOrNull(config.screening.maxTop10Pct);
+  const top10Pct = percentOrNull(audit.top_holders_pct);
+  if (maxTop10Pct != null && top10Pct == null) {
+    return { pass: false, reason: "Top holders concentration is unavailable. Deploy blocked." };
+  }
+  if (maxTop10Pct != null && top10Pct != null && top10Pct > maxTop10Pct) {
+    return {
+      pass: false,
+      reason: `Top holders concentration ${top10Pct}% exceeds maxTop10Pct ${maxTop10Pct}%. Deploy blocked.`,
+    };
+  }
+
+  const maxBotHoldersPct = numberOrNull(config.screening.maxBotHoldersPct);
+  const botPct = percentOrNull(audit.bot_holders_pct);
+  if (maxBotHoldersPct != null && botPct == null) {
+    return { pass: false, reason: "Bot holders percentage is unavailable. Deploy blocked." };
+  }
+  if (maxBotHoldersPct != null && botPct != null && botPct > maxBotHoldersPct) {
+    return {
+      pass: false,
+      reason: `Bot holders ${botPct}% exceeds maxBotHoldersPct ${maxBotHoldersPct}%. Deploy blocked.`,
+    };
+  }
+
+  const maxBundlePct = numberOrNull(config.screening.maxBundlePct);
+  const bundlePct = percentOrNull(verifiedToken.bundle_pct);
+  if (maxBundlePct != null && bundlePct != null && bundlePct > maxBundlePct) {
+    return {
+      pass: false,
+      reason: `Bundle holding ${bundlePct}% exceeds maxBundlePct ${maxBundlePct}%. Deploy blocked.`,
+    };
+  }
 
   const deployAmountY = numberOrNull(args.amount_y ?? args.amount_sol ?? 0) ?? 0;
   const deployAmountX = numberOrNull(args.amount_x ?? 0) ?? 0;

@@ -39,6 +39,8 @@ export async function getTokenInfo({ query }) {
     organic_label: t.organicScoreLabel,
     launchpad: t.launchpad,
     graduated: !!t.graduatedPool,
+    created_at: t.createdAt ? Date.parse(t.createdAt) : null,
+    token_age_hours: t.createdAt ? Math.floor((Date.now() - Date.parse(t.createdAt)) / 3_600_000) : null,
     global_fees_sol: t.fees != null ? parseFloat(t.fees.toFixed(2)) : null,
     audit: t.audit ? {
       mint_disabled: t.audit.mintAuthorityDisabled,
