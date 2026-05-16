@@ -67,6 +67,14 @@ function rangeMarkerPct(range) {
   return clamp(((current - min) / (max - min)) * 100, 0, 100);
 }
 
+function rangeSidePct(current, edge, direction) {
+  if (!Number.isFinite(current) || !Number.isFinite(edge) || current <= 0) return null;
+  const raw = direction === 'down'
+    ? ((current - edge) / current) * 100
+    : ((edge - current) / current) * 100;
+  return Math.max(0, raw);
+}
+
 function readPositionStore() {
   if (typeof window === 'undefined') return {};
   try {
@@ -127,13 +135,19 @@ export default function PositionCard({ pos, peakPnl = null }) {
   const markerPct = rangeMarkerPct(range);
   const currentPrice = Number(range.current);
   const lowerPrice = Number(range.min);
-  const downsideRoom = Number.isFinite(currentPrice) && Number.isFinite(lowerPrice)
-    ? currentPrice - lowerPrice
+  const upperPrice = Number(range.max);
+  const downsideCover = Number.isFinite(upperPrice) && Number.isFinite(lowerPrice)
+    ? upperPrice - lowerPrice
     : null;
-  const downsidePct = downsideRoom != null && Number.isFinite(currentPrice) && currentPrice > 0
-    ? (downsideRoom / currentPrice) * 100
+  const downsidePct = downsideCover != null && Number.isFinite(upperPrice) && upperPrice > 0
+    ? (downsideCover / upperPrice) * 100
     : null;
   const downsideTone = downsidePct == null ? '' : downsidePct > 30 ? 'good' : downsidePct >= 10 ? 'warn' : 'risk';
+  const rangeDownPct = rangeSidePct(currentPrice, lowerPrice, 'down');
+  const rangeUpPct = rangeSidePct(currentPrice, upperPrice, 'up');
+  const splitRangeDisplay = rangeDownPct == null || rangeUpPct == null
+    ? '- / -'
+    : `-${rangeDownPct.toFixed(1)}% / +${rangeUpPct.toFixed(1)}%`;
   const lowerBin = Number(pos.lower_bin);
   const upperBin = Number(pos.upper_bin);
   const activeBin = Number(pos.active_bin);
@@ -164,9 +178,9 @@ export default function PositionCard({ pos, peakPnl = null }) {
   const peakDisplay = peak == null || !Number.isFinite(peak) ? '-' : `${peak >= 0 ? '+' : ''}${peak.toFixed(2)}%`;
   const openedAt = getOpenedAt(pos, stored);
   const holdTime = fmtHoldTime(openedAt, now);
-  const downsideDisplay = downsideRoom == null || downsidePct == null
-    ? 'Downside: -'
-    : `Downside: -${fmtPrice(Math.max(0, downsideRoom))} (${Math.max(0, downsidePct).toFixed(1)}% room)`;
+  const downsideDisplay = downsideCover == null || downsidePct == null
+    ? 'Downside cover: -'
+    : `Downside cover: -${fmtPrice(Math.max(0, downsideCover))} (${Math.max(0, downsidePct).toFixed(1)}%)`;
   const downsideColor = downsideTone === 'good'
     ? '#22c55e'
     : downsideTone === 'warn'
@@ -192,6 +206,7 @@ export default function PositionCard({ pos, peakPnl = null }) {
     ...ellipsis,
     fontSize: isMobile ? 9 : undefined,
   };
+  const activeLabelLeft = `${clamp(markerPct, isMobile ? 18 : 10, isMobile ? 82 : 90)}%`;
   const holdingsGridStyle = isMobile ? { gridTemplateColumns: '1fr 1fr', gap: 7 } : undefined;
   const holdingValueStyle = isMobile ? { ...ellipsis, fontSize: 12 } : ellipsis;
   const holdingDetailStyle = isMobile ? { ...ellipsis, fontSize: 11 } : ellipsis;
@@ -224,7 +239,7 @@ export default function PositionCard({ pos, peakPnl = null }) {
     <article className={`position-card ${inRange ? 'in-range' : 'out-range'}`} style={isMobile ? { padding: 10, maxWidth: '100%', overflow: 'hidden' } : undefined}>
       <div className="position-head">
         <div style={{ minWidth: 0, maxWidth: '100%' }}>
-          <h3 style={ellipsis}>{pos.pair}</h3>
+          <h3 className="pair-name" style={ellipsis}>{pos.pair}</h3>
           <p style={ellipsis}>{pos.strategy || 'DLMM'} | {totalBins || '-'} bins | step {pos.bin_step || '-'} | held {holdTime}</p>
         </div>
         <span className={`range-badge ${inRange ? 'ok' : 'risk'}`}>
@@ -252,8 +267,9 @@ export default function PositionCard({ pos, peakPnl = null }) {
       </div>
 
       <div className="price-range-block">
-        <div className="range-values">
+        <div className="range-values range-values-anchored">
           <span style={rangeLabelStyle}>{fmtPrice(range.min)}</span>
+          <span className="range-current-label" style={{ left: activeLabelLeft }}>{fmtPrice(range.current)}</span>
           <span style={{ ...rangeLabelStyle, textAlign: 'right' }}>{fmtPrice(range.max)}</span>
         </div>
         <div className={sliderClass} aria-label="Position price range">
@@ -261,8 +277,11 @@ export default function PositionCard({ pos, peakPnl = null }) {
           <i className="price-marker" style={{ left: `${markerPct}%` }} />
         </div>
         <div className="range-meta" style={rangeMetaStyle}>
-          <span style={ellipsis}>Active {fmtPrice(range.current)} {'\u00b7'} {pos.lower_bin ?? '-'} to {pos.upper_bin ?? '-'}</span>
+          <span style={ellipsis}>Active {pos.active_bin ?? '-'} {'\u00b7'} {pos.lower_bin ?? '-'} to {pos.upper_bin ?? '-'}</span>
           <span style={{ ...ellipsis, color: downsideColor, textAlign: isMobile ? 'left' : 'right' }}>{downsideDisplay}</span>
+        </div>
+        <div className="range-split" aria-label="Downside and upside room">
+          <span>{splitRangeDisplay}</span>
         </div>
       </div>
 

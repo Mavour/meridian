@@ -430,6 +430,21 @@ button, input {
   overflow-wrap: anywhere;
 }
 
+.position-head h3.pair-name {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 8px 3px;
+  border: 1px solid rgba(121, 167, 255, 0.34);
+  border-radius: 6px;
+  background: rgba(121, 167, 255, 0.1);
+  color: #f8fbff;
+  font-size: 18px;
+  font-weight: 850;
+  line-height: 1.15;
+  text-shadow: 0 0 12px rgba(121, 167, 255, 0.26);
+}
+
 .position-head p {
   margin: 4px 0 0;
   color: var(--text-dim);
@@ -514,9 +529,35 @@ button, input {
   margin-bottom: 8px;
 }
 
+.range-values-anchored {
+  position: relative;
+  min-height: 18px;
+  align-items: flex-end;
+}
+
+.range-current-label {
+  position: absolute;
+  bottom: 0;
+  max-width: 96px !important;
+  color: var(--text);
+  font-weight: 800;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
 .range-meta {
   margin-top: 8px;
   color: var(--text-dim);
+}
+
+.range-split {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-family: Consolas, "JetBrains Mono", monospace;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .price-slider {

@@ -14,7 +14,7 @@ loadEnv({
   envPath: path.join(__dirname, '../.env'),
   keyPath: path.join(__dirname, '../.envrypt'),
 });
-const MERIDIAN_PATH = process.env.MERIDIAN_PATH || path.join(__dirname, '../meridian');
+const MERIDIAN_PATH = process.env.MERIDIAN_PATH || path.join(__dirname, '..');
 const PORT = parseInt(process.env.DASHBOARD_PORT || '3001');
 
 // ── helpers ──────────────────────────────────────────
