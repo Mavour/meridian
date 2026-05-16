@@ -147,6 +147,7 @@ HARD RULE (enforced at code level):
 
 MANDATORY DEPLOY PARAMETER — fees_paid_sol:
 You MUST pass fees_paid_sol (from the token audit data) as an explicit argument when calling deploy_position.
+When candidate price timing is available, also pass price_5m_change, price_1h_change, price_6h_change, price_24h_change, fee_change_pct, volume_change_pct, and price_trend into deploy_position so the safety gate can fall back to candidate timing if the Pool Discovery detail endpoint is temporarily unavailable.
 If fees_paid_sol is missing or unavailable, DO NOT deploy — re-fetch the audit data first.
 
 RISK SIGNALS (guidelines — use judgment):

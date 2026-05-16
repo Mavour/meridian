@@ -908,6 +908,7 @@ STEPS:
    strategy = use the candidate's recommended_strategy (spot or bid_ask). Override ONLY with strong justification.
    bins_below = round(${config.strategy.minBinsBelow} + (candidate volatility/4)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}].
    pass deploy_position.volatility = the candidate volatility value.
+   pass candidate timing fields too: price_5m_change, price_1h_change, price_6h_change, price_24h_change, fee_change_pct, volume_change_pct, price_trend.
    bins_above = 0. Single-side SOL only: set amount_y, keep amount_x = 0.
 3. Report in this exact format (no tables, no extra sections):
    🚀 DEPLOYED
@@ -2195,6 +2196,14 @@ async function deployLatestCandidate(index) {
     fee_tvl_ratio: candidate.fee_active_tvl_ratio ?? candidate.fee_tvl_ratio,
     organic_score: candidate.organic_score,
     initial_value_usd: candidate.tvl ?? candidate.active_tvl ?? null,
+    price_5m_change: candidate.price_5m_change ?? candidate.price_change_pct,
+    price_1h_change: candidate.price_1h_change,
+    price_6h_change: candidate.price_6h_change,
+    price_24h_change: candidate.price_24h_change,
+    fee_change_pct: candidate.fee_change_pct,
+    volume_change_pct: candidate.volume_change_pct,
+    price_trend: candidate.price_trend,
+    fees_paid_sol: candidate.fees_paid_sol ?? candidate.global_fees_sol ?? candidate.token_info?.global_fees_sol,
   });
   if (result?.success === false || result?.error) {
     throw new Error(result.error || "Deploy failed");

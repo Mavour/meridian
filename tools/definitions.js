@@ -192,6 +192,13 @@ WARNING: This executes a real on-chain transaction. Check DRY_RUN mode.`,
           fee_tvl_ratio: { type: "number", description: "fee/TVL ratio at deploy time" },
           organic_score: { type: "number", description: "Base token organic score at deploy time" },
           initial_value_usd: { type: "number", description: "Estimated USD value being deployed" },
+          price_5m_change: { type: "number", description: "Candidate 5m pool price change percentage from get_top_candidates; used as timing fallback if fresh Pool Discovery detail fails." },
+          price_1h_change: { type: "number", description: "Candidate 1h pool price change percentage from get_top_candidates; used by the single-side SOL timing gate." },
+          price_6h_change: { type: "number", description: "Candidate 6h pool price change percentage from get_top_candidates; used by the smart-wallet retest timing gate." },
+          price_24h_change: { type: "number", description: "Candidate 24h pool price change percentage from get_top_candidates; used by the smart-wallet retest timing gate." },
+          fee_change_pct: { type: "number", description: "Candidate fee change percentage; used as timing fallback if fresh Pool Discovery detail fails." },
+          volume_change_pct: { type: "number", description: "Candidate volume change percentage; used as timing fallback if fresh Pool Discovery detail fails." },
+          price_trend: { type: "string", description: "Candidate price trend label; used as timing fallback if fresh Pool Discovery detail fails." },
           fees_paid_sol: { type: "number", description: "global_fees_sol from get_token_holders — must be >= minTokenFeesSol (default 30 SOL). Fetch via get_token_holders(mint=<base_mint>) and pass the global_fees_sol field." }
         },
         required: ["pool_address"]

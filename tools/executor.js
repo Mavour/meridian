@@ -91,6 +91,10 @@ function poolDetailVolatility(pool) {
   return numberOrNull(pool?.volatility);
 }
 
+function poolDetailPriceChange(pool) {
+  return numberOrNull(pool?.pool_price_change_pct ?? pool?.price_change_pct);
+}
+
 async function fetchFreshPoolDetail(poolAddress, timeframe = config.screening.timeframe || "5m") {
   const encodedTimeframe = encodeURIComponent(timeframe);
   const filter = encodeURIComponent(`pool_address=${poolAddress}`);
@@ -212,40 +216,45 @@ async function validateDeployPoolThresholds(args) {
   const requestedBinsAbove = numberOrNull(args.bins_above ?? 0) ?? 0;
   const isSingleSideSolDeploy = deployAmountY > 0 && deployAmountX <= 0 && requestedBinsAbove === 0;
   if (isSingleSideSolDeploy && config.screening.singleSideSolEntryGateEnabled !== false) {
-    let detail5m = null;
-    let detail1h = null;
-    let detail6h = null;
-    let detail24h = null;
-    try {
-      [detail5m, detail1h, detail6h, detail24h] = await Promise.all([
-        fetchFreshPoolDetail(args.pool_address, "5m"),
-        fetchFreshPoolDetail(args.pool_address, "1h"),
-        fetchFreshPoolDetail(args.pool_address, "6h"),
-        fetchFreshPoolDetail(args.pool_address, "24h"),
-      ]);
-    } catch (error) {
-      return {
-        pass: false,
-        reason: `Could not verify single-side SOL entry timing before deploy: ${error.message}`,
-      };
+    const timingDetails = new Map();
+    const timingErrors = [];
+    const results = await Promise.allSettled(
+      ["5m", "1h", "6h", "24h"].map(async (timeframe) => ({
+        timeframe,
+        detail: await fetchFreshPoolDetail(args.pool_address, timeframe),
+      })),
+    );
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        timingDetails.set(result.value.timeframe, result.value.detail);
+      } else {
+        timingErrors.push(result.reason?.message || String(result.reason));
+      }
+    }
+
+    if (timingErrors.length > 0) {
+      log("executor_warn", `Pool timing refresh partial failure for ${args.pool_address}: ${timingErrors.join("; ")}`);
     }
 
     const timing = evaluateSingleSideSolEntry({
-      name: detail?.name || args.pool_name || args.pool_address,
+      name: timingDetails.get("5m")?.name || detail?.name || args.pool_name || args.pool_address,
       pool: args.pool_address,
-      price_5m_change: detail5m?.pool_price_change_pct,
-      price_1h_change: detail1h?.pool_price_change_pct,
-      price_6h_change: detail6h?.pool_price_change_pct,
-      price_24h_change: detail24h?.pool_price_change_pct,
-      fee_active_tvl_ratio: detail?.fee_active_tvl_ratio,
-      fee_change_pct: detail5m?.fee_change_pct ?? detail?.fee_change_pct,
-      volume_change_pct: detail5m?.volume_change_pct ?? detail?.volume_change_pct,
-      price_trend: detail5m?.price_trend ?? detail?.price_trend,
+      price_5m_change: poolDetailPriceChange(timingDetails.get("5m")) ?? numberOrNull(args.price_5m_change ?? args.price_change_pct),
+      price_1h_change: poolDetailPriceChange(timingDetails.get("1h")) ?? numberOrNull(args.price_1h_change),
+      price_6h_change: poolDetailPriceChange(timingDetails.get("6h")) ?? numberOrNull(args.price_6h_change),
+      price_24h_change: poolDetailPriceChange(timingDetails.get("24h")) ?? numberOrNull(args.price_24h_change),
+      fee_active_tvl_ratio: detail?.fee_active_tvl_ratio ?? args.fee_tvl_ratio,
+      fee_change_pct: timingDetails.get("5m")?.fee_change_pct ?? detail?.fee_change_pct ?? args.fee_change_pct,
+      volume_change_pct: timingDetails.get("5m")?.volume_change_pct ?? detail?.volume_change_pct ?? args.volume_change_pct,
+      price_trend: timingDetails.get("5m")?.price_trend ?? detail?.price_trend ?? args.price_trend,
     });
     if (!timing.pass) {
       return {
         pass: false,
-        reason: timing.reason,
+        reason: timingErrors.length > 0
+          ? `${timing.reason} (used candidate timing fallback after API error: ${timingErrors[0]})`
+          : timing.reason,
       };
     }
   }
