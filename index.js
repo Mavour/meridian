@@ -33,6 +33,7 @@ import { getActiveStrategy } from "./strategy-library.js";
 import { recordPositionSnapshot, recallForPool, addPoolNote, isBaseMintOnCooldown, isPoolOnCooldown } from "./pool-memory.js";
 import { checkSmartWalletsOnPool } from "./smart-wallets.js";
 import { getTokenNarrative, getTokenInfo } from "./tools/token.js";
+import { checkMeteoraWhaleGuard } from "./tools/whale-guard.js";
 import { studyTopLPers } from "./tools/study.js";
 import { stageSignals } from "./signal-tracker.js";
 import { getWeightsSummary } from "./signal-weights.js";
@@ -1053,6 +1054,18 @@ Summarize the current portfolio health, total fees earned, and performance of al
         if (!openPositionIds.has(posId)) _closingPositions.delete(posId);
       }
       for (const p of result.positions) {
+        if (_closingPositions.has(p.position)) continue;
+        const whaleExit = await checkMeteoraWhaleGuard(p);
+        if (whaleExit) {
+          _closingPositions.add(p.position);
+          const reason = `${whaleExit.reason} | source=${whaleExit.source}`;
+          log("state", `[PnL poll] ${reason} — fast close ${p.pair}`);
+          executeTool("close_position", {
+            position_address: p.position,
+            reason,
+          }).catch((e) => log("cron_error", `Whale guard close failed for ${p.pair}: ${e.message}`));
+          break;
+        }
         if (
           !p.pnl_pct_suspicious &&
           queuePeakConfirmation(p.position, p.pnl_pct, { immediate: !shouldUsePnlRecheck() }) &&
@@ -1106,7 +1119,7 @@ Summarize the current portfolio health, total fees earned, and performance of al
     } finally {
       _pnlPollBusy = false;
     }
-  }, 30_000);
+  }, Math.max(5, Number(pollIntervalSec || 10)) * 1000);
 
   _cronTasks = [mgmtTask, screenTask, healthTask, briefingTask, briefingWatchdog];
   // Store interval ref so stopCronJobs can clear it
@@ -1824,6 +1837,10 @@ const SETTINGS_PAGES = [
       { key: "repeatDeployCooldownHours", label: "Repeat cooldown h", digits: 2 },
       { key: "repeatDeployCooldownMinFeeEarnedPct", label: "Repeat min fee %", digits: 1 },
       { key: "repeatDeployCooldownScope", label: "Repeat scope", type: "select", options: [["token", "Token"], ["pool", "Pool"], ["both", "Both"]] },
+      { key: "whaleGuardEnabled", label: "Whale guard", type: "toggle" },
+      { key: "whaleGuardMinQuoteDrainUsd", label: "Whale quote $", digits: 0 },
+      { key: "whaleGuardMinLiquidityDropPct", label: "Whale TVL drop %", digits: 1 },
+      { key: "whaleGuardWindowMinutes", label: "Whale window m", digits: 0 },
     ],
   },
   {

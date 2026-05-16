@@ -225,6 +225,18 @@ export const config = {
     solMode:               u.solMode               ?? false,
   },
 
+  whaleGuard: {
+    enabled: u.whaleGuardEnabled ?? true,
+    source: u.whaleGuardSource ?? "meteora",
+    windowMinutes: u.whaleGuardWindowMinutes ?? 5,
+    cooldownMinutes: u.whaleGuardCooldownMinutes ?? 10,
+    minNetWithdrawUsd: u.whaleGuardMinNetWithdrawUsd ?? 12_000,
+    minQuoteDrainUsd: u.whaleGuardMinQuoteDrainUsd ?? u.whaleGuardMinNetWithdrawUsd ?? 12_000,
+    minTvlDropUsd: u.whaleGuardMinTvlDropUsd ?? u.whaleGuardMinNetWithdrawUsd ?? 12_000,
+    minTvlDropPct: u.whaleGuardMinLiquidityDropPct ?? u.whaleGuardMinTvlDropPct ?? 18,
+    requireBaseIncreaseForQuoteDrain: u.whaleGuardRequireBaseIncreaseForQuoteDrain ?? true,
+  },
+
   // ─── Strategy Mapping ───────────────────
   strategy: {
     strategy:     u.strategy     ?? "bid_ask",
