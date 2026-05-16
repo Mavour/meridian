@@ -95,6 +95,17 @@ function poolDetailPriceChange(pool) {
   return numberOrNull(pool?.pool_price_change_pct ?? pool?.price_change_pct);
 }
 
+function timingFallbackAffectsReason(reason, fallbackFrames) {
+  if (!reason || !fallbackFrames?.length) return false;
+  const text = String(reason).toLowerCase();
+  return (
+    (fallbackFrames.includes("5m") && text.includes("short-term")) ||
+    (fallbackFrames.includes("1h") && text.includes("1h")) ||
+    (fallbackFrames.includes("6h") && text.includes("6h")) ||
+    (fallbackFrames.includes("24h") && text.includes("24h"))
+  );
+}
+
 async function fetchFreshPoolDetail(poolAddress, timeframe = config.screening.timeframe || "5m") {
   const encodedTimeframe = encodeURIComponent(timeframe);
   const filter = encodeURIComponent(`pool_address=${poolAddress}`);
@@ -237,13 +248,23 @@ async function validateDeployPoolThresholds(args) {
       log("executor_warn", `Pool timing refresh partial failure for ${args.pool_address}: ${timingErrors.join("; ")}`);
     }
 
+    const fallbackFrames = [];
+    const price5m = poolDetailPriceChange(timingDetails.get("5m")) ?? numberOrNull(args.price_5m_change ?? args.price_change_pct);
+    const price1h = poolDetailPriceChange(timingDetails.get("1h")) ?? numberOrNull(args.price_1h_change);
+    const price6h = poolDetailPriceChange(timingDetails.get("6h")) ?? numberOrNull(args.price_6h_change);
+    const price24h = poolDetailPriceChange(timingDetails.get("24h")) ?? numberOrNull(args.price_24h_change);
+    if (!timingDetails.has("5m") && price5m != null) fallbackFrames.push("5m");
+    if (!timingDetails.has("1h") && price1h != null) fallbackFrames.push("1h");
+    if (!timingDetails.has("6h") && price6h != null) fallbackFrames.push("6h");
+    if (!timingDetails.has("24h") && price24h != null) fallbackFrames.push("24h");
+
     const timing = evaluateSingleSideSolEntry({
       name: timingDetails.get("5m")?.name || detail?.name || args.pool_name || args.pool_address,
       pool: args.pool_address,
-      price_5m_change: poolDetailPriceChange(timingDetails.get("5m")) ?? numberOrNull(args.price_5m_change ?? args.price_change_pct),
-      price_1h_change: poolDetailPriceChange(timingDetails.get("1h")) ?? numberOrNull(args.price_1h_change),
-      price_6h_change: poolDetailPriceChange(timingDetails.get("6h")) ?? numberOrNull(args.price_6h_change),
-      price_24h_change: poolDetailPriceChange(timingDetails.get("24h")) ?? numberOrNull(args.price_24h_change),
+      price_5m_change: price5m,
+      price_1h_change: price1h,
+      price_6h_change: price6h,
+      price_24h_change: price24h,
       fee_active_tvl_ratio: detail?.fee_active_tvl_ratio ?? args.fee_tvl_ratio,
       fee_change_pct: timingDetails.get("5m")?.fee_change_pct ?? detail?.fee_change_pct ?? args.fee_change_pct,
       volume_change_pct: timingDetails.get("5m")?.volume_change_pct ?? detail?.volume_change_pct ?? args.volume_change_pct,
@@ -252,8 +273,8 @@ async function validateDeployPoolThresholds(args) {
     if (!timing.pass) {
       return {
         pass: false,
-        reason: timingErrors.length > 0
-          ? `${timing.reason} (used candidate timing fallback after API error: ${timingErrors[0]})`
+        reason: timingFallbackAffectsReason(timing.reason, fallbackFrames)
+          ? `${timing.reason} (used candidate timing fallback for ${fallbackFrames.join(", ")} after API error: ${timingErrors[0]})`
           : timing.reason,
       };
     }
