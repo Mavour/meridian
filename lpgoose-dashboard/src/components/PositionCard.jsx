@@ -172,7 +172,9 @@ export default function PositionCard({ pos, peakPnl = null }) {
     pos.fees?.unclaimed_y_amount != null ? fmtAmount(pos.fees.unclaimed_y_amount, tokenY.symbol) : null,
   ].filter(Boolean).join(' + ');
   const initialValue = stored?.initialValue;
-  const pnl = computedPnlPct(currentValue, initialValue);
+  const apiPnl = pos.pnl_pct != null && pos.pnl_pct !== '' ? Number(pos.pnl_pct) : null;
+  const localPnl = computedPnlPct(currentValue, initialValue);
+  const pnl = Number.isFinite(apiPnl) ? apiPnl : localPnl;
   const peak = Number.isFinite(Number(peakPnl)) ? Number(peakPnl) : null;
   const pnlDisplay = pnl == null ? '-' : `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}%`;
   const peakDisplay = peak == null || !Number.isFinite(peak) ? '-' : `${peak >= 0 ? '+' : ''}${peak.toFixed(2)}%`;
