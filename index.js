@@ -1271,7 +1271,7 @@ const MAX_HISTORY = 20;    // keep last 20 messages (10 exchanges)
 let _ttyInterface = null;
 let _latestCandidates = [];
 let _latestCandidatesAt = null;
-let _pendingInput = null; // { key, page, menuMsgId }
+let _pendingInput = null; // { key, page, menuMsgId } or { mode: "setKey", menuMsgId }
 
 function setLatestCandidates(candidates = []) {
   _latestCandidates = Array.isArray(candidates) ? candidates : [];
@@ -1335,6 +1335,8 @@ function formatConfigSnapshot() {
 function parseConfigValue(raw) {
   const value = String(raw ?? "").trim();
   if (!value.length) return "";
+  if (/^(on|yes)$/i.test(value)) return true;
+  if (/^(off|no)$/i.test(value)) return false;
   if (/^(true|false)$/i.test(value)) return value.toLowerCase() === "true";
   if (/^null$/i.test(value)) return null;
   if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);
@@ -1472,6 +1474,7 @@ function settingValue(key) {
 
 function fmtSettingValue(value) {
   if (Array.isArray(value)) return value.join(",");
+  if (value == null) return "off";
   if (typeof value === "boolean") return value ? "on" : "off";
   return String(value);
 }
@@ -1498,6 +1501,146 @@ function inputButton(key, label, { digits = 0 } = {}) {
   const value = settingValue(key);
   const shown = value == null ? "off" : Number.isFinite(Number(value)) ? String(parseFloat(Number(value).toFixed(digits))) : String(value);
   return [settingButton(`${label}: ${shown} ✏`, `cfg:input:${key}`)];
+}
+
+const MENU_INTEGER_KEYS = new Set([
+  "maxPositions",
+  "managementIntervalMin",
+  "screeningIntervalMin",
+  "minTvl",
+  "maxTvl",
+  "minVolume",
+  "minOrganic",
+  "minHolders",
+  "minMcap",
+  "maxMcap",
+  "minBinStep",
+  "maxBinStep",
+  "minTokenFeesSol",
+  "maxBotHoldersPct",
+  "maxTop10Pct",
+  "maxBundlePct",
+  "minTokenAgeHours",
+  "maxTokenAgeHours",
+  "maxDexBoosts",
+  "minBinsBelow",
+  "maxBinsBelow",
+  "defaultBinsBelow",
+  "outOfRangeWaitMinutes",
+  "outOfRangeBinsToClose",
+  "minAgeBeforeYieldCheck",
+  "minClaimAmount",
+  "slowBleedMinAge",
+  "postCloseReentryCooldownMin",
+  "maxWavesPerToken",
+  "maxLossesPerToken",
+  "waveBlockHours",
+  "repeatDeployCooldownTriggerCount",
+  "gmgnMinKolCount",
+  "gmgnMinTotalFeeSol",
+  "gmgnMinHolders",
+  "gmgnMinVolume",
+  "gmgnMinTokenAgeHours",
+  "gmgnMaxTokenAgeHours",
+  "rsiLength",
+  "indicatorCandles",
+  "rsiOversold",
+  "rsiOverbought",
+  "minSentimentScore",
+  "xLookbackDays",
+  "pnlPollIntervalSec",
+  "trailingConfirmDelaySec",
+]);
+
+const MENU_NON_NEGATIVE_KEYS = new Set([
+  "deployAmountSol",
+  "gasReserve",
+  "positionSizePct",
+  "maxPositions",
+  "maxDeployAmount",
+  "managementIntervalMin",
+  "screeningIntervalMin",
+  "minTvl",
+  "maxTvl",
+  "minVolume",
+  "minOrganic",
+  "minHolders",
+  "minMcap",
+  "maxMcap",
+  "minBinStep",
+  "maxBinStep",
+  "minFeeActiveTvlRatio",
+  "minTokenFeesSol",
+  "maxBotHoldersPct",
+  "maxTop10Pct",
+  "maxBundlePct",
+  "minTokenAgeHours",
+  "maxTokenAgeHours",
+  "maxDexBoosts",
+  "minBinsBelow",
+  "maxBinsBelow",
+  "defaultBinsBelow",
+  "outOfRangeWaitMinutes",
+  "outOfRangeBinsToClose",
+  "minFeePerTvl24h",
+  "minAgeBeforeYieldCheck",
+  "minClaimAmount",
+  "slowBleedMinAge",
+  "postCloseReentryCooldownMin",
+  "maxWavesPerToken",
+  "maxLossesPerToken",
+  "waveBlockHours",
+  "repeatDeployCooldownTriggerCount",
+  "repeatDeployCooldownHours",
+  "repeatDeployCooldownMinFeeEarnedPct",
+  "gmgnMinKolCount",
+  "gmgnMinTotalFeeSol",
+  "gmgnMinHolders",
+  "gmgnMinVolume",
+  "gmgnMinTokenAgeHours",
+  "gmgnMaxTokenAgeHours",
+  "gmgnMaxBundlerRate",
+  "gmgnMaxTop10HolderRate",
+  "rsiLength",
+  "indicatorCandles",
+  "rsiOversold",
+  "rsiOverbought",
+  "xLookbackDays",
+  "pnlPollIntervalSec",
+  "trailingConfirmDelaySec",
+]);
+
+function sanitizeMenuValue(key, value) {
+  if (value == null) return value;
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+  if (MENU_INTEGER_KEYS.has(key)) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) throw new Error(`${key} must be a number`);
+    value = Math.round(num);
+  } else if (MENU_NON_NEGATIVE_KEYS.has(key) || typeof settingValue(key) === "number") {
+    const num = Number(value);
+    if (!Number.isFinite(num)) throw new Error(`${key} must be a number`);
+    value = num;
+  }
+  if (MENU_NON_NEGATIVE_KEYS.has(key)) value = Math.max(0, value);
+  if (key === "maxPositions") value = Math.max(1, value);
+  if (key === "rsiLength") value = Math.max(2, value);
+  if (["minBinsBelow", "maxBinsBelow", "defaultBinsBelow"].includes(key)) value = Math.max(35, value);
+  if (key === "maxBinsBelow") value = Math.max(value, Number(config.strategy.minBinsBelow ?? 35));
+  if (key === "defaultBinsBelow") {
+    value = Math.max(Number(config.strategy.minBinsBelow ?? 35), Math.min(Number(config.strategy.maxBinsBelow ?? value), value));
+  }
+  if (key === "minBinStep" && Number(config.screening.maxBinStep) > 0) value = Math.min(value, Number(config.screening.maxBinStep));
+  if (key === "maxBinStep") value = Math.max(value, Number(config.screening.minBinStep ?? 0));
+  if (key === "minTvl" && Number(config.screening.maxTvl) > 0) value = Math.min(value, Number(config.screening.maxTvl));
+  if (key === "maxTvl") value = Math.max(value, Number(config.screening.minTvl ?? 0));
+  return value;
+}
+
+function formatAppliedConfig(applied = {}) {
+  const entries = Object.entries(applied);
+  if (!entries.length) return "";
+  return entries.map(([key, value]) => `${key} = ${fmtSettingValue(value)}`).join("\n");
 }
 
 function renderSettingsMenu(page = "quick") {
@@ -1537,6 +1680,7 @@ function renderSettingsMenu(page = "quick") {
   const footer = [
     [
       settingButton("🔄 Refresh", `cfg:page:${page}`),
+      settingButton("Set key", "cfg:setkey"),
       settingButton("📋 Raw cfg", "cfg:show"),
       settingButton("❌ Close", "cfg:close"),
     ],
@@ -1788,7 +1932,23 @@ async function applySettingsMenuCallback(msg) {
       allowedLaunchpads: `e.g. moontok,deployer.fun`,
     };
     const hint = examples[inputKey] ? ` (${examples[inputKey]})` : "";
-    await sendMessage(`Enter new value for ${inputKey}\nCurrent: ${currentVal ?? "off"}${hint}\nSend a number (or "off" to clear).`);
+    await sendMessage(`Enter new value for ${inputKey}\nCurrent: ${fmtSettingValue(currentVal)}${hint}\nSend "cancel" to abort. Use "null" to clear nullable fields.`);
+    return;
+  }
+  if (action === "setkey") {
+    _pendingInput = { mode: "setKey", menuMsgId: msg.messageId };
+    await answerCallbackQuery(msg.callbackQueryId);
+    await sendMessage([
+      "Send config update as:",
+      "key value",
+      "",
+      "Examples:",
+      "deployAmountSol 0.5",
+      "maxPositions 3",
+      "blockedLaunchpads pump.fun,letsbonk.fun",
+      "",
+      'Send "cancel" to abort.',
+    ].join("\n"));
     return;
   }
   if (action === "close") {
@@ -1819,17 +1979,9 @@ async function applySettingsMenuCallback(msg) {
       await answerCallbackQuery(msg.callbackQueryId, "Invalid setting");
       return;
     }
-    value = Number((current + delta).toFixed(4));
-    if (key === "maxPositions") value = Math.max(1, Math.round(value));
-    if (key === "rsiLength") value = Math.max(2, Math.round(value));
-    if (key === "repeatDeployCooldownTriggerCount") value = Math.max(1, Math.round(value));
-    if (key === "repeatDeployCooldownHours") value = Math.max(0, Math.round(value));
-    if (key === "repeatDeployCooldownMinFeeEarnedPct") value = Math.max(0, value);
-    if (["deployAmountSol", "gasReserve", "maxDeployAmount"].includes(key)) value = Math.max(0, value);
-    if (key === "minBinsBelow") value = Math.max(35, Math.round(value));
-    if (key === "maxBinsBelow") value = Math.max(35, Math.round(value));
+    value = sanitizeMenuValue(key, Number((current + delta).toFixed(4)));
   } else if (action === "set") {
-    value = normalizeMenuValue(key, parts.slice(3).join(":"));
+    value = sanitizeMenuValue(key, normalizeMenuValue(key, parts.slice(3).join(":")));
   } else {
     await answerCallbackQuery(msg.callbackQueryId, "Unknown action");
     return;
@@ -1840,12 +1992,14 @@ async function applySettingsMenuCallback(msg) {
     reason: "Telegram settings menu",
   });
   if (!result?.success) {
-    await answerCallbackQuery(msg.callbackQueryId, "Config update failed");
+    await answerCallbackQuery(msg.callbackQueryId, `Config update failed: ${(result?.unknown || [key]).join(", ")}`);
     return;
   }
   const page = resolveSettingPage(key);
   await answerCallbackQuery(msg.callbackQueryId, `Updated ${key}`);
   await showSettingsMenu({ messageId: msg.messageId, page });
+  const appliedText = formatAppliedConfig(result.applied);
+  if (appliedText) await sendMessage(`Updated config:\n${appliedText}`).catch(() => {});
 }
 
 function formatHelpText() {
@@ -1861,7 +2015,8 @@ function formatHelpText() {
     "/closeall — close all open positions",
     "/set <n> <note> — set note/instruction on position",
     "/config — show important runtime config",
-    "/settings — button menu for common config",
+    "/menu — button menu to edit config",
+    "/settings — same as /menu",
     "/setcfg <key> <value> — update persisted config",
     "/screen — refresh deterministic candidate list",
     "/candidates — show latest cached candidates",
@@ -1951,24 +2106,55 @@ async function telegramHandler(msg) {
   if (!text) return;
 
   if (_pendingInput && !msg.isCallback && !text.startsWith("/")) {
-    const { key, page, menuMsgId } = _pendingInput;
-    _pendingInput = null;
-    let value;
-    if (text.toLowerCase() === "off" || text.toLowerCase() === "null") {
-      value = null;
-    } else {
-      value = normalizeMenuValue(key, text);
-      if (value === text && !Number.isNaN(Number(text)) && text.trim() !== "") {
-        const num = Number(text);
-        if (Number.isFinite(num)) value = num;
-      }
-    }
-    const result = await executeTool("update_config", { changes: { [key]: value }, reason: "Telegram input field" });
-    if (!result?.success) {
-      await sendMessage(`Failed to update ${key}.`);
+    if (/^cancel$/i.test(text)) {
+      const { page = "quick", menuMsgId } = _pendingInput;
+      _pendingInput = null;
+      await sendMessage("Config edit cancelled.").catch(() => {});
+      if (menuMsgId) await showSettingsMenu({ messageId: menuMsgId, page }).catch(() => {});
       return;
     }
-    await showSettingsMenu({ messageId: menuMsgId, page });
+
+    const pending = _pendingInput;
+    _pendingInput = null;
+
+    let key = pending.key;
+    let page = pending.page || "quick";
+    const menuMsgId = pending.menuMsgId;
+    let rawValue = text;
+
+    if (pending.mode === "setKey") {
+      const match = text.match(/^([A-Za-z0-9_]+)(?:\s+|=)([\s\S]+)$/);
+      if (!match) {
+        await sendMessage('Invalid format. Send "key value", for example: deployAmountSol 0.5').catch(() => {});
+        _pendingInput = pending;
+        return;
+      }
+      key = match[1];
+      rawValue = match[2].trim();
+      page = resolveSettingPage(key);
+    }
+
+    let value;
+    try {
+      if (rawValue.toLowerCase() === "null") {
+        value = null;
+      } else {
+        value = sanitizeMenuValue(key, normalizeMenuValue(key, rawValue));
+      }
+    } catch (e) {
+      await sendMessage(`Invalid value for ${key}: ${e.message}`).catch(() => {});
+      _pendingInput = pending;
+      return;
+    }
+
+    const result = await executeTool("update_config", { changes: { [key]: value }, reason: "Telegram settings menu input" });
+    if (!result?.success) {
+      await sendMessage(`Failed to update ${key}.\nUnknown: ${(result?.unknown || []).join(", ") || "none"}`).catch(() => {});
+      return;
+    }
+    const appliedText = formatAppliedConfig(result.applied);
+    await sendMessage(`Updated config:\n${appliedText || `${key} = ${fmtSettingValue(value)}`}`).catch(() => {});
+    if (menuMsgId) await showSettingsMenu({ messageId: menuMsgId, page }).catch(() => {});
     return;
   }
   if (msg?.isCallback && text.startsWith("cfg:")) {
