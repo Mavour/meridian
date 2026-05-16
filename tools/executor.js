@@ -373,6 +373,12 @@ const toolMap = {
   update_config: ({ changes, reason = "" }) => {
     // Flat key → config section mapping (covers everything in config.js)
     const CONFIG_MAP = {
+      // setup/runtime
+      preset: ["persist", "preset"],
+      dryRun: ["env", "DRY_RUN"],
+      llmModel: ["env", "LLM_MODEL"],
+      tvlDropSkipPct: ["persist", "tvlDropSkipPct"],
+      minBaseFeeSkipPct: ["persist", "minBaseFeeSkipPct"],
       // screening
       screeningSource: ["screening", "source"],
       minFeeActiveTvlRatio: ["screening", "minFeeActiveTvlRatio"],
@@ -395,6 +401,7 @@ const toolMap = {
       avoidPvpSymbols: ["screening", "avoidPvpSymbols"],
       blockPvpSymbols: ["screening", "blockPvpSymbols"],
       maxBundlePct:     ["screening", "maxBundlePct"],
+      maxBundlersPct:   ["screening", "maxBundlePct", ["maxBundlePct"]],
       maxBotHoldersPct: ["screening", "maxBotHoldersPct"],
       maxTop10Pct: ["screening", "maxTop10Pct"],
       allowedLaunchpads: ["screening", "allowedLaunchpads"],
@@ -417,6 +424,7 @@ const toolMap = {
       repeatDeployCooldownMinFeeEarnedPct: ["management", "repeatDeployCooldownMinFeeEarnedPct"],
       minVolumeToRebalance: ["management", "minVolumeToRebalance"],
       stopLossPct: ["management", "stopLossPct"],
+      emergencyPriceDropPct: ["management", "stopLossPct"],
       hardStopPct: ["management", "hardStopPct"],
       hardStopBypassSuspicious: ["management", "hardStopBypassSuspicious"],
       trailingConfirmDelaySec: ["management", "trailingConfirmDelaySec"],
@@ -616,6 +624,16 @@ const toolMap = {
     // Apply to live config immediately
     for (const [key, val] of Object.entries(applied)) {
       const [section, field, third] = CONFIG_MAP[key];
+      if (section === "env") {
+        const before = process.env[field];
+        process.env[field] = String(val);
+        log("config", `update_config: process.env.${field} ${redactConfigValue(key, before)} â†’ ${redactConfigValue(key, val)}`);
+        continue;
+      }
+      if (section === "persist") {
+        log("config", `update_config: user-config.${field} â†’ ${redactConfigValue(key, val)}`);
+        continue;
+      }
       const isNestedField = typeof third === "string"; // string = nested subfield, array = persistPath
       if (isNestedField) {
         if (!config[section][field] || typeof config[section][field] !== "object") config[section][field] = {};

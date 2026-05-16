@@ -39,6 +39,8 @@ import { getWeightsSummary } from "./signal-weights.js";
 import { bootstrapHiveMind, ensureAgentId, getHiveMindPullMode, isHiveMindEnabled, pullHiveMindLessons, pullHiveMindPresets, registerHiveMindAgent, startHiveMindBackgroundSync } from "./hivemind.js";
 import { appendDecision } from "./decision-log.js";
 
+const APP_DIR = path.dirname(fileURLToPath(import.meta.url));
+const USER_CONFIG_PATH = path.join(APP_DIR, "user-config.json");
 const entrypointPath = process.env.pm_exec_path || process.argv[1];
 const isMain = entrypointPath
   ? path.resolve(entrypointPath) === fileURLToPath(import.meta.url)
@@ -1346,8 +1348,22 @@ function parseConfigValue(raw) {
   return value;
 }
 
+function readUserConfigSnapshot() {
+  try {
+    return fs.existsSync(USER_CONFIG_PATH)
+      ? JSON.parse(fs.readFileSync(USER_CONFIG_PATH, "utf8"))
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 function settingValue(key) {
+  const userConfig = readUserConfigSnapshot();
   const values = {
+    dryRun: process.env.DRY_RUN === "true",
+    preset: userConfig.preset,
+    llmModel: userConfig.llmModel || process.env.LLM_MODEL,
     // ── Quick toggles ──
     solMode: config.management.solMode,
     lpAgentRelayEnabled: config.api.lpAgentRelayEnabled,
@@ -1363,12 +1379,15 @@ function settingValue(key) {
     trailingDropPct: config.management.trailingDropPct,
     managementIntervalMin: config.schedule.managementIntervalMin,
     screeningIntervalMin: config.schedule.screeningIntervalMin,
+    healthCheckIntervalMin: config.schedule.healthCheckIntervalMin,
     // ── Screen ──
     screeningSource: config.screening.source,
+    excludeHighSupplyConcentration: config.screening.excludeHighSupplyConcentration,
     minTvl: config.screening.minTvl,
     maxTvl: config.screening.maxTvl,
     minVolume: config.screening.minVolume,
     minOrganic: config.screening.minOrganic,
+    minQuoteOrganic: config.screening.minQuoteOrganic,
     minHolders: config.screening.minHolders,
     minMcap: config.screening.minMcap,
     maxMcap: config.screening.maxMcap,
@@ -1398,6 +1417,14 @@ function settingValue(key) {
     waveBlockHours: config.screening.waveBlockHours,
     fallingKnife5mThreshold: config.screening.fallingKnife5mThreshold,
     fallingKnife1hThreshold: config.screening.fallingKnife1hThreshold,
+    singleSideSolEntryGateEnabled: config.screening.singleSideSolEntryGateEnabled,
+    singleSideSolMin1hChange: config.screening.singleSideSolMin1hChange,
+    singleSideSolMinRetest1hChange: config.screening.singleSideSolMinRetest1hChange,
+    singleSideSolMaxRetest1hChange: config.screening.singleSideSolMaxRetest1hChange,
+    singleSideSolMax5mPullback: config.screening.singleSideSolMax5mPullback,
+    singleSideSolWeakTrendMax1h: config.screening.singleSideSolWeakTrendMax1h,
+    singleSideSolMaxWeakBounce5m: config.screening.singleSideSolMaxWeakBounce5m,
+    singleSideSolMinFeeActiveTvlRatio: config.screening.singleSideSolMinFeeActiveTvlRatio,
     useDiscordSignals: config.screening.useDiscordSignals,
     discordSignalMode: config.screening.discordSignalMode,
     // ── Strategy ──
@@ -1417,6 +1444,10 @@ function settingValue(key) {
     minAgeBeforeYieldCheck: config.management.minAgeBeforeYieldCheck,
     minClaimAmount: config.management.minClaimAmount,
     autoSwapAfterClaim: config.management.autoSwapAfterClaim,
+    oorCooldownTriggerCount: config.management.oorCooldownTriggerCount,
+    oorCooldownHours: config.management.oorCooldownHours,
+    repeatDeployCooldownScope: config.management.repeatDeployCooldownScope,
+    minVolumeToRebalance: config.management.minVolumeToRebalance,
     slowBleedMinAge: config.management.slowBleedMinAge,
     slowBleedMinPnl: config.management.slowBleedMinPnl,
     slowBleedMaxPnl: config.management.slowBleedMaxPnl,
@@ -1424,6 +1455,7 @@ function settingValue(key) {
     hardStopBypassSuspicious: config.management.hardStopBypassSuspicious,
     trailingConfirmDelaySec: config.management.trailingConfirmDelaySec,
     pnlPollIntervalSec: config.management.pnlPollIntervalSec,
+    pnlSanityMaxDiffPct: config.management.pnlSanityMaxDiffPct,
     minSolToOpen: config.management.minSolToOpen,
     repeatDeployCooldownEnabled: config.management.repeatDeployCooldownEnabled,
     repeatDeployCooldownTriggerCount: config.management.repeatDeployCooldownTriggerCount,
@@ -1465,9 +1497,22 @@ function settingValue(key) {
     rsiOverbought: config.indicators.rsiOverbought,
     // ── Advanced ──
     darwinEnabled: config.darwin.enabled,
+    darwinWindowDays: config.darwin.windowDays,
+    darwinRecalcEvery: config.darwin.recalcEvery,
+    darwinBoost: config.darwin.boostFactor,
+    darwinDecay: config.darwin.decayFactor,
+    darwinFloor: config.darwin.weightFloor,
+    darwinCeiling: config.darwin.weightCeiling,
+    darwinMinSamples: config.darwin.minSamples,
     xSentimentEnabled: config.xSentiment.enabled,
     minSentimentScore: config.xSentiment.minScore,
     xLookbackDays: config.xSentiment.lookbackDays,
+    hiveMindPullMode: config.hiveMind.pullMode,
+    takeProfitFeePct: config.management.takeProfitPct,
+    emergencyPriceDropPct: config.management.stopLossPct,
+    maxBundlersPct: config.screening.maxBundlePct,
+    tvlDropSkipPct: userConfig.tvlDropSkipPct,
+    minBaseFeeSkipPct: userConfig.minBaseFeeSkipPct,
   };
   return values[key];
 }
@@ -1480,7 +1525,8 @@ function fmtSettingValue(value) {
 }
 
 function settingButton(label, data) {
-  return { text: label, callback_data: data };
+  const text = String(label);
+  return { text: text.length > 60 ? `${text.slice(0, 57)}...` : text, callback_data: data };
 }
 
 function toggleButton(key, label) {
@@ -1507,10 +1553,12 @@ const MENU_INTEGER_KEYS = new Set([
   "maxPositions",
   "managementIntervalMin",
   "screeningIntervalMin",
+  "healthCheckIntervalMin",
   "minTvl",
   "maxTvl",
   "minVolume",
   "minOrganic",
+  "minQuoteOrganic",
   "minHolders",
   "minMcap",
   "maxMcap",
@@ -1536,6 +1584,7 @@ const MENU_INTEGER_KEYS = new Set([
   "maxLossesPerToken",
   "waveBlockHours",
   "repeatDeployCooldownTriggerCount",
+  "oorCooldownTriggerCount",
   "gmgnMinKolCount",
   "gmgnMinTotalFeeSol",
   "gmgnMinHolders",
@@ -1546,10 +1595,15 @@ const MENU_INTEGER_KEYS = new Set([
   "indicatorCandles",
   "rsiOversold",
   "rsiOverbought",
-  "minSentimentScore",
   "xLookbackDays",
   "pnlPollIntervalSec",
   "trailingConfirmDelaySec",
+  "maxSteps",
+  "maxTokens",
+  "darwinWindowDays",
+  "darwinRecalcEvery",
+  "darwinMinSamples",
+  "cgBlockRank",
 ]);
 
 const MENU_NON_NEGATIVE_KEYS = new Set([
@@ -1560,10 +1614,12 @@ const MENU_NON_NEGATIVE_KEYS = new Set([
   "maxDeployAmount",
   "managementIntervalMin",
   "screeningIntervalMin",
+  "healthCheckIntervalMin",
   "minTvl",
   "maxTvl",
   "minVolume",
   "minOrganic",
+  "minQuoteOrganic",
   "minHolders",
   "minMcap",
   "maxMcap",
@@ -1591,6 +1647,7 @@ const MENU_NON_NEGATIVE_KEYS = new Set([
   "maxLossesPerToken",
   "waveBlockHours",
   "repeatDeployCooldownTriggerCount",
+  "oorCooldownTriggerCount",
   "repeatDeployCooldownHours",
   "repeatDeployCooldownMinFeeEarnedPct",
   "gmgnMinKolCount",
@@ -1608,6 +1665,18 @@ const MENU_NON_NEGATIVE_KEYS = new Set([
   "xLookbackDays",
   "pnlPollIntervalSec",
   "trailingConfirmDelaySec",
+  "maxSteps",
+  "maxTokens",
+  "temperature",
+  "darwinWindowDays",
+  "darwinRecalcEvery",
+  "darwinBoost",
+  "darwinDecay",
+  "darwinFloor",
+  "darwinCeiling",
+  "darwinMinSamples",
+  "singleSideSolMinFeeActiveTvlRatio",
+  "minBaseFeeSkipPct",
 ]);
 
 function sanitizeMenuValue(key, value) {
@@ -1643,200 +1712,256 @@ function formatAppliedConfig(applied = {}) {
   return entries.map(([key, value]) => `${key} = ${fmtSettingValue(value)}`).join("\n");
 }
 
+const SETTINGS_PAGES = [
+  {
+    id: "quick",
+    label: "Quick",
+    fields: [
+      { key: "preset", label: "Preset", type: "select", options: [["custom", "Custom"], ["degen", "Degen"], ["moderate", "Moderate"], ["safe", "Safe"]] },
+      { key: "solMode", label: "SOL mode", type: "toggle" },
+      { key: "dryRun", label: "Dry run", type: "toggle" },
+      { key: "maxPositions", label: "Max positions", digits: 0 },
+      { key: "deployAmountSol", label: "Deploy SOL", digits: 2 },
+      { key: "minSolToOpen", label: "Min SOL open", digits: 2 },
+      { key: "maxDeployAmount", label: "Max deploy SOL", digits: 2 },
+      { key: "gasReserve", label: "Gas reserve", digits: 2 },
+      { key: "positionSizePct", label: "Position size", digits: 2 },
+    ],
+  },
+  {
+    id: "screen",
+    label: "Screen",
+    fields: [
+      { key: "screeningSource", label: "Source", type: "select", options: [["meteora", "Meteora"], ["gmgn", "GMGN"]] },
+      { key: "timeframe", label: "Timeframe", type: "select", options: [["5m", "5m"], ["30m", "30m"], ["1h", "1h"], ["24h", "24h"]] },
+      { key: "category", label: "Category", type: "select", options: [["trending", "Trending"], ["top", "Top"], ["new", "New"]] },
+      { key: "minTvl", label: "Min TVL", digits: 0 },
+      { key: "maxTvl", label: "Max TVL", digits: 0 },
+      { key: "minVolume", label: "Min volume", digits: 0 },
+      { key: "minOrganic", label: "Min organic", digits: 0 },
+      { key: "minQuoteOrganic", label: "Min quote organic", digits: 0 },
+      { key: "minHolders", label: "Min holders", digits: 0 },
+      { key: "minMcap", label: "Min mcap", digits: 0 },
+      { key: "maxMcap", label: "Max mcap", digits: 0 },
+      { key: "minBinStep", label: "Min bin step", digits: 0 },
+      { key: "maxBinStep", label: "Max bin step", digits: 0 },
+      { key: "minFeeActiveTvlRatio", label: "Min fee/aTVL", digits: 2 },
+      { key: "minTokenFeesSol", label: "Min fees SOL", digits: 0 },
+    ],
+  },
+  {
+    id: "risk",
+    label: "Risk",
+    fields: [
+      { key: "excludeHighSupplyConcentration", label: "Supply concentration", type: "toggle" },
+      { key: "maxBundlePct", label: "Max bundle %", digits: 0 },
+      { key: "maxBotHoldersPct", label: "Max bot holders %", digits: 0 },
+      { key: "maxTop10Pct", label: "Max top10 %", digits: 0 },
+      { key: "avoidPvpSymbols", label: "Avoid PVP", type: "toggle" },
+      { key: "blockPvpSymbols", label: "Hard block PVP", type: "toggle" },
+      { key: "blockedLaunchpads", label: "Blocked launchpads" },
+      { key: "allowedLaunchpads", label: "Allowed launchpads" },
+      { key: "blockedSymbols", label: "Blocked symbols" },
+      { key: "minTokenAgeHours", label: "Min age h", digits: 0 },
+      { key: "maxTokenAgeHours", label: "Max age h", digits: 0 },
+      { key: "athFilterPct", label: "ATH filter %", digits: 1 },
+      { key: "fallingKnife5mThreshold", label: "Knife 5m %", digits: 1 },
+      { key: "fallingKnife1hThreshold", label: "Knife 1h %", digits: 1 },
+      { key: "maxVolatility", label: "Max volatility", digits: 1 },
+      { key: "maxDexBoosts", label: "Max Dex boosts", digits: 0 },
+      { key: "tvlDropSkipPct", label: "TVL drop skip %", digits: 1 },
+      { key: "minBaseFeeSkipPct", label: "Min base fee skip", digits: 2 },
+      { key: "cgBlockRank", label: "CG block rank", digits: 0 },
+    ],
+  },
+  {
+    id: "single",
+    label: "Single SOL",
+    fields: [
+      { key: "singleSideSolEntryGateEnabled", label: "Entry gate", type: "toggle" },
+      { key: "singleSideSolMin1hChange", label: "Min 1h %", digits: 1 },
+      { key: "singleSideSolMax5mPullback", label: "Max 5m pullback", digits: 1 },
+      { key: "singleSideSolWeakTrendMax1h", label: "Weak trend max 1h", digits: 1 },
+      { key: "singleSideSolMinRetest1hChange", label: "Retest min 1h", digits: 1 },
+      { key: "singleSideSolMaxRetest1hChange", label: "Retest max 1h", digits: 1 },
+      { key: "singleSideSolMaxWeakBounce5m", label: "Max weak bounce 5m", digits: 1 },
+      { key: "singleSideSolMinFeeActiveTvlRatio", label: "Min fee/aTVL", digits: 2 },
+    ],
+  },
+  {
+    id: "strategy",
+    label: "Strategy",
+    fields: [
+      { key: "strategy", label: "Strategy", type: "select", options: [["spot", "Spot"], ["bid_ask", "Bid-ask"], ["curve", "Curve"]] },
+      { key: "dynamicStrategyEnabled", label: "Dynamic strategy", type: "toggle" },
+      { key: "minBinsBelow", label: "Min bins", digits: 0 },
+      { key: "maxBinsBelow", label: "Max bins", digits: 0 },
+      { key: "defaultBinsBelow", label: "Default bins", digits: 0 },
+      { key: "spotMinPrice1hChange", label: "Spot min 1h %", digits: 1 },
+      { key: "spotMinVolatility", label: "Spot min vol", digits: 1 },
+      { key: "spotMinPrice5mFloor", label: "Spot 5m floor", digits: 1 },
+      { key: "spotMinPrice30mFloor", label: "Spot 30m floor", digits: 1 },
+    ],
+  },
+  {
+    id: "mgmt",
+    label: "Manage",
+    fields: [
+      { key: "minClaimAmount", label: "Min claim", digits: 1 },
+      { key: "autoSwapAfterClaim", label: "Auto swap claim", type: "toggle" },
+      { key: "minVolumeToRebalance", label: "Min rebalance vol", digits: 0 },
+      { key: "outOfRangeBinsToClose", label: "OOR bins close", digits: 0 },
+      { key: "outOfRangeWaitMinutes", label: "OOR wait min", digits: 0 },
+      { key: "oorCooldownTriggerCount", label: "OOR cooldown count", digits: 0 },
+      { key: "oorCooldownHours", label: "OOR cooldown h", digits: 2 },
+      { key: "postCloseReentryCooldownMin", label: "Reentry cooldown", digits: 0 },
+      { key: "maxWavesPerToken", label: "Max waves/token", digits: 0 },
+      { key: "maxLossesPerToken", label: "Max losses/token", digits: 0 },
+      { key: "waveBlockHours", label: "Wave block h", digits: 0 },
+      { key: "repeatDeployCooldownEnabled", label: "Repeat cooldown", type: "toggle" },
+      { key: "repeatDeployCooldownTriggerCount", label: "Repeat count", digits: 0 },
+      { key: "repeatDeployCooldownHours", label: "Repeat cooldown h", digits: 2 },
+      { key: "repeatDeployCooldownMinFeeEarnedPct", label: "Repeat min fee %", digits: 1 },
+      { key: "repeatDeployCooldownScope", label: "Repeat scope", type: "select", options: [["token", "Token"], ["pool", "Pool"], ["both", "Both"]] },
+    ],
+  },
+  {
+    id: "exits",
+    label: "Exits",
+    fields: [
+      { key: "takeProfitPct", label: "Take profit %", digits: 1 },
+      { key: "takeProfitFeePct", label: "TP fee alias %", digits: 1 },
+      { key: "stopLossPct", label: "Stop loss %", digits: 1 },
+      { key: "emergencyPriceDropPct", label: "Emergency drop %", digits: 1 },
+      { key: "hardStopPct", label: "Hard stop %", digits: 1 },
+      { key: "hardStopBypassSuspicious", label: "Hard bypass suspicious", type: "toggle" },
+      { key: "trailingTakeProfit", label: "Trailing TP", type: "toggle" },
+      { key: "trailingTriggerPct", label: "Trail trigger %", digits: 1 },
+      { key: "trailingDropPct", label: "Trail drop %", digits: 1 },
+      { key: "trailingConfirmDelaySec", label: "Trail confirm s", digits: 0 },
+      { key: "pnlSanityMaxDiffPct", label: "PnL sanity diff %", digits: 1 },
+      { key: "pnlPollIntervalSec", label: "PnL poll s", digits: 0 },
+      { key: "minFeePerTvl24h", label: "Yield floor %", digits: 1 },
+      { key: "minAgeBeforeYieldCheck", label: "Yield check age", digits: 0 },
+      { key: "slowBleedMinAge", label: "Slow bleed age", digits: 0 },
+      { key: "slowBleedMinPnl", label: "Slow bleed min", digits: 1 },
+      { key: "slowBleedMaxPnl", label: "Slow bleed max", digits: 1 },
+    ],
+  },
+  {
+    id: "schedule",
+    label: "Schedule",
+    fields: [
+      { key: "managementIntervalMin", label: "Manage interval", digits: 0 },
+      { key: "screeningIntervalMin", label: "Screen interval", digits: 0 },
+      { key: "healthCheckIntervalMin", label: "Health interval", digits: 0 },
+    ],
+  },
+  {
+    id: "llm",
+    label: "LLM",
+    fields: [
+      { key: "llmModel", label: "Default model" },
+      { key: "managementModel", label: "Manager model" },
+      { key: "screeningModel", label: "Screener model" },
+      { key: "generalModel", label: "General model" },
+      { key: "temperature", label: "Temperature", digits: 3 },
+      { key: "maxTokens", label: "Max tokens", digits: 0 },
+      { key: "maxSteps", label: "Max steps", digits: 0 },
+    ],
+  },
+  {
+    id: "signals",
+    label: "Signals",
+    fields: [
+      { key: "useDiscordSignals", label: "Discord signals", type: "toggle" },
+      { key: "discordSignalMode", label: "Discord mode", type: "select", options: [["merge", "Merge"], ["only", "Only"]] },
+      { key: "xSentimentEnabled", label: "X sentiment", type: "toggle" },
+      { key: "minSentimentScore", label: "Min X score", digits: 0 },
+      { key: "xLookbackDays", label: "X lookback days", digits: 0 },
+      { key: "darwinEnabled", label: "Darwin signals", type: "toggle" },
+      { key: "darwinWindowDays", label: "Darwin window d", digits: 0 },
+      { key: "darwinRecalcEvery", label: "Darwin recalc every", digits: 0 },
+      { key: "darwinBoost", label: "Darwin boost", digits: 2 },
+      { key: "darwinDecay", label: "Darwin decay", digits: 2 },
+      { key: "darwinFloor", label: "Darwin floor", digits: 2 },
+      { key: "darwinCeiling", label: "Darwin ceiling", digits: 2 },
+      { key: "darwinMinSamples", label: "Darwin min samples", digits: 0 },
+      { key: "hiveMindPullMode", label: "Hive pull mode", type: "select", options: [["auto", "Auto"], ["manual", "Manual"], ["off", "Off"]] },
+    ],
+  },
+  {
+    id: "indicators",
+    label: "Indicators",
+    fields: [
+      { key: "chartIndicatorsEnabled", label: "Chart indicators", type: "toggle" },
+      { key: "requireAllIntervals", label: "Require all TF", type: "toggle" },
+      { key: "indicatorIntervals", label: "Intervals", type: "select", options: [["5_MINUTE", "5m"], ["15_MINUTE", "15m"], ["both", "Both"]] },
+      { key: "indicatorEntryPreset", label: "Entry preset", type: "select", options: [["smart_wallet_retest", "Retest"], ["single_side_reclaim", "Reclaim"], ["supertrend_break", "Supertrend"], ["rsi_reversal", "RSI"]] },
+      { key: "indicatorExitPreset", label: "Exit preset", type: "select", options: [["supertrend_break", "Supertrend"], ["rsi_reversal", "RSI"], ["bb_plus_rsi", "BB+RSI"]] },
+      { key: "rsiLength", label: "RSI length", digits: 0 },
+      { key: "indicatorCandles", label: "Candles", digits: 0 },
+      { key: "rsiOversold", label: "RSI oversold", digits: 0 },
+      { key: "rsiOverbought", label: "RSI overbought", digits: 0 },
+    ],
+  },
+];
+
+const SETTINGS_PAGE_BY_KEY = new Map(
+  SETTINGS_PAGES.flatMap((page) => page.fields.map((field) => [field.key, page.id])),
+);
+
+function selectButtons(field) {
+  const current = settingValue(field.key);
+  const currentText = Array.isArray(current) ? current.join(",") : String(current);
+  return field.options.map(([value, label]) => {
+    const selected = value === "both"
+      ? Array.isArray(current) && current.includes("5_MINUTE") && current.includes("15_MINUTE")
+      : String(value) === currentText;
+    return settingButton(`${selected ? "✓ " : ""}${label}`, `cfg:set:${field.key}:${value}`);
+  });
+}
+
+function settingRowsForPage(page) {
+  return page.fields.flatMap((field) => {
+    if (field.type === "toggle") return [[toggleButton(field.key, field.label)]];
+    if (field.type === "select") return [selectButtons(field)];
+    return [inputButton(field.key, field.label, { digits: field.digits ?? 0 })];
+  });
+}
+
 function renderSettingsMenu(page = "quick") {
-  const tabLabels = {
-    quick: "⚡ Quick",
-    screen: "🔍 Screen",
-    strategy: "📐 Strat",
-    mgmt: "🛡️ Mgmt",
-    gmgn: "📡 GMGN",
-    indicators: "📊 Indic",
-    adv: "🔧 Adv",
-  };
+  const selectedPage = SETTINGS_PAGES.find((item) => item.id === page) || SETTINGS_PAGES[0];
 
   const summary = [
-    `${tabLabels[page] || "Settings"}`,
+    `Settings: ${selectedPage.label}`,
     "",
     `Mode: ${config.management.solMode ? "SOL" : "USD"} | Source: ${config.screening.source} | Strat: ${config.strategy.strategy}`,
     `Deploy: ${config.management.deployAmountSol} SOL | MaxPos: ${config.risk.maxPositions} | Gas: ${config.management.gasReserve}`,
     `TP/SL: ${config.management.takeProfitPct}% / ${config.management.stopLossPct}% | Trailing: ${config.management.trailingTakeProfit ? "ON" : "OFF"}`,
     `Bins: [${config.strategy.minBinsBelow}–${config.strategy.maxBinsBelow}] | Indicators: ${config.indicators.enabled ? "ON" : "OFF"}`,
+    "",
+    `${selectedPage.fields.length} editable settings. Tap a value to edit.`,
   ].join("\n");
 
-  const nav = [
-    [
-      settingButton("⚡ Quick", "cfg:page:quick"),
-      settingButton("🔍 Screen", "cfg:page:screen"),
-      settingButton("📐 Strat", "cfg:page:strategy"),
-    ],
-    [
-      settingButton("🛡️ Mgmt", "cfg:page:mgmt"),
-      settingButton("📡 GMGN", "cfg:page:gmgn"),
-      settingButton("📊 Indic", "cfg:page:indicators"),
-      settingButton("🔧 Adv", "cfg:page:adv"),
-    ],
-  ];
+  const nav = [];
+  for (let i = 0; i < SETTINGS_PAGES.length; i += 3) {
+    nav.push(SETTINGS_PAGES.slice(i, i + 3).map((item) => {
+      const prefix = item.id === selectedPage.id ? "✓ " : "";
+      return settingButton(`${prefix}${item.label}`, `cfg:page:${item.id}`);
+    }));
+  }
 
   const footer = [
     [
-      settingButton("🔄 Refresh", `cfg:page:${page}`),
+      settingButton("🔄 Refresh", `cfg:page:${selectedPage.id}`),
       settingButton("Set key", "cfg:setkey"),
       settingButton("📋 Raw cfg", "cfg:show"),
       settingButton("❌ Close", "cfg:close"),
     ],
   ];
 
-  let rows = [];
-  if (page === "quick") {
-    rows = [
-      [toggleButton("solMode", "🟢 SOL mode")],
-      inputButton("maxPositions", "Max positions", { digits: 0 }),
-      inputButton("deployAmountSol", "Deploy SOL", { digits: 2 }),
-      inputButton("gasReserve", "Gas reserve", { digits: 2 }),
-      inputButton("positionSizePct", "Size %", { digits: 2 }),
-      inputButton("takeProfitPct", "TP %", { digits: 0 }),
-      inputButton("stopLossPct", "SL %", { digits: 0 }),
-      [toggleButton("trailingTakeProfit", "🟢 Trailing TP")],
-      inputButton("trailingTriggerPct", "Trail trigger", { digits: 1 }),
-      inputButton("trailingDropPct", "Trail drop", { digits: 1 }),
-      inputButton("managementIntervalMin", "Mgmt interval", { digits: 0 }),
-      inputButton("screeningIntervalMin", "Screen interval", { digits: 0 }),
-    ];
-  } else if (page === "screen") {
-    rows = [
-      [
-        settingButton("Meteora", "cfg:set:screeningSource:meteora"),
-        settingButton("GMGN", "cfg:set:screeningSource:gmgn"),
-      ],
-      inputButton("minTvl", "Min TVL", { digits: 0 }),
-      inputButton("maxTvl", "Max TVL", { digits: 0 }),
-      inputButton("minVolume", "Min vol", { digits: 0 }),
-      inputButton("minOrganic", "Min organic", { digits: 0 }),
-      inputButton("minHolders", "Min holders", { digits: 0 }),
-      inputButton("minMcap", "Min mcap", { digits: 0 }),
-      inputButton("maxMcap", "Max mcap", { digits: 0 }),
-      inputButton("minBinStep", "Min binStep", { digits: 0 }),
-      inputButton("maxBinStep", "Max binStep", { digits: 0 }),
-      inputButton("minFeeActiveTvlRatio", "Min fee/TVL", { digits: 2 }),
-      inputButton("minTokenFeesSol", "Min fees SOL", { digits: 0 }),
-      inputButton("maxBotHoldersPct", "Max bot %", { digits: 0 }),
-      inputButton("maxTop10Pct", "Max top10 %", { digits: 0 }),
-      inputButton("maxBundlePct", "Max bundle %", { digits: 0 }),
-      [toggleButton("avoidPvpSymbols", "🟢 Avoid PVP"), toggleButton("blockPvpSymbols", "🟢 Hard block PVP")],
-      inputButton("minTokenAgeHours", "Min age h", { digits: 0 }),
-      inputButton("maxTokenAgeHours", "Max age h", { digits: 0 }),
-      inputButton("athFilterPct", "ATH filter %", { digits: 0 }),
-      inputButton("maxVolatility", "Max vol", { digits: 0 }),
-      inputButton("maxDexBoosts", "Max boosts", { digits: 0 }),
-      inputButton("blockedLaunchpads", "Blocked launchpads"),
-      inputButton("allowedLaunchpads", "Allowed launchpads"),
-    ];
-  } else if (page === "strategy") {
-    rows = [
-      [
-        settingButton("spot", "cfg:set:strategy:spot"),
-        settingButton("bid_ask", "cfg:set:strategy:bid_ask"),
-      ],
-      [toggleButton("dynamicStrategyEnabled", "🟢 Dynamic strat")],
-      inputButton("minBinsBelow", "Min bins", { digits: 0 }),
-      inputButton("maxBinsBelow", "Max bins", { digits: 0 }),
-      inputButton("defaultBinsBelow", "Default bins", { digits: 0 }),
-      inputButton("spotMinPrice1hChange", "Spot 1h %", { digits: 0 }),
-      inputButton("spotMinVolatility", "Spot min vol", { digits: 0 }),
-      inputButton("spotMinPrice5mFloor", "Spot 5m floor", { digits: 1 }),
-    ];
-  } else if (page === "mgmt") {
-    rows = [
-      inputButton("outOfRangeWaitMinutes", "OOR wait min", { digits: 0 }),
-      inputButton("outOfRangeBinsToClose", "OOR bins close", { digits: 0 }),
-      inputButton("minFeePerTvl24h", "Min yield %", { digits: 1 }),
-      inputButton("minAgeBeforeYieldCheck", "Min age yield", { digits: 0 }),
-      inputButton("minClaimAmount", "Min claim $", { digits: 0 }),
-      [toggleButton("autoSwapAfterClaim", "🟢 Auto swap claim")],
-      inputButton("slowBleedMinAge", "Slow bleed age", { digits: 0 }),
-      inputButton("slowBleedMinPnl", "Slow bleed min", { digits: 1 }),
-      inputButton("slowBleedMaxPnl", "Slow bleed max", { digits: 1 }),
-      inputButton("hardStopPct", "Hard stop %", { digits: 0 }),
-      inputButton("postCloseReentryCooldownMin", "Reentry cooldown", { digits: 0 }),
-      inputButton("maxWavesPerToken", "Max waves", { digits: 0 }),
-      inputButton("maxLossesPerToken", "Max losses", { digits: 0 }),
-      inputButton("waveBlockHours", "Wave block h", { digits: 0 }),
-      [toggleButton("repeatDeployCooldownEnabled", "🟢 Repeat cooldown")],
-      inputButton("repeatDeployCooldownTriggerCount", "Repeat count", { digits: 0 }),
-      inputButton("repeatDeployCooldownHours", "Repeat hrs", { digits: 1 }),
-      inputButton("repeatDeployCooldownMinFeeEarnedPct", "Repeat min fee %", { digits: 1 }),
-    ];
-  } else if (page === "gmgn") {
-    rows = [
-      [toggleButton("gmgnRequireKol", "🟢 Require KOL")],
-      [
-        settingButton("5m", "cfg:set:gmgnInterval:5m"),
-        settingButton("1h", "cfg:set:gmgnInterval:1h"),
-        settingButton("6h", "cfg:set:gmgnInterval:6h"),
-        settingButton("24h", "cfg:set:gmgnInterval:24h"),
-      ],
-      [toggleButton("gmgnIndicatorFilter", "🟢 Indicator filter")],
-      [
-        settingButton("5m TF", "cfg:set:gmgnIndicatorInterval:5_MINUTE"),
-        settingButton("15m TF", "cfg:set:gmgnIndicatorInterval:15_MINUTE"),
-        settingButton("1h TF", "cfg:set:gmgnIndicatorInterval:1_HOUR"),
-      ],
-      [toggleButton("gmgnRequireBullishSt", "🟢 Bullish ST"), toggleButton("gmgnRejectAtBottom", "🟢 Reject bottom"), toggleButton("gmgnRequireAboveSt", "🟢 Above ST")],
-      inputButton("gmgnMinRsi", "Min RSI", { digits: 0 }),
-      inputButton("gmgnMaxRsi", "Max RSI", { digits: 0 }),
-      inputButton("gmgnMinKolCount", "Min KOL", { digits: 0 }),
-      inputButton("gmgnMinTotalFeeSol", "Min fee SOL", { digits: 0 }),
-      inputButton("gmgnMinHolders", "Min holders", { digits: 0 }),
-      inputButton("gmgnMinVolume", "Min vol", { digits: 0 }),
-      inputButton("gmgnMinTokenAgeHours", "Min age h", { digits: 0 }),
-      inputButton("gmgnMaxTokenAgeHours", "Max age h", { digits: 0 }),
-      inputButton("gmgnMaxBundlerRate", "Max bundler %", { digits: 2 }),
-      inputButton("gmgnMaxTop10HolderRate", "Max top10 %", { digits: 2 }),
-      inputButton("gmgnPreferredKolNames", "Preferred KOLs"),
-      inputButton("gmgnDumpKolNames", "Dump KOLs"),
-    ];
-  } else if (page === "indicators") {
-    rows = [
-      [toggleButton("chartIndicatorsEnabled", "🟢 Chart indicators"), toggleButton("requireAllIntervals", "🟢 All TF")],
-      [
-        settingButton("5m", "cfg:set:indicatorIntervals:5_MINUTE"),
-        settingButton("15m", "cfg:set:indicatorIntervals:15_MINUTE"),
-        settingButton("both", "cfg:set:indicatorIntervals:both"),
-      ],
-      [
-        settingButton("Entry Retest", "cfg:set:indicatorEntryPreset:smart_wallet_retest"),
-        settingButton("Entry Reclaim", "cfg:set:indicatorEntryPreset:single_side_reclaim"),
-        settingButton("Entry ST", "cfg:set:indicatorEntryPreset:supertrend_break"),
-        settingButton("Entry RSI", "cfg:set:indicatorEntryPreset:rsi_reversal"),
-      ],
-      [
-        settingButton("Exit ST", "cfg:set:indicatorExitPreset:supertrend_break"),
-        settingButton("Exit RSI", "cfg:set:indicatorExitPreset:rsi_reversal"),
-        settingButton("Exit BB+RSI", "cfg:set:indicatorExitPreset:bb_plus_rsi"),
-      ],
-      inputButton("rsiLength", "RSI length", { digits: 0 }),
-      inputButton("indicatorCandles", "Candles", { digits: 0 }),
-      inputButton("rsiOversold", "RSI oversold", { digits: 0 }),
-      inputButton("rsiOverbought", "RSI overbought", { digits: 0 }),
-    ];
-  } else if (page === "adv") {
-    rows = [
-      [toggleButton("darwinEnabled", "🟢 Darwin signals")],
-      [toggleButton("useDiscordSignals", "🟢 Discord signals")],
-      [
-        settingButton("Merge", "cfg:set:discordSignalMode:merge"),
-        settingButton("Only", "cfg:set:discordSignalMode:only"),
-      ],
-      [toggleButton("xSentimentEnabled", "🟢 X sentiment")],
-      inputButton("minSentimentScore", "Min X score", { digits: 0 }),
-      inputButton("xLookbackDays", "X lookback d", { digits: 0 }),
-      inputButton("pnlPollIntervalSec", "PnL poll s", { digits: 0 }),
-      inputButton("trailingConfirmDelaySec", "Trail confirm s", { digits: 0 }),
-      [toggleButton("lpAgentRelayEnabled", "🟢 LPAgent relay")],
-    ];
-  }
-
-  return { text: summary, keyboard: [...nav, ...rows, ...footer] };
+  return { text: summary, keyboard: [...nav, ...settingRowsForPage(selectedPage), ...footer] };
 }
 
 async function showSettingsMenu({ messageId = null, page = "quick" } = {}) {
@@ -1860,14 +1985,7 @@ function normalizeMenuValue(key, raw) {
 }
 
 function resolveSettingPage(key) {
-  if (["deployAmountSol", "gasReserve", "maxPositions", "maxDeployAmount", "takeProfitPct", "stopLossPct", "trailingTakeProfit", "trailingTriggerPct", "trailingDropPct", "positionSizePct", "managementIntervalMin", "screeningIntervalMin", "solMode"].includes(key)) return "quick";
-  if (["minTvl", "maxTvl", "minVolume", "minOrganic", "minHolders", "minMcap", "maxMcap", "minBinStep", "maxBinStep", "timeframe", "category", "minFeeActiveTvlRatio", "minTokenFeesSol", "maxBotHoldersPct", "maxTop10Pct", "maxBundlePct", "avoidPvpSymbols", "blockPvpSymbols", "minTokenAgeHours", "maxTokenAgeHours", "athFilterPct", "maxVolatility", "maxDexBoosts", "blockedLaunchpads", "allowedLaunchpads", "screeningSource", "blockedSymbols", "cgBlockRank", "postCloseReentryCooldownMin", "fallingKnife5mThreshold", "fallingKnife1hThreshold", "singleSideSolEntryGateEnabled", "singleSideSolMin1hChange", "singleSideSolMinRetest1hChange", "singleSideSolMaxRetest1hChange", "singleSideSolMax5mPullback", "singleSideSolWeakTrendMax1h", "singleSideSolMaxWeakBounce5m", "singleSideSolMinFeeActiveTvlRatio"].includes(key)) return "screen";
-  if (["strategy", "minBinsBelow", "maxBinsBelow", "dynamicStrategyEnabled", "spotMinPrice1hChange", "spotMinVolatility", "spotMinPrice5mFloor", "spotMinPrice30mFloor", "defaultBinsBelow"].includes(key)) return "strategy";
-  if (["outOfRangeWaitMinutes", "outOfRangeBinsToClose", "minFeePerTvl24h", "minAgeBeforeYieldCheck", "minClaimAmount", "autoSwapAfterClaim", "slowBleedMinAge", "slowBleedMinPnl", "slowBleedMaxPnl", "hardStopPct", "hardStopBypassSuspicious", "repeatDeployCooldownEnabled", "repeatDeployCooldownTriggerCount", "repeatDeployCooldownHours", "repeatDeployCooldownMinFeeEarnedPct", "maxWavesPerToken", "maxLossesPerToken", "waveBlockHours", "postCloseReentryCooldownMin", "minSolToOpen"].includes(key)) return "mgmt";
-  if (["gmgnRequireKol", "gmgnInterval", "gmgnIndicatorFilter", "gmgnIndicatorInterval", "gmgnRequireBullishSt", "gmgnRejectAtBottom", "gmgnRequireAboveSt", "gmgnMinRsi", "gmgnMaxRsi", "gmgnMinKolCount", "gmgnMinTotalFeeSol", "gmgnMinHolders", "gmgnMinVolume", "gmgnMinTokenAgeHours", "gmgnMaxTokenAgeHours", "gmgnMaxBundlerRate", "gmgnMaxTop10HolderRate", "gmgnPreferredKolNames", "gmgnPreferredKolMinHoldPct", "gmgnDumpKolNames", "gmgnDumpKolMinHoldPct", "gmgnMinMcap", "gmgnMaxMcap"].includes(key)) return "gmgn";
-  if (["chartIndicatorsEnabled", "indicatorEntryPreset", "indicatorExitPreset", "rsiLength", "indicatorIntervals", "requireAllIntervals", "indicatorCandles", "rsiOversold", "rsiOverbought"].includes(key)) return "indicators";
-  if (["darwinEnabled", "useDiscordSignals", "discordSignalMode", "xSentimentEnabled", "minSentimentScore", "xLookbackDays", "pnlPollIntervalSec", "trailingConfirmDelaySec", "lpAgentRelayEnabled"].includes(key)) return "adv";
-  return "quick";
+  return SETTINGS_PAGE_BY_KEY.get(key) || "quick";
 }
 
 async function applySettingsMenuCallback(msg) {
@@ -1915,8 +2033,13 @@ async function applySettingsMenuCallback(msg) {
       athFilterPct: "e.g. -20",
       maxVolatility: "e.g. 7",
       maxDexBoosts: "e.g. 100",
+      singleSideSolMin1hChange: "e.g. 0",
       singleSideSolMinRetest1hChange: "e.g. -5",
-      singleSideSolMaxRetest1hChange: "e.g. 6",
+      singleSideSolMaxRetest1hChange: "e.g. 20",
+      singleSideSolMax5mPullback: "e.g. -2",
+      singleSideSolWeakTrendMax1h: "e.g. 3",
+      singleSideSolMaxWeakBounce5m: "e.g. 10",
+      singleSideSolMinFeeActiveTvlRatio: "e.g. 0.3",
       minBinsBelow: "e.g. 35",
       maxBinsBelow: "e.g. 69",
       defaultBinsBelow: "e.g. 45",
