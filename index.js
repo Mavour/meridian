@@ -1707,6 +1707,27 @@ function settingValue(key) {
     indicatorCandles: config.indicators.candles,
     rsiOversold: config.indicators.rsiOversold,
     rsiOverbought: config.indicators.rsiOverbought,
+    // ── Bottom Spot LP ──
+    bottomSpotEnabled: config.bottomSpotLP.enabled,
+    bottomSpotDeployAmountSol: config.bottomSpotLP.deployAmountSol,
+    bottomSpotMinBaseFee: config.bottomSpotLP.minBaseFee,
+    bottomSpotMinTvl: config.bottomSpotLP.minTvl,
+    bottomSpotMaxTvl: config.bottomSpotLP.maxTvl,
+    bottomSpotMinOrganic: config.bottomSpotLP.minOrganic,
+    bottomSpotRangePct: config.bottomSpotLP.rangePct,
+    bottomSpotMinDumpPct: config.bottomSpotLP.minDumpPct,
+    bottomSpotMinRetracePct: config.bottomSpotLP.minRetracePct,
+    bottomSpotAthLookbackCandles: config.bottomSpotLP.athLookbackCandles,
+    bottomSpotCandleInterval: config.bottomSpotLP.candleInterval,
+    bottomSpotRsiExitThreshold: config.bottomSpotLP.rsiExitThreshold,
+    bottomSpotTakeProfitFeePct: config.bottomSpotLP.takeProfitFeePct,
+    bottomSpotMaxILPct: config.bottomSpotLP.maxILPct,
+    bottomSpotMinFeesToOverrideStopLoss: config.bottomSpotLP.minFeesToOverrideStopLoss,
+    bottomSpotOutOfRangeWaitMinutes: config.bottomSpotLP.outOfRangeWaitMinutes,
+    bottomSpotOutOfRangeTolerance: config.bottomSpotLP.outOfRangeTolerance,
+    bottomSpotFeesForReposition: config.bottomSpotLP.feesForReposition,
+    bottomSpotEnableTAExit: config.bottomSpotLP.enableTAExit,
+    bottomSpotMaxOpenPositions: config.bottomSpotLP.maxOpenPositions,
     // ── Advanced ──
     darwinEnabled: config.darwin.enabled,
     darwinWindowDays: config.darwin.windowDays,
@@ -1807,6 +1828,14 @@ const MENU_INTEGER_KEYS = new Set([
   "indicatorCandles",
   "rsiOversold",
   "rsiOverbought",
+  "bottomSpotMinTvl",
+  "bottomSpotMaxTvl",
+  "bottomSpotMinOrganic",
+  "bottomSpotAthLookbackCandles",
+  "bottomSpotRsiExitThreshold",
+  "bottomSpotOutOfRangeWaitMinutes",
+  "bottomSpotOutOfRangeTolerance",
+  "bottomSpotMaxOpenPositions",
   "xLookbackDays",
   "pnlPollIntervalSec",
   "trailingConfirmDelaySec",
@@ -1889,6 +1918,22 @@ const MENU_NON_NEGATIVE_KEYS = new Set([
   "darwinMinSamples",
   "singleSideSolMinFeeActiveTvlRatio",
   "minBaseFeeSkipPct",
+  "bottomSpotDeployAmountSol",
+  "bottomSpotMinBaseFee",
+  "bottomSpotMinTvl",
+  "bottomSpotMaxTvl",
+  "bottomSpotMinOrganic",
+  "bottomSpotMinDumpPct",
+  "bottomSpotMinRetracePct",
+  "bottomSpotAthLookbackCandles",
+  "bottomSpotRsiExitThreshold",
+  "bottomSpotTakeProfitFeePct",
+  "bottomSpotMaxILPct",
+  "bottomSpotMinFeesToOverrideStopLoss",
+  "bottomSpotOutOfRangeWaitMinutes",
+  "bottomSpotOutOfRangeTolerance",
+  "bottomSpotFeesForReposition",
+  "bottomSpotMaxOpenPositions",
 ]);
 
 function sanitizeMenuValue(key, value) {
@@ -1915,6 +1960,12 @@ function sanitizeMenuValue(key, value) {
   if (key === "maxBinStep") value = Math.max(value, Number(config.screening.minBinStep ?? 0));
   if (key === "minTvl" && Number(config.screening.maxTvl) > 0) value = Math.min(value, Number(config.screening.maxTvl));
   if (key === "maxTvl") value = Math.max(value, Number(config.screening.minTvl ?? 0));
+  if (key === "bottomSpotDeployAmountSol") value = Math.max(0.1, value);
+  if (key === "bottomSpotRangePct") value = Math.max(-55, Math.min(-30, -Math.abs(value)));
+  if (key === "bottomSpotMinTvl" && Number(config.bottomSpotLP.maxTvl) > 0) {
+    value = Math.min(value, Number(config.bottomSpotLP.maxTvl));
+  }
+  if (key === "bottomSpotMaxTvl") value = Math.max(value, Number(config.bottomSpotLP.minTvl ?? 0));
   return value;
 }
 
@@ -2114,6 +2165,32 @@ const SETTINGS_PAGES = [
       { key: "rsiOverbought", label: "RSI overbought", digits: 0 },
     ],
   },
+  {
+    id: "bottom",
+    label: "Bottom LP",
+    fields: [
+      { key: "bottomSpotEnabled", label: "Enabled", type: "toggle" },
+      { key: "bottomSpotDeployAmountSol", label: "Deploy SOL", digits: 2 },
+      { key: "bottomSpotEnableTAExit", label: "TA exit", type: "toggle" },
+      { key: "bottomSpotMaxOpenPositions", label: "Max open", digits: 0 },
+      { key: "bottomSpotRangePct", label: "Range down %", digits: 0 },
+      { key: "bottomSpotMinDumpPct", label: "Min dump %", digits: 0 },
+      { key: "bottomSpotMinRetracePct", label: "Min retrace %", digits: 0 },
+      { key: "bottomSpotMinBaseFee", label: "Min base fee %", digits: 2 },
+      { key: "bottomSpotMinTvl", label: "Min TVL", digits: 0 },
+      { key: "bottomSpotMaxTvl", label: "Max TVL", digits: 0 },
+      { key: "bottomSpotMinOrganic", label: "Min organic", digits: 0 },
+      { key: "bottomSpotAthLookbackCandles", label: "ATH candles", digits: 0 },
+      { key: "bottomSpotCandleInterval", label: "Candle TF", type: "select", options: [["5_MINUTE", "5m"], ["15_MINUTE", "15m"]] },
+      { key: "bottomSpotRsiExitThreshold", label: "RSI exit", digits: 0 },
+      { key: "bottomSpotTakeProfitFeePct", label: "Fee TP %", digits: 1 },
+      { key: "bottomSpotMaxILPct", label: "Max IL %", digits: 0 },
+      { key: "bottomSpotMinFeesToOverrideStopLoss", label: "IL fee override %", digits: 0 },
+      { key: "bottomSpotOutOfRangeWaitMinutes", label: "OOR wait m", digits: 0 },
+      { key: "bottomSpotOutOfRangeTolerance", label: "OOR tolerance m", digits: 0 },
+      { key: "bottomSpotFeesForReposition", label: "Reposition fees %", digits: 1 },
+    ],
+  },
 ];
 
 const SETTINGS_PAGE_BY_KEY = new Map(
@@ -2262,6 +2339,17 @@ async function applySettingsMenuCallback(msg) {
       minSentimentScore: "e.g. -30",
       blockedLaunchpads: `e.g. pump.fun,letsbonk.fun`,
       allowedLaunchpads: `e.g. moontok,deployer.fun`,
+      bottomSpotDeployAmountSol: "e.g. 0.1",
+      bottomSpotRangePct: "e.g. -45",
+      bottomSpotMinDumpPct: "e.g. 30",
+      bottomSpotMinRetracePct: "e.g. 5",
+      bottomSpotMinBaseFee: "e.g. 2.0",
+      bottomSpotMinTvl: "e.g. 10000",
+      bottomSpotMaxTvl: "e.g. 150000",
+      bottomSpotAthLookbackCandles: "e.g. 48",
+      bottomSpotRsiExitThreshold: "e.g. 90",
+      bottomSpotTakeProfitFeePct: "e.g. 5",
+      bottomSpotMaxILPct: "e.g. 25",
     };
     const hint = examples[inputKey] ? ` (${examples[inputKey]})` : "";
     await sendMessage(`Enter new value for ${inputKey}\nCurrent: ${fmtSettingValue(currentVal)}${hint}\nSend "cancel" to abort. Use "null" to clear nullable fields.`);
