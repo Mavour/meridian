@@ -71,6 +71,8 @@ Sets defined in `agent.js:6-7`. If you add a tool, also add it to the relevant s
 | minFeeActiveTvlRatio | screening | 0.05 |
 | minTvl / maxTvl | screening | 10k / 150k |
 | minVolume | screening | 500 |
+| spotMinVolume | strategy | 10k |
+| spotMinFeeActiveTvlRatio | strategy | 0.5 |
 | minOrganic | screening | 60 |
 | minHolders | screening | 500 |
 | minMcap / maxMcap | screening | 150k / 10M |

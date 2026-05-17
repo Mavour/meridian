@@ -83,6 +83,10 @@ function poolDetailTvl(pool) {
   return numberOrNull(pool?.tvl ?? pool?.active_tvl ?? pool?.liquidity);
 }
 
+function poolDetailVolume(pool) {
+  return numberOrNull(pool?.volume_window ?? pool?.volume ?? pool?.volume_24h);
+}
+
 function poolDetailBinStep(pool) {
   return numberOrNull(pool?.dlmm_params?.bin_step ?? pool?.pool_config?.bin_step);
 }
@@ -186,6 +190,29 @@ async function validateDeployPoolThresholds(args) {
       pass: false,
       reason: `Pool fee/active-TVL ${feeActiveTvlRatio ?? "unknown"}% is below configured minFeeActiveTvlRatio ${minFeeActiveTvlRatio}%.`,
     };
+  }
+
+  if (String(args.strategy || "").toLowerCase() === "spot") {
+    const spotVolume = poolDetailVolume(detail) ?? numberOrNull(args.volume);
+    const spotMinVolume = numberOrNull(config.strategy.spotMinVolume);
+    if (spotMinVolume != null && spotMinVolume > 0 && (spotVolume == null || spotVolume < spotMinVolume)) {
+      return {
+        pass: false,
+        reason: `Spot deploy blocked: pool volume $${spotVolume ?? "unknown"} is below spotMinVolume $${spotMinVolume}. Spot needs strong flow to offset IL.`,
+      };
+    }
+
+    const spotMinFeeActiveTvlRatio = numberOrNull(config.strategy.spotMinFeeActiveTvlRatio);
+    if (
+      spotMinFeeActiveTvlRatio != null &&
+      spotMinFeeActiveTvlRatio > 0 &&
+      (feeActiveTvlRatio == null || feeActiveTvlRatio < spotMinFeeActiveTvlRatio)
+    ) {
+      return {
+        pass: false,
+        reason: `Spot deploy blocked: fee/active-TVL ${feeActiveTvlRatio ?? "unknown"}% is below spotMinFeeActiveTvlRatio ${spotMinFeeActiveTvlRatio}%.`,
+      };
+    }
   }
 
   const volatilityTimeframe = getVolatilityTimeframe(config.screening.timeframe || "5m");
@@ -692,6 +719,8 @@ const toolMap = {
       bottomSpotMinBaseFee: ["bottomSpotLP", "minBaseFee", ["bottomSpotLP", "minBaseFee"]],
       bottomSpotMinTvl: ["bottomSpotLP", "minTvl", ["bottomSpotLP", "minTvl"]],
       bottomSpotMaxTvl: ["bottomSpotLP", "maxTvl", ["bottomSpotLP", "maxTvl"]],
+      bottomSpotMinVolume: ["bottomSpotLP", "minVolume", ["bottomSpotLP", "minVolume"]],
+      bottomSpotMinFeeActiveTvlRatio: ["bottomSpotLP", "minFeeActiveTvlRatio", ["bottomSpotLP", "minFeeActiveTvlRatio"]],
       bottomSpotMinOrganic: ["bottomSpotLP", "minOrganic", ["bottomSpotLP", "minOrganic"]],
       bottomSpotRangePct: ["bottomSpotLP", "rangePct", ["bottomSpotLP", "rangePct"]],
       bottomSpotMinDumpPct: ["bottomSpotLP", "minDumpPct", ["bottomSpotLP", "minDumpPct"]],
@@ -741,6 +770,8 @@ const toolMap = {
       outOfRangeBinsToClose: ["management", "outOfRangeBinsToClose"],
       minSolToOpen: ["management", "minSolToOpen"],
       // strategy extended
+      spotMinVolume: ["strategy", "spotMinVolume"],
+      spotMinFeeActiveTvlRatio: ["strategy", "spotMinFeeActiveTvlRatio"],
       spotMinPrice5mFloor: ["strategy", "spotMinPrice5mFloor"],
       spotMinPrice30mFloor: ["strategy", "spotMinPrice30mFloor"],
       // darwin

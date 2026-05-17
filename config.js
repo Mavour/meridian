@@ -248,6 +248,8 @@ export const config = {
     spotMinVolatility:      u.spotMinVolatility      ?? 3,
     spotMinPrice5mFloor:    u.spotMinPrice5mFloor    ?? u.spotMinPrice30mFloor ?? -2,
     spotMinPrice30mFloor:   u.spotMinPrice30mFloor   ?? -2, // legacy alias
+    spotMinVolume:          u.spotMinVolume          ?? 10_000,
+    spotMinFeeActiveTvlRatio: u.spotMinFeeActiveTvlRatio ?? 0.5,
   },
 
   // ─── Scheduling ─────────────────────────
@@ -330,6 +332,8 @@ export const config = {
     minBaseFee: u.bottomSpotLP?.minBaseFee ?? 2.0,
     minTvl: u.bottomSpotLP?.minTvl ?? 10_000,
     maxTvl: u.bottomSpotLP?.maxTvl ?? 150_000,
+    minVolume: u.bottomSpotLP?.minVolume ?? 10_000,
+    minFeeActiveTvlRatio: u.bottomSpotLP?.minFeeActiveTvlRatio ?? 0.5,
     minOrganic: u.bottomSpotLP?.minOrganic ?? 65,
     rangePct: u.bottomSpotLP?.rangePct ?? -45,
     minDumpPct: u.bottomSpotLP?.minDumpPct ?? 30,
@@ -433,6 +437,8 @@ export function reloadScreeningThresholds() {
     if (fresh.spotMinVolatility != null) config.strategy.spotMinVolatility = fresh.spotMinVolatility;
     if (fresh.spotMinPrice5mFloor != null) config.strategy.spotMinPrice5mFloor = fresh.spotMinPrice5mFloor;
     if (fresh.spotMinPrice30mFloor != null) config.strategy.spotMinPrice30mFloor = fresh.spotMinPrice30mFloor;
+    if (fresh.spotMinVolume != null) config.strategy.spotMinVolume = fresh.spotMinVolume;
+    if (fresh.spotMinFeeActiveTvlRatio != null) config.strategy.spotMinFeeActiveTvlRatio = fresh.spotMinFeeActiveTvlRatio;
     if (fresh.fallingKnife5mThreshold != null) config.screening.fallingKnife5mThreshold = fresh.fallingKnife5mThreshold;
     if (fresh.fallingKnife1hThreshold != null) config.screening.fallingKnife1hThreshold = fresh.fallingKnife1hThreshold;
     if (fresh.singleSideSolEntryGateEnabled !== undefined) config.screening.singleSideSolEntryGateEnabled = fresh.singleSideSolEntryGateEnabled;

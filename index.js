@@ -711,6 +711,7 @@ async function tryBottomSpotDeploy({ passing, prePositions, deployAmount, liveMe
     strategy_tag: "bottom_spot_lp",
     organic_score: params.organic_score ?? null,
     fee_tvl_ratio: params.fee_tvl_ratio ?? null,
+    volume: params.volume ?? null,
     volatility: params.volatility ?? null,
   });
 
@@ -749,6 +750,8 @@ async function tryBottomSpotDeploy({ passing, prePositions, deployAmount, liveMe
       retrace_pct: selected.entry.retracePct,
       bins_below: selected.binRange.binsBelow,
       range_pct: Math.abs(Number(config.bottomSpotLP.rangePct ?? -45)),
+      volume: params.volume ?? null,
+      fee_tvl_ratio: params.fee_tvl_ratio ?? null,
     },
   });
 
@@ -763,6 +766,7 @@ async function tryBottomSpotDeploy({ passing, prePositions, deployAmount, liveMe
     `SOL: ${amountSol}`,
     `Strategy: spot | single-side SOL | downside ${Math.abs(Number(config.bottomSpotLP.rangePct ?? -45))}%`,
     `Dump: ${selected.entry.dumpPct}% | Retrace: ${selected.entry.retracePct}%`,
+    `Flow: volume $${params.volume ?? "?"} | fee/TVL ${params.fee_tvl_ratio ?? "?"}%`,
     `Range bins: ${selected.binRange.binsBelow} below | warnings: ${selected.binRange.warnings.join(", ") || "none"}`,
     result?.position ? `Position: ${result.position}` : null,
     result?.txs?.length ? `Tx: ${result.txs[0]}` : null,
@@ -1105,8 +1109,10 @@ STEPS:
 1. Pick the best candidate based on narrative quality, smart wallets, and pool metrics.
 2. Call deploy_position (active_bin is pre-fetched above — no need to call get_active_bin).
    strategy = use the candidate's recommended_strategy (spot or bid_ask). Override ONLY with strong justification.
+   If strategy=spot, the executor will require volume >= ${config.strategy.spotMinVolume} and fee/active-TVL >= ${config.strategy.spotMinFeeActiveTvlRatio}%.
    bins_below = round(${config.strategy.minBinsBelow} + (candidate volatility/4)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}].
    pass deploy_position.volatility = the candidate volatility value.
+   pass deploy_position.volume = the candidate volume_window value.
    pass candidate timing fields too: price_5m_change, price_1h_change, fee_change_pct, volume_change_pct, price_trend.
    bins_above = 0. Single-side SOL only: set amount_y, keep amount_x = 0.
 3. Report in this exact format (no tables, no extra sections):
@@ -1713,6 +1719,8 @@ function settingValue(key) {
     bottomSpotMinBaseFee: config.bottomSpotLP.minBaseFee,
     bottomSpotMinTvl: config.bottomSpotLP.minTvl,
     bottomSpotMaxTvl: config.bottomSpotLP.maxTvl,
+    bottomSpotMinVolume: config.bottomSpotLP.minVolume,
+    bottomSpotMinFeeActiveTvlRatio: config.bottomSpotLP.minFeeActiveTvlRatio,
     bottomSpotMinOrganic: config.bottomSpotLP.minOrganic,
     bottomSpotRangePct: config.bottomSpotLP.rangePct,
     bottomSpotMinDumpPct: config.bottomSpotLP.minDumpPct,
@@ -1743,6 +1751,8 @@ function settingValue(key) {
     hiveMindPullMode: config.hiveMind.pullMode,
     takeProfitFeePct: config.management.takeProfitPct,
     emergencyPriceDropPct: config.management.stopLossPct,
+    spotMinVolume: config.strategy.spotMinVolume,
+    spotMinFeeActiveTvlRatio: config.strategy.spotMinFeeActiveTvlRatio,
     maxBundlersPct: config.screening.maxBundlePct,
     tvlDropSkipPct: userConfig.tvlDropSkipPct,
     minBaseFeeSkipPct: userConfig.minBaseFeeSkipPct,
@@ -1830,6 +1840,7 @@ const MENU_INTEGER_KEYS = new Set([
   "rsiOverbought",
   "bottomSpotMinTvl",
   "bottomSpotMaxTvl",
+  "bottomSpotMinVolume",
   "bottomSpotMinOrganic",
   "bottomSpotAthLookbackCandles",
   "bottomSpotRsiExitThreshold",
@@ -1917,11 +1928,15 @@ const MENU_NON_NEGATIVE_KEYS = new Set([
   "darwinCeiling",
   "darwinMinSamples",
   "singleSideSolMinFeeActiveTvlRatio",
+  "spotMinVolume",
+  "spotMinFeeActiveTvlRatio",
   "minBaseFeeSkipPct",
   "bottomSpotDeployAmountSol",
   "bottomSpotMinBaseFee",
   "bottomSpotMinTvl",
   "bottomSpotMaxTvl",
+  "bottomSpotMinVolume",
+  "bottomSpotMinFeeActiveTvlRatio",
   "bottomSpotMinOrganic",
   "bottomSpotMinDumpPct",
   "bottomSpotMinRetracePct",
@@ -2053,6 +2068,8 @@ const SETTINGS_PAGES = [
       { key: "minBinsBelow", label: "Min bins", digits: 0 },
       { key: "maxBinsBelow", label: "Max bins", digits: 0 },
       { key: "defaultBinsBelow", label: "Default bins", digits: 0 },
+      { key: "spotMinVolume", label: "Spot min volume", digits: 0 },
+      { key: "spotMinFeeActiveTvlRatio", label: "Spot min fee/TVL", digits: 2 },
       { key: "spotMinPrice1hChange", label: "Spot min 1h %", digits: 1 },
       { key: "spotMinVolatility", label: "Spot min vol", digits: 1 },
       { key: "spotMinPrice5mFloor", label: "Spot 5m floor", digits: 1 },
@@ -2179,6 +2196,8 @@ const SETTINGS_PAGES = [
       { key: "bottomSpotMinBaseFee", label: "Min base fee %", digits: 2 },
       { key: "bottomSpotMinTvl", label: "Min TVL", digits: 0 },
       { key: "bottomSpotMaxTvl", label: "Max TVL", digits: 0 },
+      { key: "bottomSpotMinVolume", label: "Min volume", digits: 0 },
+      { key: "bottomSpotMinFeeActiveTvlRatio", label: "Min fee/TVL %", digits: 2 },
       { key: "bottomSpotMinOrganic", label: "Min organic", digits: 0 },
       { key: "bottomSpotAthLookbackCandles", label: "ATH candles", digits: 0 },
       { key: "bottomSpotCandleInterval", label: "Candle TF", type: "select", options: [["5_MINUTE", "5m"], ["15_MINUTE", "15m"]] },

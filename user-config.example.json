@@ -14,6 +14,8 @@
   "positionSizePct": 0.35,
 
   "strategy": "bid_ask",
+  "spotMinVolume": 10000,
+  "spotMinFeeActiveTvlRatio": 0.5,
   "minBinsBelow": 35,
   "maxBinsBelow": 69,
   "defaultBinsBelow": 69,
@@ -124,6 +126,8 @@
     "minBaseFee": 2.0,
     "minTvl": 10000,
     "maxTvl": 150000,
+    "minVolume": 10000,
+    "minFeeActiveTvlRatio": 0.5,
     "minOrganic": 65,
     "rangePct": -45,
     "minDumpPct": 30,

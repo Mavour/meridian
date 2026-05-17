@@ -3,6 +3,7 @@ import {
   calculateBinRange,
   detectDumpAndRetrace,
   evaluateExitSignal,
+  selectBestPool,
 } from "../strategies/bottomSpotLP.js";
 
 function candle(close, overrides = {}) {
@@ -111,6 +112,38 @@ function testCalculateBinRange() {
   assert.equal(invalid.reason, "invalid_current_price");
 }
 
+function testSelectBestPoolFlowFilters() {
+  const basePool = {
+    name: "GOOD-SOL",
+    pool: "good",
+    fee_pct: 2,
+    tvl: 50_000,
+    volume_window: 25_000,
+    fee_active_tvl_ratio: 0.8,
+    organic_score: 80,
+  };
+
+  const selected = selectBestPool([basePool], {
+    minBaseFee: 2,
+    minTvl: 10_000,
+    maxTvl: 150_000,
+    minVolume: 10_000,
+    minFeeActiveTvlRatio: 0.5,
+    minOrganic: 65,
+  });
+  assert.equal(selected?.pool, "good");
+
+  assert.equal(selectBestPool([{ ...basePool, pool: "quiet", volume_window: 5_000 }], {
+    minVolume: 10_000,
+    minFeeActiveTvlRatio: 0.5,
+  }), null);
+
+  assert.equal(selectBestPool([{ ...basePool, pool: "weak-fee", fee_active_tvl_ratio: 0.2 }], {
+    minVolume: 10_000,
+    minFeeActiveTvlRatio: 0.5,
+  }), null);
+}
+
 function testEvaluateExitSignal() {
   const rsiExit = evaluateExitSignal(generateRisingCandles(), {
     upperPrice: 999,
@@ -178,6 +211,7 @@ function testEvaluateExitSignal() {
 
 testDetectDumpAndRetrace();
 testCalculateBinRange();
+testSelectBestPoolFlowFilters();
 testEvaluateExitSignal();
 
 console.log("bottomSpotLP tests passed");

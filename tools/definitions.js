@@ -190,6 +190,7 @@ WARNING: This executes a real on-chain transaction. Check DRY_RUN mode.`,
           base_fee: { type: "number", description: "Pool base fee percentage (from discover_pools)" },
           volatility: { type: "number", description: "Pool volatility at deploy time, sourced from max(screening timeframe, 30m)" },
           fee_tvl_ratio: { type: "number", description: "fee/TVL ratio at deploy time" },
+          volume: { type: "number", description: "Pool volume_window at deploy time. Required for spot deploy hard guard." },
           organic_score: { type: "number", description: "Base token organic score at deploy time" },
           initial_value_usd: { type: "number", description: "Estimated USD value being deployed" },
           price_5m_change: { type: "number", description: "Candidate 5m pool price change percentage from get_top_candidates; used as timing fallback if fresh Pool Discovery detail fails." },
@@ -391,12 +392,13 @@ Changes persist to user-config.json and take effect immediately — no restart n
 
 VALID KEYS (use EXACTLY these key names, nothing else):
 Screening: screeningSource, minFeeActiveTvlRatio, minTvl, maxTvl, minVolume, minOrganic, minQuoteOrganic, minHolders, minMcap, maxMcap, minBinStep, maxBinStep, timeframe, category, minTokenFeesSol, excludeHighSupplyConcentration, allowedLaunchpads, blockedLaunchpads, singleSideSolEntryGateEnabled
+Strategy: strategy, minBinsBelow, maxBinsBelow, spotMinVolume, spotMinFeeActiveTvlRatio
+Bottom Spot LP: bottomSpotMinVolume, bottomSpotMinFeeActiveTvlRatio
 GMGN (persisted to gmgn-config.json): gmgnApiKey, gmgnBaseUrl, gmgnInterval, gmgnOrderBy, gmgnDirection, gmgnLimit, gmgnEnrichLimit, gmgnRequestDelayMs, gmgnMaxRetries, gmgnFilters, gmgnPlatforms, gmgnMinMcap, gmgnMaxMcap, gmgnMinVolume, gmgnMinHolders, gmgnMinTokenAgeHours, gmgnMaxTokenAgeHours, gmgnAthFilterPct, gmgnMaxBundlerRate, gmgnMaxFreshWalletRate, gmgnMaxDevTeamHoldRate, gmgnPreferredKolNames, gmgnPreferredKolMinHoldPct, gmgnRequireKol, gmgnMinKolCount, gmgnMinSmartDegenCount, gmgnMinTotalFeeSol
 Management: minClaimAmount, outOfRangeBinsToClose, outOfRangeWaitMinutes, oorCooldownTriggerCount, oorCooldownHours, repeatDeployCooldownEnabled, repeatDeployCooldownTriggerCount, repeatDeployCooldownHours, repeatDeployCooldownScope, repeatDeployCooldownMinFeeEarnedPct, minVolumeToRebalance, stopLossPct, takeProfitPct, minSolToOpen, deployAmountSol, gasReserve, positionSizePct, whaleGuardEnabled, whaleGuardSource, whaleGuardWindowMinutes, whaleGuardCooldownMinutes, whaleGuardMinNetWithdrawUsd, whaleGuardMinQuoteDrainUsd, whaleGuardMinTvlDropUsd, whaleGuardMinLiquidityDropPct, whaleGuardRequireBaseIncreaseForQuoteDrain
 Risk: maxPositions, maxDeployAmount
 Schedule: managementIntervalMin, screeningIntervalMin
 Models: managementModel, screeningModel, generalModel
-Strategy: strategy, minBinsBelow, maxBinsBelow
 
 Reason is optional but helpful — logged as a lesson when provided.`,
       parameters: {
