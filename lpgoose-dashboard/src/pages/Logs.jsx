@@ -4,6 +4,7 @@ import { WSContext } from '../App';
 const TAG_COLORS = {
   DEPLOY:'#4ade80', CLOSE:'#60a5fa', STATE:'#fbbf24',
   SCREENING:'#c084fc', AGENT:'#22d3ee', CRON:'#475569',
+  POSITIONS:'#60a5fa',
   WARN:'#fb923c', CLOSE_WARN:'#fb923c',
   SAFETY_BLOCK:'#f87171', WAVE_DEBUG:'#818cf8',
   EXECUTOR:'#94a3b8', LESSONS:'#86efac',
@@ -46,7 +47,7 @@ export default function Logs() {
     ? logLines.filter(l => l.msg?.toLowerCase().includes(search.toLowerCase()))
     : logLines;
 
-  const tags = ['DEPLOY','CLOSE','STATE','SCREENING','AGENT','WARN','SAFETY_BLOCK','EXECUTOR','LESSONS','SHUTDOWN','SWAP'];
+  const tags = ['DEPLOY','CLOSE','STATE','POSITIONS','SCREENING','AGENT','WARN','SAFETY_BLOCK','EXECUTOR','LESSONS','SHUTDOWN','SWAP'];
 
   return (
     <div style={{ padding:'12px 16px', maxWidth:1400, minHeight:'calc(100vh - 58px)', overflow:'visible' }}>

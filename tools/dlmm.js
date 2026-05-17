@@ -1225,6 +1225,25 @@ function roundNum(value, decimals = 4) {
   return Math.round(n * factor) / factor;
 }
 
+function fmtPositionMetric(value, decimals = 4, fallback = "?") {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(decimals) : fallback;
+}
+
+function formatOpenPositionLog(position) {
+  const currency = config.management.solMode ? "SOL" : "USD";
+  const value = fmtPositionMetric(position.total_value_usd, config.management.solMode ? 4 : 2);
+  const fees = fmtPositionMetric(position.unclaimed_fees_usd, config.management.solMode ? 4 : 2);
+  const pnl = fmtPositionMetric(position.pnl_pct, 2);
+  const yieldPct = fmtPositionMetric(position.fee_per_tvl_24h, 4);
+  const age = Number.isFinite(Number(position.age_minutes)) ? `${Number(position.age_minutes)}m` : "?";
+  const range = position.in_range ? "IN" : `OOR ${Number(position.minutes_out_of_range || 0)}m`;
+  const bins = [position.lower_bin, position.active_bin, position.upper_bin]
+    .map((v) => v ?? "?")
+    .join("/");
+  return `${position.pair || position.pool?.slice?.(0, 8) || "position"} | Age: ${age} | Val: ${currency} ${value} | Unclaimed: ${currency} ${fees} | PnL: ${pnl}% | Yield: ${yieldPct}% | ${range} | bins ${bins}`;
+}
+
 const PERFORMANCE_SIGNAL_FIELDS = [
   "organic_score",
   "fee_tvl_ratio",
@@ -1386,7 +1405,6 @@ export async function getMyPositions({ force = false, silent = false, wallet_add
     const portfolio = await res.json();
 
     const pools = portfolio.pools || [];
-    log("positions", `Found ${pools.length} pool(s) with open positions`);
 
     // Fetch bin data (lowerBinId, upperBinId, poolActiveBinId) for all pools in parallel
     // Needed for rules 3 & 4 (active_bin vs upper_bin comparison)
@@ -1526,6 +1544,21 @@ export async function getMyPositions({ force = false, silent = false, wallet_add
           minutes_out_of_range: minutesOutOfRange(positionAddress),
           instruction:        tracked?.instruction ?? null,
         });
+      }
+    }
+
+    if (positions.length === 0) {
+      log("positions", "No open positions");
+    } else {
+      const totalValue = positions.reduce((sum, p) => sum + safeNum(p.total_value_usd), 0);
+      const totalFees = positions.reduce((sum, p) => sum + safeNum(p.unclaimed_fees_usd), 0);
+      const currency = config.management.solMode ? "SOL" : "USD";
+      log(
+        "positions",
+        `Open positions: ${positions.length} pool(s) | total ${currency} ${fmtPositionMetric(totalValue, config.management.solMode ? 4 : 2)} | fees ${currency} ${fmtPositionMetric(totalFees, config.management.solMode ? 4 : 2)}`,
+      );
+      for (const position of positions) {
+        log("positions", formatOpenPositionLog(position));
       }
     }
 
