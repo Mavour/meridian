@@ -773,6 +773,74 @@ async function tryBottomSpotDeploy({ passing, prePositions, deployAmount, liveMe
   ].filter(Boolean).join("\n");
 }
 
+function fmtDeployValue(value, digits = 2) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return number.toLocaleString("en-US", {
+    maximumFractionDigits: digits,
+  });
+}
+
+function fmtDeployPct(value, digits = 2) {
+  const formatted = fmtDeployValue(value, digits);
+  return formatted == null ? null : `${formatted}%`;
+}
+
+function fmtDeployUsd(value, digits = 0) {
+  const formatted = fmtDeployValue(value, digits);
+  return formatted == null ? null : `$${formatted}`;
+}
+
+function buildAuthoritativeDeployReport({ args = {}, result = {} }) {
+  const wouldDeploy = result.would_deploy || {};
+  const poolName = result.pool_name || args.pool_name || "Selected pool";
+  const poolAddress = result.pool || args.pool_address || wouldDeploy.pool_address || null;
+  const strategy = result.strategy || args.strategy || wouldDeploy.strategy || config.strategy.strategy;
+  const amountSol = result.amount_y ?? args.amount_y ?? args.amount_sol ?? wouldDeploy.amount_y;
+  const binRange = result.bin_range || {};
+  const range = result.range_coverage || {};
+  const prices = result.price_range || {};
+  const dryRun = result.dry_run === true;
+
+  const rangeLine = prices.min != null && prices.max != null
+    ? `Range: ${fmtDeployValue(prices.min, 8)} -> ${fmtDeployValue(prices.max, 8)}`
+    : (binRange.min != null && binRange.max != null ? `Range bins: ${binRange.min} -> ${binRange.max}` : null);
+  const coverageParts = [
+    range.downside_pct != null ? `${fmtDeployPct(range.downside_pct)} downside` : null,
+    range.upside_pct != null ? `${fmtDeployPct(range.upside_pct)} upside` : null,
+    range.width_pct != null ? `${fmtDeployPct(range.width_pct)} total` : null,
+  ].filter(Boolean);
+  const marketLines = [
+    args.fee_tvl_ratio != null ? `Fee/TVL: ${fmtDeployPct(args.fee_tvl_ratio)}` : null,
+    args.volume != null ? `Volume: ${fmtDeployUsd(args.volume)}` : null,
+    args.volatility != null ? `Volatility: ${fmtDeployValue(args.volatility)}` : null,
+    args.organic_score != null ? `Organic: ${fmtDeployValue(args.organic_score, 0)}` : null,
+    args.initial_value_usd != null ? `Initial value: ${fmtDeployUsd(args.initial_value_usd)}` : null,
+  ].filter(Boolean);
+  const auditLines = [
+    args.fees_paid_sol != null ? `Fees paid: ${fmtDeployValue(args.fees_paid_sol)} SOL` : null,
+    args.base_mint ? `Base mint: ${args.base_mint}` : null,
+  ].filter(Boolean);
+  const tx = result.txs?.[0] || result.tx || null;
+
+  return [
+    dryRun ? "DRY RUN - DEPLOY SIMULATED" : "DEPLOYED",
+    "",
+    poolName,
+    poolAddress,
+    "",
+    amountSol != null ? `${fmtDeployValue(amountSol, 4)} SOL | ${strategy}${binRange.active != null ? ` | bin ${binRange.active}` : ""}` : `${strategy}${binRange.active != null ? ` | bin ${binRange.active}` : ""}`,
+    result.position ? `Position: ${result.position}` : null,
+    rangeLine,
+    coverageParts.length ? `Range cover: ${coverageParts.join(" | ")}` : null,
+    result.bin_step != null ? `Bin step: ${result.bin_step}${result.base_fee != null ? ` | base fee ${fmtDeployPct(result.base_fee, 4)}` : ""}` : null,
+    marketLines.length ? `\nMARKET\n${marketLines.join("\n")}` : null,
+    auditLines.length ? `\nAUDIT\n${auditLines.join("\n")}` : null,
+    tx ? `\nTx: ${tx}` : null,
+    dryRun ? "\nNo transaction was sent because DRY_RUN=true." : null,
+  ].filter(Boolean).join("\n");
+}
+
 export async function runScreeningCycle({ silent = false, recentlyClosed = [] } = {}) {
   if (_screeningBusy) {
     log("cron", "Screening skipped — previous cycle still running");
@@ -788,6 +856,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
   let prePositions, preBalance;
   let liveMessage = null;
   let screenReport = null;
+  let successfulDeploy = null;
   try {
     [prePositions, preBalance] = await Promise.all([getMyPositions({ force: true }), getWalletBalances()]);
     if (prePositions.total_positions >= config.risk.maxPositions) {
@@ -1174,14 +1243,26 @@ IMPORTANT:
 - Keep the whole report compact and highly scannable for Telegram.
       `, config.llm.maxSteps, [], "SCREENER", config.llm.screeningModel, 2048, {
         onToolStart: async ({ name }) => { await liveMessage?.toolStart(name); },
-        onToolFinish: async ({ name, result, success }) => { await liveMessage?.toolFinish(name, result, success); },
+        onToolFinish: async ({ name, args, result, success }) => {
+          if (name === "deploy_position" && success) {
+            successfulDeploy = { args, result };
+          }
+          await liveMessage?.toolFinish(name, result, success);
+        },
       });
     const funnelAppend = buildGmgnFunnelReport(gmgnStageCounts, gmgnAllFiltered, { fromStage: 2 });
-    screenReport = funnelAppend ? `${content}\n\n─────────────\n${funnelAppend}` : content;
+    const noDeployReported = /NO DEPLOY/i.test(content);
+    const finalContent = successfulDeploy && noDeployReported
+      ? buildAuthoritativeDeployReport(successfulDeploy)
+      : content;
+    if (successfulDeploy && noDeployReported) {
+      log("screening_warn", `LLM reported NO DEPLOY after successful deploy_position; overriding final report for ${successfulDeploy.result?.position || successfulDeploy.args?.pool_address || "unknown position"}`);
+    }
+    screenReport = funnelAppend ? `${finalContent}\n\n─────────────\n${funnelAppend}` : finalContent;
     if (hardFilteredBlock) {
       screenReport += `\n\n─────────────${hardFilteredBlock}`;
     }
-    if (/⛔\s*NO DEPLOY/i.test(content)) {
+    if (!successfulDeploy && noDeployReported) {
       appendDecision({
         type: "no_deploy",
         actor: "SCREENER",
