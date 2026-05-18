@@ -841,6 +841,66 @@ function buildAuthoritativeDeployReport({ args = {}, result = {} }) {
   ].filter(Boolean).join("\n");
 }
 
+function parseScreeningDeployDecision(content) {
+  const text = stripThink(String(content || ""));
+  if (/\bNO_DEPLOY\b|\bNO DEPLOY\b/i.test(text)) {
+    return { action: "NO_DEPLOY" };
+  }
+  const actionMatch = text.match(/\bACTION\s*:\s*(DEPLOY|NO_DEPLOY|NO DEPLOY)\b/i);
+  if (actionMatch && /NO/i.test(actionMatch[1])) return { action: "NO_DEPLOY" };
+  if (actionMatch && /DEPLOY/i.test(actionMatch[1])) {
+    const poolMatch = text.match(/\bPOOL_ADDRESS\s*:\s*([1-9A-HJ-NP-Za-km-z]{32,44})/i);
+    const strategyMatch = text.match(/\bSTRATEGY\s*:\s*(spot|bid_ask)\b/i);
+    return {
+      action: "DEPLOY",
+      pool_address: poolMatch?.[1] || null,
+      strategy: strategyMatch?.[1]?.toLowerCase() || null,
+    };
+  }
+  return { action: "NO_DEPLOY" };
+}
+
+function buildScreenerDeployParams({ decision, candidateEntry, studyResult, deployAmount }) {
+  const pool = candidateEntry.pool;
+  const tokenInfo = candidateEntry.ti;
+  const strategyRec = resolveStrategyForPool(pool, studyResult);
+  const strategy = decision.strategy || strategyRec.strategy || config.strategy.strategy;
+  const volatility = Number(pool.volatility);
+  const minBins = Number(config.strategy.minBinsBelow);
+  const maxBins = Number(config.strategy.maxBinsBelow);
+  const defaultBins = Number(config.strategy.defaultBinsBelow ?? minBins);
+  const computedBins = Number.isFinite(volatility)
+    ? Math.round(minBins + (volatility / 4) * (maxBins - minBins))
+    : defaultBins;
+  const binsBelow = Math.max(minBins, Math.min(maxBins, computedBins));
+
+  return {
+    pool_address: pool.pool,
+    pool_name: pool.name,
+    base_mint: pool.base?.mint || pool.base_mint || tokenInfo?.mint,
+    amount_y: deployAmount,
+    amount_x: 0,
+    strategy,
+    bins_below: binsBelow,
+    bins_above: 0,
+    bin_step: pool.bin_step,
+    base_fee: pool.fee_pct,
+    volatility: pool.volatility,
+    fee_tvl_ratio: pool.fee_active_tvl_ratio,
+    volume: pool.volume_window,
+    organic_score: pool.organic_score,
+    initial_value_usd: pool.initial_value_usd,
+    price_5m_change: pool.price_5m_change ?? pool.price_change_pct,
+    price_1h_change: pool.price_1h_change,
+    price_6h_change: pool.price_6h_change,
+    price_24h_change: pool.price_24h_change,
+    fee_change_pct: pool.fee_change_pct,
+    volume_change_pct: pool.volume_change_pct,
+    price_trend: pool.price_trend,
+    fees_paid_sol: tokenInfo?.global_fees_sol,
+  };
+}
+
 export async function runScreeningCycle({ silent = false, recentlyClosed = [] } = {}) {
   if (_screeningBusy) {
     log("cron", "Screening skipped — previous cycle still running");
@@ -856,7 +916,6 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
   let prePositions, preBalance;
   let liveMessage = null;
   let screenReport = null;
-  let successfulDeploy = null;
   try {
     [prePositions, preBalance] = await Promise.all([getMyPositions({ force: true }), getWalletBalances()]);
     if (prePositions.total_positions >= config.risk.maxPositions) {
@@ -1175,58 +1234,19 @@ PRE-LOADED CANDIDATES (${passing.length} pools):
 ${candidateBlocks.join("\n\n")}${hardFilteredBlock}
 
 STEPS:
+0. DECISION ONLY: do not call deploy_position. First output ACTION: DEPLOY with POOL_ADDRESS and STRATEGY, or ACTION: NO_DEPLOY. The system will execute deploy_position only after reading ACTION: DEPLOY.
 1. Pick the best candidate based on narrative quality, smart wallets, and pool metrics.
-2. Call deploy_position (active_bin is pre-fetched above — no need to call get_active_bin).
-   strategy = use the candidate's recommended_strategy (spot or bid_ask). Override ONLY with strong justification.
-   If strategy=spot, the executor will require volume >= ${config.strategy.spotMinVolume} and fee/active-TVL >= ${config.strategy.spotMinFeeActiveTvlRatio}%.
-   bins_below = round(${config.strategy.minBinsBelow} + (candidate volatility/4)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}].
-   pass deploy_position.volatility = the candidate volatility value.
-   pass deploy_position.volume = the candidate volume_window value.
-   pass candidate timing fields too: price_5m_change, price_1h_change, fee_change_pct, volume_change_pct, price_trend.
-   bins_above = 0. Single-side SOL only: set amount_y, keep amount_x = 0.
-3. Report in this exact format (no tables, no extra sections):
-   🚀 DEPLOYED
-
-   <pool name>
-   <pool address>
-
-   ◎ <deploy amount> SOL | <strategy> | bin <active_bin>
-   Range: <minPrice> → <maxPrice>
-   Range cover: <downside %> downside | <upside %> upside | <total width %> total
-
-   IMPORTANT:
-   - Do NOT calculate the range percentages yourself.
-   - Use the actual deploy_position tool result:
-     range_coverage.downside_pct
-     range_coverage.upside_pct
-     range_coverage.width_pct
-
-   MARKET
-   Fee/TVL: <x>%
-   Volume: $<x>
-   TVL: $<x>
-   Volatility: <x>
-   Organic: <x>
-   Mcap: $<x>
-   Age: <x>h
-
-   AUDIT
-   Top10: <x>%
-   Bots: <x>%
-   Fees paid: <x> SOL
-   Smart wallets: <names or none>
-
-   RISK
-   <If OKX advanced/risk data exists, list only the fields that actually exist: Risk level, Bundle, Sniper, Suspicious, ATH distance, Rugpull, Wash.>
-   <If only rugpull/wash exist, list just those.>
-   <If OKX enrichment is missing, write exactly: OKX: unavailable>
-   Sentiment: <one sentence>
-
+2. Do not execute deploy_position. Only choose whether the system should deploy after your final answer.
+   Use the candidate's recommended_strategy (spot or bid_ask). Override ONLY with strong justification.
+3. If one pool qualifies, report in this exact format:
+   ACTION: DEPLOY
+   POOL_ADDRESS: <pool address>
+   STRATEGY: <spot or bid_ask>
 
    WHY THIS WON
    <2-4 concise sentences on why this pool won, key risks, and why it still beat the alternatives>
-4. If no pool qualifies, report in this exact format instead:
-   ⛔ NO DEPLOY
+4. If no pool qualifies, report in this exact format:
+   ACTION: NO_DEPLOY
 
    Cycle finished with no valid entry.
 
@@ -1241,28 +1261,57 @@ STEPS:
 IMPORTANT:
 - Never write "unknown" for OKX. Use real values, omit missing fields, or write exactly "OKX: unavailable".
 - Keep the whole report compact and highly scannable for Telegram.
+- Final action must be explicit: ACTION: DEPLOY or ACTION: NO_DEPLOY.
       `, config.llm.maxSteps, [], "SCREENER", config.llm.screeningModel, 2048, {
         onToolStart: async ({ name }) => { await liveMessage?.toolStart(name); },
-        onToolFinish: async ({ name, args, result, success }) => {
-          if (name === "deploy_position" && success) {
-            successfulDeploy = { args, result };
-          }
+        onToolFinish: async ({ name, result, success }) => {
           await liveMessage?.toolFinish(name, result, success);
         },
+        blockedTools: ["deploy_position"],
+        requireToolOnAction: false,
       });
     const funnelAppend = buildGmgnFunnelReport(gmgnStageCounts, gmgnAllFiltered, { fromStage: 2 });
-    const noDeployReported = /NO DEPLOY/i.test(content);
-    const finalContent = successfulDeploy && noDeployReported
-      ? buildAuthoritativeDeployReport(successfulDeploy)
-      : content;
-    if (successfulDeploy && noDeployReported) {
-      log("screening_warn", `LLM reported NO DEPLOY after successful deploy_position; overriding final report for ${successfulDeploy.result?.position || successfulDeploy.args?.pool_address || "unknown position"}`);
+    const decision = parseScreeningDeployDecision(content);
+    let finalContent = content;
+    if (decision.action === "DEPLOY") {
+      const selectedIndex = passing.findIndex(({ pool }) => pool.pool === decision.pool_address);
+      if (selectedIndex < 0) {
+        finalContent = `ACTION: NO_DEPLOY\n\nCycle finished with no valid entry.\n\nWHY SKIPPED\nModel requested an invalid or missing POOL_ADDRESS, so no deploy was executed.`;
+        appendDecision({
+          type: "no_deploy",
+          actor: "SCREENER",
+          summary: "Deploy decision rejected",
+          reason: `Invalid deploy pool address from model: ${decision.pool_address || "missing"}`,
+        });
+      } else {
+        const params = buildScreenerDeployParams({
+          decision,
+          candidateEntry: passing[selectedIndex],
+          studyResult: studyResults[selectedIndex]?.status === "fulfilled" ? studyResults[selectedIndex].value : null,
+          deployAmount,
+        });
+        await liveMessage?.toolStart("deploy_position");
+        const result = await executeTool("deploy_position", params);
+        const success = result?.success !== false && !result?.error && !result?.blocked;
+        await liveMessage?.toolFinish("deploy_position", result, success);
+        finalContent = success
+          ? buildAuthoritativeDeployReport({ args: params, result })
+          : `ACTION: NO_DEPLOY\n\nDeploy blocked by executor.\n\nWHY SKIPPED\n${result?.reason || result?.error || "deploy_position failed"}`;
+        if (!success) {
+          appendDecision({
+            type: "no_deploy",
+            actor: "SCREENER",
+            summary: "Deploy blocked",
+            reason: result?.reason || result?.error || "deploy_position failed",
+          });
+        }
+      }
     }
     screenReport = funnelAppend ? `${finalContent}\n\n─────────────\n${funnelAppend}` : finalContent;
     if (hardFilteredBlock) {
       screenReport += `\n\n─────────────${hardFilteredBlock}`;
     }
-    if (!successfulDeploy && noDeployReported) {
+    if (decision.action !== "DEPLOY") {
       appendDecision({
         type: "no_deploy",
         actor: "SCREENER",

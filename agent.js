@@ -156,7 +156,7 @@ function isToolChoiceRequiredError(error) {
  * @returns {string} - The agent's final text response
  */
 export async function agentLoop(goal, maxSteps = config.llm.maxSteps, sessionHistory = [], agentType = "GENERAL", model = null, maxOutputTokens = null, options = {}) {
-  const { interactive = false, onToolStart = null, onToolFinish = null } = options;
+  const { interactive = false, onToolStart = null, onToolFinish = null, blockedTools = [], requireToolOnAction = true } = options;
   // Build dynamic system prompt with current portfolio state
   const [portfolio, positions] = await Promise.all([getWalletBalances(), getMyPositions()]);
   const stateSummary = getStateSummary();
@@ -199,14 +199,16 @@ export async function agentLoop(goal, maxSteps = config.llm.maxSteps, sessionHis
       let usedModel = activeModel;
       // Force a tool call on step 0 for action intents — prevents the model from inventing deploy/close outcomes
       const ACTION_INTENTS = /\b(deploy|open|add liquidity|close|exit|withdraw|claim|swap|block|unblock)\b/i;
-      let toolChoice = (step === 0 && (ACTION_INTENTS.test(goal) || mustUseRealTool)) ? "required" : "auto";
+      let toolChoice = (requireToolOnAction && step === 0 && (ACTION_INTENTS.test(goal) || mustUseRealTool)) ? "required" : "auto";
+      const availableTools = getToolsForRole(agentType, goal)
+        .filter((tool) => !blockedTools.includes(tool.function.name));
 
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           response = await client.chat.completions.create({
             model: usedModel,
             messages,
-            tools: getToolsForRole(agentType, goal),
+            tools: availableTools,
             tool_choice: toolChoice,
             temperature: config.llm.temperature,
             max_tokens: maxOutputTokens ?? config.llm.maxTokens,
@@ -316,6 +318,22 @@ export async function agentLoop(goal, maxSteps = config.llm.maxSteps, sessionHis
             log("error", `Failed to parse args for ${functionName}: ${parseError.message}`);
             functionArgs = {};
           }
+        }
+
+        if (blockedTools.includes(functionName)) {
+          log("agent", `Blocked ${functionName} call by loop policy`);
+          await onToolFinish?.({
+            name: functionName,
+            args: functionArgs,
+            result: { blocked: true, reason: `${functionName} is disabled for this decision phase.` },
+            success: false,
+            step,
+          });
+          return {
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({ blocked: true, reason: `${functionName} is disabled for this decision phase.` }),
+          };
         }
 
         // Block once-per-session tools from firing a second time
