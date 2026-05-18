@@ -72,6 +72,37 @@ function numberOrNull(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+export function computeBinsBelow(volatility, cfg = config) {
+  const minBins = Math.max(MIN_SAFE_BINS_BELOW, Number(cfg.strategy?.minBinsBelow ?? MIN_SAFE_BINS_BELOW));
+  const maxBins = Math.max(minBins, Number(cfg.strategy?.maxBinsBelow ?? minBins));
+  const defaultBins = Math.max(minBins, Math.min(maxBins, Number(cfg.strategy?.defaultBinsBelow ?? minBins)));
+  const vol = Number(volatility);
+
+  if (!Number.isFinite(vol) || vol <= 0) return defaultBins;
+
+  const bins = Math.round(minBins + (vol / 5) * (maxBins - minBins));
+  return Math.min(maxBins, Math.max(minBins, bins));
+}
+
+export function computeBinsAbove(strategy, { singleSideSol = true } = {}) {
+  if (singleSideSol) return 0;
+  return String(strategy || "").toLowerCase() === "spot" ? 0 : null;
+}
+
+export function selectStrategy(pool, cfg = config) {
+  const vol = numberOrNull(pool?.volatility) ?? 0;
+  const feeTvl = numberOrNull(pool?.fee_active_tvl_ratio ?? pool?.fee_tvl_ratio) ?? 0;
+  const volume = numberOrNull(pool?.volume ?? pool?.volume_window ?? pool?.volume_24h) ?? 0;
+  const volThreshold = Number(cfg.strategy?.spotMinVolatility ?? 3);
+  const feeThreshold = Number(cfg.strategy?.spotMinFeeActiveTvlRatio ?? 0.5);
+  const minVolume = Number(cfg.strategy?.spotMinVolume ?? 20_000);
+
+  if (vol < volThreshold && feeTvl > feeThreshold && volume > minVolume) {
+    return "spot";
+  }
+  return "bid_ask";
+}
+
 function getVolatilityTimeframe(sourceTimeframe) {
   const source = String(sourceTimeframe || "").trim();
   const sourceMinutes = TIMEFRAME_MINUTES[source];
@@ -192,6 +223,54 @@ async function validateDeployPoolThresholds(args) {
     };
   }
 
+  const volatilityTimeframe = getVolatilityTimeframe(config.screening.timeframe || "5m");
+  let volatilityDetail = detail;
+  if ((config.screening.timeframe || "5m") !== volatilityTimeframe) {
+    try {
+      volatilityDetail = await fetchFreshPoolDetail(args.pool_address, volatilityTimeframe);
+    } catch (error) {
+      return {
+        pass: false,
+        reason: `Could not verify pool ${volatilityTimeframe} volatility before deploy: ${error.message}`,
+      };
+    }
+  }
+
+  const volatility = poolDetailVolatility(volatilityDetail);
+  if (volatility == null || volatility <= 0) {
+    return {
+      pass: false,
+      reason: `Pool ${volatilityTimeframe} volatility ${volatility ?? "unknown"} is unusable. Refusing deploy.`,
+    };
+  }
+
+  const deployAmountYForShape = numberOrNull(args.amount_y ?? args.amount_sol ?? 0) ?? 0;
+  const deployAmountXForShape = numberOrNull(args.amount_x ?? 0) ?? 0;
+  const isSingleSideSolShape = deployAmountYForShape > 0 && deployAmountXForShape <= 0;
+  const codeSelectedStrategy = selectStrategy({
+    ...detail,
+    volatility,
+    volume: poolDetailVolume(detail) ?? numberOrNull(args.volume),
+    fee_active_tvl_ratio: feeActiveTvlRatio,
+  }, config);
+  const codeBinsBelow = computeBinsBelow(volatility, config);
+  const codeBinsAbove = computeBinsAbove(codeSelectedStrategy, { singleSideSol: isSingleSideSolShape });
+  const originalShape = {
+    strategy: args.strategy,
+    bins_below: args.bins_below,
+    bins_above: args.bins_above,
+  };
+  args.strategy = codeSelectedStrategy;
+  if (args.downside_pct == null) args.bins_below = codeBinsBelow;
+  if (args.upside_pct == null && codeBinsAbove != null) args.bins_above = codeBinsAbove;
+  if (
+    originalShape.strategy !== args.strategy ||
+    originalShape.bins_below !== args.bins_below ||
+    originalShape.bins_above !== args.bins_above
+  ) {
+    log("executor", `Deploy shape normalized by code: ${JSON.stringify(originalShape)} -> ${JSON.stringify({ strategy: args.strategy, bins_below: args.bins_below, bins_above: args.bins_above })}`);
+  }
+
   if (String(args.strategy || "").toLowerCase() === "spot") {
     const spotVolume = poolDetailVolume(detail) ?? numberOrNull(args.volume);
     const spotMinVolume = numberOrNull(config.strategy.spotMinVolume);
@@ -213,27 +292,6 @@ async function validateDeployPoolThresholds(args) {
         reason: `Spot deploy blocked: fee/active-TVL ${feeActiveTvlRatio ?? "unknown"}% is below spotMinFeeActiveTvlRatio ${spotMinFeeActiveTvlRatio}%.`,
       };
     }
-  }
-
-  const volatilityTimeframe = getVolatilityTimeframe(config.screening.timeframe || "5m");
-  let volatilityDetail = detail;
-  if ((config.screening.timeframe || "5m") !== volatilityTimeframe) {
-    try {
-      volatilityDetail = await fetchFreshPoolDetail(args.pool_address, volatilityTimeframe);
-    } catch (error) {
-      return {
-        pass: false,
-        reason: `Could not verify pool ${volatilityTimeframe} volatility before deploy: ${error.message}`,
-      };
-    }
-  }
-
-  const volatility = poolDetailVolatility(volatilityDetail);
-  if (volatility == null || volatility <= 0) {
-    return {
-      pass: false,
-      reason: `Pool ${volatilityTimeframe} volatility ${volatility ?? "unknown"} is unusable. Refusing deploy.`,
-    };
   }
 
   const actualBinStep = poolDetailBinStep(detail);

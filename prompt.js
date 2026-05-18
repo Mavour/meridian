@@ -219,9 +219,8 @@ DEPLOY DECISION:
 
 DEPLOY RULES:
 - COMPOUNDING: Use the deploy amount from the goal EXACTLY. Do NOT default to a smaller number.
-- strategy = use the candidate's recommended_strategy (spot or bid_ask). Override ONLY with strong justification (e.g. clear contradicting signal from pool memory or lessons).
-- spot = uptrend/pump (price_1h_change > +5%, 5m not falling knife, or top LPers consensus). bid_ask = sideways/consolidation/dip.
-- bins_below = round(${config.strategy.minBinsBelow} + (candidate volatility/5)*${config.strategy.maxBinsBelow - config.strategy.minBinsBelow}) clamped to [${config.strategy.minBinsBelow},${config.strategy.maxBinsBelow}]. bins_above = 0.
+- strategy and bins are normalized in executor.js from live pool volatility, fee/active-TVL, and volume. Pass the candidate metrics; do not invent custom bins.
+- Single-side SOL deploys must keep amount_x=0 and bins_above=0. The executor recalculates bins_below with the configured hard formula.
 - Bin steps must be [${config.screening.minBinStep}-${config.screening.maxBinStep}].
 
 REPORT FORMAT (keep it SHORT — copy the exact values from the candidate data above, do NOT invent numbers):

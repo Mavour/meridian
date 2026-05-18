@@ -12,7 +12,8 @@ import { getTopCandidates } from "./tools/screening.js";
 import { formatGmgnCandidateForPrompt } from "./tools/gmgn.js";
 import { config, reloadScreeningThresholds, computeDeployAmount } from "./config.js";
 import { evolveThresholds, getPerformanceSummary } from "./lessons.js";
-import { executeTool, registerCronRestarter } from "./tools/executor.js";
+import { computeBinsBelow, executeTool, registerCronRestarter } from "./tools/executor.js";
+import { decideCloseAction } from "./tools/close-decider.js";
 import { checkCookieHealth, analyzeSentiment, isCookieExpired } from "./tools/x.js";
 import {
   startPolling,
@@ -865,14 +866,7 @@ function buildScreenerDeployParams({ decision, candidateEntry, studyResult, depl
   const tokenInfo = candidateEntry.ti;
   const strategyRec = resolveStrategyForPool(pool, studyResult);
   const strategy = decision.strategy || strategyRec.strategy || config.strategy.strategy;
-  const volatility = Number(pool.volatility);
-  const minBins = Number(config.strategy.minBinsBelow);
-  const maxBins = Number(config.strategy.maxBinsBelow);
-  const defaultBins = Number(config.strategy.defaultBinsBelow ?? minBins);
-  const computedBins = Number.isFinite(volatility)
-    ? Math.round(minBins + (volatility / 4) * (maxBins - minBins))
-    : defaultBins;
-  const binsBelow = Math.max(minBins, Math.min(maxBins, computedBins));
+  const binsBelow = computeBinsBelow(pool.volatility, config);
 
   return {
     pool_address: pool.pool,
@@ -1529,6 +1523,29 @@ function formatCandidates(candidates) {
   ].join("\n");
 }
 
+function closeReasonText(decision) {
+  switch (decision.reason) {
+    case "hard_stop":
+      return "hard stop";
+    case "stop_loss":
+      return "stop loss";
+    case "take_profit":
+      return "take profit";
+    case "trailing_stop":
+      return `trailing stop${decision.peak != null ? ` from peak ${decision.peak}%` : ""}`;
+    case "slow_bleed":
+      return `slow bleed / slow rug - PnL ${decision.pnl}% fee/TVL ${decision.feePerTvl}%`;
+    case "low_yield":
+      return `low yield - fee/TVL ${decision.feePerTvl}%`;
+    case "pumped_far_above_range":
+      return "pumped far above range";
+    case "oor":
+      return "OOR";
+    default:
+      return decision.reason || "close rule";
+  }
+}
+
 function getDeterministicCloseRule(position, managementConfig) {
   const tracked = getTrackedPosition(position.position);
   const pnlSuspect = (() => {
@@ -1541,46 +1558,27 @@ function getDeterministicCloseRule(position, managementConfig) {
     return false;
   })();
 
-  if (!pnlSuspect && position.pnl_pct != null && position.pnl_pct <= managementConfig.stopLossPct) {
-    return { action: "CLOSE", rule: 1, reason: "stop loss" };
-  }
-  if (!pnlSuspect && position.pnl_pct != null && position.pnl_pct >= managementConfig.takeProfitPct) {
-    return { action: "CLOSE", rule: 2, reason: "take profit" };
-  }
+  const hardStopPct = Number(managementConfig.hardStopPct ?? managementConfig.stopLossPct);
   if (
-    position.active_bin != null &&
-    position.upper_bin != null &&
-    position.active_bin > position.upper_bin + managementConfig.outOfRangeBinsToClose
+    pnlSuspect &&
+    managementConfig.hardStopBypassSuspicious === true &&
+    Number.isFinite(hardStopPct) &&
+    position.pnl_pct <= hardStopPct
   ) {
-    return { action: "CLOSE", rule: 3, reason: "pumped far above range" };
+    return {
+      action: "CLOSE",
+      rule: 1,
+      reason: "hard stop",
+      decision: { action: "close", priority: 1, reason: "hard_stop", pnl: position.pnl_pct },
+    };
   }
-  if (
-    position.active_bin != null &&
-    position.upper_bin != null &&
-    position.active_bin > position.upper_bin &&
-    (position.minutes_out_of_range ?? 0) >= managementConfig.outOfRangeWaitMinutes
-  ) {
-    return { action: "CLOSE", rule: 4, reason: "OOR" };
-  }
-  if (
-    position.fee_per_tvl_24h != null &&
-    position.fee_per_tvl_24h < managementConfig.minFeePerTvl24h &&
-    (position.age_minutes ?? 0) >= (managementConfig.minAgeBeforeYieldCheck ?? 60)
-  ) {
-    return { action: "CLOSE", rule: 5, reason: "low yield" };
-  }
-  // Rule 6: slow bleed / slow rug — in range, low fees, shallow PnL, going nowhere
-  if (
-    position.in_range === true &&
-    position.age_minutes != null &&
-    position.age_minutes >= (managementConfig.slowBleedMinAge ?? 20) &&
-    position.pnl_pct != null &&
-    position.pnl_pct >= (managementConfig.slowBleedMinPnl ?? -1) &&
-    position.pnl_pct <= (managementConfig.slowBleedMaxPnl ?? 0.5) &&
-    position.fee_per_tvl_24h != null &&
-    position.fee_per_tvl_24h < managementConfig.minFeePerTvl24h
-  ) {
-    return { action: "CLOSE", rule: 6, reason: `slow bleed / slow rug — age ${position.age_minutes}m, PnL ${position.pnl_pct}% (range ${managementConfig.slowBleedMinPnl ?? -1}% to ${managementConfig.slowBleedMaxPnl ?? 0.5}%), fee/TVL ${position.fee_per_tvl_24h}% < ${managementConfig.minFeePerTvl24h}%` };
+
+  const decision = decideCloseAction(
+    pnlSuspect ? { ...position, pnl_pct: null, pnlPct: null } : position,
+    managementConfig,
+  );
+  if (decision.action === "close") {
+    return { action: "CLOSE", rule: decision.priority, reason: closeReasonText(decision), decision };
   }
   return null;
 }
@@ -1601,12 +1599,6 @@ function buildGmgnFunnelReport(stageCounts, allFiltered = [], { fromStage = 1 } 
     .map(([key, items]) => `${stageLabels[key] || key}:\n${items.map(r => `  • ${r}`).join("\n")}`)
     .join("\n");
   return details ? `${funnel}\n\n${details}` : funnel;
-}
-
-function computeBinsBelow(volatility) {
-  const lo = config.strategy.minBinsBelow;
-  const hi = config.strategy.maxBinsBelow;
-  return Math.max(lo, Math.min(hi, Math.round(lo + ((Number(volatility) || 0) / 5) * (hi - lo))));
 }
 
 // ═══════════════════════════════════════════

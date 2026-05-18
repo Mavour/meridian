@@ -145,7 +145,13 @@ function isSystemRoleError(error) {
 
 function isToolChoiceRequiredError(error) {
   const message = String(error?.message || error?.error?.message || error || "");
-  return /tool_choice/i.test(message) && /required/i.test(message);
+  return /tool_choice/i.test(message) && (/required/i.test(message) || error?.status === 404 || error?.code === 404);
+}
+
+function getApiError(response) {
+  return response && typeof response.error === "object" && response.error !== null
+    ? response.error
+    : null;
 }
 
 /**
@@ -229,8 +235,9 @@ export async function agentLoop(goal, maxSteps = config.llm.maxSteps, sessionHis
           }
           throw error;
         }
-        if (response.choices?.length) break;
-        const errCode = response.error?.code;
+        if (response?.choices?.length) break;
+        const responseError = getApiError(response);
+        const errCode = responseError?.code;
         if (errCode === 502 || errCode === 503 || errCode === 529) {
           const wait = (attempt + 1) * 5000;
           if (attempt === 1 && usedModel !== FALLBACK_MODEL) {
@@ -245,9 +252,10 @@ export async function agentLoop(goal, maxSteps = config.llm.maxSteps, sessionHis
         }
       }
 
-      if (!response.choices?.length) {
+      if (!response?.choices?.length) {
+        const responseError = getApiError(response);
         log("error", `Bad API response: ${JSON.stringify(response).slice(0, 200)}`);
-        throw new Error(`API returned no choices: ${response.error?.message || JSON.stringify(response)}`);
+        throw new Error(`API returned no choices: ${responseError?.message || JSON.stringify(response)}`);
       }
       const msg = response.choices[0].message;
       // Repair malformed tool call JSON before pushing to history —
