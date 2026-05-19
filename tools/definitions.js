@@ -618,63 +618,9 @@ Returns pool address, name, bin_step, fee %, TVL, volume, and token mints.`,
     }
   },
 
-  {
-    type: "function",
-    function: {
-      name: "get_top_lpers",
-      description: `Get the top open LPers for a pool by address — quick read-only lookup.
-Use this when the user asks "who are the top LPers in this pool?" or wants to
-know how others are performing in a specific pool without saving lessons.
 
-Returns: aggregate LPAgent-backed top-LPer patterns from the Agent Meridian
-\`/top-lp/:pool\` endpoint. Data is cached server-side and refreshed on a 30m cadence.`,
-      parameters: {
-        type: "object",
-        properties: {
-          pool_address: {
-            type: "string",
-            description: "The pool address to look up top LPers for"
-          },
-          limit: {
-            type: "number",
-            description: "Number of top LPers to return. Default 5."
-          }
-        },
-        required: ["pool_address"]
-      }
-    }
-  },
 
-  {
-    type: "function",
-    function: {
-      name: "study_top_lpers",
-      description: `Fetch and analyze top open LPers for a pool to learn from their behaviour.
-Returns LPAgent-backed owner aggregates and historical style/range samples from
-the Agent Meridian \`/study-top-lp/:pool\` endpoint.
 
-Use this before deploying into a new pool to:
-- See if top performers are scalpers (< 1h holds) or long-term holders.
-- Match your strategy and range to what is actually working for others right now.
-- Avoid pools where even the best open LPs are poorly placed or losing.
-
-Server note: study data is cached and refreshed every 30 minutes.`,
-      parameters: {
-        type: "object",
-        properties: {
-          pool_address: {
-            type: "string",
-            description: "Pool address to study top LPers for"
-          },
-          limit: {
-            type: "number",
-            description: "Number of top LPers to study. Default 4."
-          }
-        },
-        required: ["pool_address"]
-      }
-    }
-  },
 
   {
     type: "function",
@@ -739,7 +685,7 @@ Pass null or empty string to clear an existing instruction.`,
     function: {
       name: "add_lesson",
       description: `Save a lesson to the agent's permanent memory.
-Use after studying top LPers or observing a pattern worth remembering.
+Use after observing a pattern worth remembering.
 Lessons are injected into the system prompt on every future cycle.
 Write concrete, actionable rules — not vague observations.
 
@@ -747,7 +693,7 @@ Use 'role' to target a specific agent type so it only appears in the right conte
 Use 'pinned: true' for critical rules that must always be present regardless of memory cap.
 
 Examples:
-- rule: "PREFER: pools where top LPers hold < 30 min", tags: ["scalping"], role: "SCREENER"
+- rule: "PREFER: pools with strong organic flow and stable fee capture", tags: ["screening"], role: "SCREENER"
 - rule: "AVOID: closing when OOR < 30min — price often recovers", tags: ["oor"], role: "MANAGER", pinned: true`,
       parameters: {
         type: "object",

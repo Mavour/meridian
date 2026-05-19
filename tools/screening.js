@@ -269,9 +269,8 @@ function getRawPoolScreeningRejectReason(pool, s) {
 }
 
 async function fetchDiscordSignalCandidates() {
-  const res = await fetch(`${config.api.url}/signals/discord/candidates`, {
-    headers: config.api.publicApiKey ? { "x-api-key": config.api.publicApiKey } : {},
-  });
+  if (!config.api.url) return [];
+  const res = await fetch(`${config.api.url}/signals/discord/candidates`);
   if (!res.ok) throw new Error(`discord signal candidates ${res.status}`);
   const data = await res.json();
   return Array.isArray(data?.candidates) ? data.candidates : [];

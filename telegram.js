@@ -212,8 +212,6 @@ function toolLabel(name) {
     get_my_positions: "get positions",
     get_wallet_balance: "get wallet balance",
     check_smart_wallets_on_pool: "check smart wallets",
-    study_top_lpers: "study top LPers",
-    get_top_lpers: "get top LPers",
     search_pools: "search pools",
     discover_pools: "discover pools",
   };
@@ -239,9 +237,6 @@ function summarizeToolResult(name, result) {
       return `${result.total_positions ?? result.positions?.length ?? 0} positions`;
     case "get_wallet_balance":
       return `${result.sol ?? "?"} SOL`;
-    case "study_top_lpers":
-    case "get_top_lpers":
-      return `${result.lpers?.length ?? 0} LPers`;
     default:
       return result.success === false ? "failed" : "done";
   }

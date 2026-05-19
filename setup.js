@@ -18,7 +18,6 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, "user-config.json");
 const GMGN_CONFIG_PATH = path.join(__dirname, "gmgn-config.json");
-const DEFAULT_HIVEMIND_URL = "https://api.agentmeridian.xyz";
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
@@ -218,7 +217,6 @@ function defaultFor(field, presetDefaults = {}) {
     return GMGN_EXAMPLE_DEFAULTS[key];
   }
   if (existing[key] !== undefined) return existing[key];
-  if (key === "hiveMindUrl") return DEFAULT_HIVEMIND_URL;
   if (presetDefaults[key] !== undefined) return presetDefaults[key];
   return EXAMPLE_DEFAULTS[key];
 }
@@ -389,9 +387,6 @@ const FIELD_SECTIONS = [
     title: "Integrations",
     fields: [
       { key: "agentId", label: "Agent ID (leave blank to auto-generate on startup)", type: "string" },
-      { key: "publicApiKey", label: "Agent Meridian public API key", type: "string", preserveExistingMasked: true },
-      { key: "agentMeridianApiUrl", label: "Agent Meridian API base URL", type: "string" },
-      { key: "lpAgentRelayEnabled", label: "Route LPAgent close execution + open positions through Agent Meridian? (true/false)", type: "boolean" },
       { key: "telegramChatId", label: "Telegram chat ID", type: "string" },
       { key: "hiveMindApiKey", label: "HiveMind API key", type: "string", preserveExistingMasked: true },
       { key: "hiveMindPullMode", label: "HiveMind pull mode", type: "choice", choices: [
@@ -448,7 +443,7 @@ console.log(
 const updates = {
   ...existing,
   preset: presetChoice.key,
-  hiveMindUrl: existing.hiveMindUrl || DEFAULT_HIVEMIND_URL,
+  hiveMindUrl: existing.hiveMindUrl || "",
 };
 const gmgnUpdates = {
   ...existingGmgn,
@@ -474,7 +469,7 @@ if (!updates.llmApiKey && existing.llmApiKey) updates.llmApiKey = existing.llmAp
 if (!updates.hiveMindApiKey && existing.hiveMindApiKey) updates.hiveMindApiKey = existing.hiveMindApiKey;
 if (!gmgnUpdates.apiKey && existingGmgn.apiKey) gmgnUpdates.apiKey = existingGmgn.apiKey;
 if (existing.agentId && !updates.agentId) updates.agentId = existing.agentId;
-updates.hiveMindUrl = updates.hiveMindUrl || existing.hiveMindUrl || DEFAULT_HIVEMIND_URL;
+updates.hiveMindUrl = updates.hiveMindUrl || existing.hiveMindUrl || "";
 
 fs.writeFileSync(CONFIG_PATH, JSON.stringify(updates, null, 2));
 fs.writeFileSync(GMGN_CONFIG_PATH, JSON.stringify(gmgnUpdates, null, 2));
@@ -495,7 +490,7 @@ Highlights:
   Screening:   every ${updates.screeningIntervalMin} min
   Dry run:     ${updates.dryRun}
   Agent ID:    ${updates.agentId || "(auto-generate on startup)"}
-  HiveMind:    ${DEFAULT_HIVEMIND_URL}${updates.hiveMindApiKey ? " (API key configured)" : " (API key not set)"}
+  HiveMind:    ${updates.hiveMindUrl || "(disabled)"}${updates.hiveMindApiKey ? " (API key configured)" : " (API key not set)"}
   Pull mode:   ${updates.hiveMindPullMode}
   GMGN:        ${updates.screeningSource === "gmgn" ? "enabled" : "configured but not selected"}${gmgnUpdates.apiKey ? " (API key configured)" : " (API key not set)"}
 

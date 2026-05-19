@@ -35,7 +35,6 @@ import { recordPositionSnapshot, recallForPool, addPoolNote, isBaseMintOnCooldow
 import { checkSmartWalletsOnPool } from "./smart-wallets.js";
 import { getTokenNarrative, getTokenInfo } from "./tools/token.js";
 import { checkMeteoraWhaleGuard } from "./tools/whale-guard.js";
-import { studyTopLPers } from "./tools/study.js";
 import { fetchChartIndicatorsForMint } from "./tools/chart-indicators.js";
 import { BottomSpotLPStrategy } from "./strategies/index.js";
 import { extractCandlesFromIndicatorPayload } from "./strategies/bottomSpotLP.js";
@@ -140,8 +139,8 @@ function buildPrompt() {
 let _cronTasks = [];
 let _managementBusy = false; // prevents overlapping management cycles
 let _screeningBusy = false;  // prevents overlapping screening cycles
-let _screeningLastTriggered = 0; // epoch ms — prevents management from spamming screening
-let _pollTriggeredAt = 0; // epoch ms — cooldown for poller-triggered management
+let _screeningLastTriggered = 0; // epoch ms - prevents management from spamming screening
+let _pollTriggeredAt = 0; // epoch ms - cooldown for poller-triggered management
 const _closingPositions = new Set(); // prevents double-close race
 const _peakConfirmTimers = new Map();
 const _trailingDropConfirmTimers = new Map();
@@ -169,7 +168,7 @@ function sanitizeUntrustedPromptText(text, maxLen = 500) {
 }
 
 function shouldUsePnlRecheck() {
-  return !config.api.lpAgentRelayEnabled;
+  return true;
 }
 
 function schedulePeakConfirmation(positionAddress) {
@@ -182,7 +181,7 @@ function schedulePeakConfirmation(positionAddress) {
       const position = result?.positions?.find((p) => p.position === positionAddress);
       resolvePendingPeak(positionAddress, position?.pnl_pct ?? null, TRAILING_PEAK_CONFIRM_TOLERANCE);
     } catch (error) {
-      log("state_warn", `Peak confirmation failed for ${positionAddress}: ${error.message}`);
+      log("state_warn", "Peak confirmation failed for " + positionAddress + ": " + error.message);
     }
   }, TRAILING_PEAK_CONFIRM_DELAY_MS);
 
@@ -192,11 +191,10 @@ function schedulePeakConfirmation(positionAddress) {
 /**
  * Resolve the best strategy (spot vs bid_ask) for a single pool candidate.
  * Priority:
- *  1. Top LPer consensus (≥60%)
- *  2. Market heuristic (price action + volatility)
- *  3. Active strategy fallback
+ *  1. Market heuristic (price action + volatility)
+ *  2. Active strategy fallback
  */
-function resolveStrategyForPool(pool, studyResult) {
+function resolveStrategyForPool(pool) {
   const activeStrategy = getActiveStrategy();
   const globalStrategy = activeStrategy?.lp_strategy || config.strategy.strategy;
 
@@ -204,24 +202,6 @@ function resolveStrategyForPool(pool, studyResult) {
     return { strategy: globalStrategy, reason: "dynamic strategy disabled" };
   }
 
-  // ── 1. Top LPer consensus ──────────────────────────────────────────
-  const lpers = studyResult?.lpers || studyResult?.top_lpers || studyResult?.aggregates || [];
-  if (lpers.length > 0) {
-    const spotCount = lpers.filter((l) =>
-      (l.strategy === "spot" || l.lp_strategy === "spot" || l.style === "spot")
-    ).length;
-    const total = lpers.length;
-    const spotPct = total > 0 ? spotCount / total : 0;
-
-    if (spotPct >= 0.6) {
-      return { strategy: "spot", reason: `top LPer consensus (${spotCount}/${total} use spot)` };
-    }
-    if (spotPct <= 0.4) {
-      return { strategy: "bid_ask", reason: `top LPer consensus (${total - spotCount}/${total} use bid_ask)` };
-    }
-  }
-
-  // ── 2. Market heuristic fallback ───────────────────────────────────
   const price1h  = pool.price_1h_change ?? null;
   const price5m  = pool.price_5m_change ?? null;
   const volatility = pool.volatility ?? null;
@@ -231,32 +211,28 @@ function resolveStrategyForPool(pool, studyResult) {
   const minVol     = config.strategy.spotMinVolatility      ?? 3;
   const min5m      = config.strategy.spotMinPrice5mFloor   ?? config.strategy.spotMinPrice30mFloor ?? -2;
 
-  // Uptrend: clear pump with stabilization
   const isUptrend =
     price1h != null && price1h > minPrice1h &&
     price5m != null && price5m >= min5m;
 
-  // Volatile directional pump
   const isVolatilePump =
     volatility != null && volatility > minVol &&
-    price1h != null && price1h > (minPrice1h - 2); // > 3%
+    price1h != null && price1h > (minPrice1h - 2);
 
-  // GMGN supertrend confirmation (if available)
   const supertrendUp = gmgnPrice.supertrend?.direction === "UP" && price1h != null && price1h > 0;
 
   if (isUptrend || isVolatilePump || supertrendUp) {
     return {
       strategy: "spot",
-      reason: `market heuristic: uptrend (1h=${price1h}%, 5m=${price5m}%, vol=${volatility}${supertrendUp ? ", supertrend=UP" : ""})`,
+      reason: "market heuristic: uptrend (1h=" + price1h + "%, 5m=" + price5m + "%, vol=" + volatility + (supertrendUp ? ", supertrend=UP" : "") + ")",
     };
   }
 
   return {
     strategy: "bid_ask",
-    reason: `market heuristic: sideways/consolidation (1h=${price1h}%, 5m=${price5m}%, vol=${volatility})`,
+    reason: "market heuristic: sideways/consolidation (1h=" + price1h + "%, 5m=" + price5m + "%, vol=" + volatility + ")",
   };
 }
-
 function scheduleTrailingDropConfirmation(positionAddress) {
   if (!positionAddress || _trailingDropConfirmTimers.has(positionAddress)) return;
 
@@ -861,10 +837,10 @@ function parseScreeningDeployDecision(content) {
   return { action: "NO_DEPLOY" };
 }
 
-function buildScreenerDeployParams({ decision, candidateEntry, studyResult, deployAmount }) {
+function buildScreenerDeployParams({ decision, candidateEntry, deployAmount }) {
   const pool = candidateEntry.pool;
   const tokenInfo = candidateEntry.ti;
-  const strategyRec = resolveStrategyForPool(pool, studyResult);
+  const strategyRec = resolveStrategyForPool(pool);
   const strategy = decision.strategy || strategyRec.strategy || config.strategy.strategy;
   const binsBelow = computeBinsBelow(pool.volatility, config);
 
@@ -1093,11 +1069,6 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
       passing.map(({ pool }) => getActiveBin({ pool_address: pool.pool }))
     );
 
-    // Study top LPers for strategy consensus
-    const studyResults = await Promise.allSettled(
-      passing.map(({ pool }) => studyTopLPers({ pool_address: pool.pool, limit: 4 }))
-    );
-
     // Build compact candidate blocks
     const hardFilteredBlock = earlyFilteredExamples.length > 0
       ? `\n\nREJECTED BY HARD FILTERS (${earlyFilteredExamples.length} pool${earlyFilteredExamples.length !== 1 ? 's' : ''} — do NOT deploy into these):\n${earlyFilteredExamples.slice(0, 5).map((e) => `- ${e.name}: ${e.reason}`).join('\n')}`
@@ -1111,8 +1082,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
       const priceChange = ti?.stats_1h?.price_change;
       const netBuyers = ti?.stats_1h?.net_buyers;
       const activeBin = activeBinResults[i]?.status === "fulfilled" ? activeBinResults[i].value?.binId : null;
-      const studyResult = studyResults[i]?.status === "fulfilled" ? studyResults[i].value : null;
-      const strategyRec = resolveStrategyForPool(pool, studyResult);
+      const strategyRec = resolveStrategyForPool(pool);
       const minFeeTvl = Number(config.screening.minFeeActiveTvlRatio ?? 0);
       const feeTvl = Number(pool.fee_active_tvl_ratio);
       const feeTvlStatus = Number.isFinite(feeTvl) && feeTvl >= minFeeTvl ? "PASS" : "FAIL";
@@ -1281,7 +1251,6 @@ IMPORTANT:
         const params = buildScreenerDeployParams({
           decision,
           candidateEntry: passing[selectedIndex],
-          studyResult: studyResults[selectedIndex]?.status === "fulfilled" ? studyResults[selectedIndex].value : null,
           deployAmount,
         });
         await liveMessage?.toolStart("deploy_position");
@@ -1710,7 +1679,6 @@ function settingValue(key) {
     llmModel: userConfig.llmModel || process.env.LLM_MODEL,
     // ── Quick toggles ──
     solMode: config.management.solMode,
-    lpAgentRelayEnabled: config.api.lpAgentRelayEnabled,
     trailingTakeProfit: config.management.trailingTakeProfit,
     // ── Quick numeric ──
     maxPositions: config.risk.maxPositions,
@@ -3159,8 +3127,6 @@ Commands:
   /status        Refresh wallet + positions
   /candidates    Refresh top pool list
   /briefing      Show morning briefing (last 24h)
-  /learn         Study top LPers from the best current pool and save lessons
-  /learn <addr>  Study top LPers from a specific pool address
   /thresholds    Show current screening thresholds + performance stats
   /evolve        Manually trigger threshold evolution from performance data
   /stop          Shut down
@@ -3273,55 +3239,6 @@ Commands:
       }
       console.log();
       rl.prompt();
-      return;
-    }
-
-    if (input.startsWith("/learn")) {
-      await runBusy(async () => {
-        const parts = input.split(" ");
-        const poolArg = parts[1] || null;
-
-        let poolsToStudy = [];
-
-        if (poolArg) {
-          poolsToStudy = [{ pool: poolArg, name: poolArg }];
-        } else {
-          // Fetch top 10 candidates across all eligible pools
-          console.log("\nFetching top pool candidates to study...\n");
-          const { candidates } = await getTopCandidates({ limit: 10 });
-          if (!candidates.length) {
-            console.log("No eligible pools found to study.\n");
-            return;
-          }
-          poolsToStudy = candidates.map((c) => ({ pool: c.pool, name: c.name }));
-        }
-
-        console.log(`\nStudying top LPers across ${poolsToStudy.length} pools...\n`);
-        for (const p of poolsToStudy) console.log(`  • ${p.name || p.pool}`);
-        console.log();
-
-        const poolList = poolsToStudy
-          .map((p, i) => `${i + 1}. ${p.name} (${p.pool})`)
-          .join("\n");
-
-        const { content: reply } = await agentLoop(
-          `Study top LPers across these ${poolsToStudy.length} pools by calling study_top_lpers for each:
-
-${poolList}
-
-For each pool, call study_top_lpers then move to the next. After studying all pools:
-1. Identify patterns that appear across multiple pools (hold time, scalping vs holding, win rates).
-2. Note pool-specific patterns where behaviour differs significantly.
-3. Derive 4-8 concrete, actionable lessons using add_lesson. Prioritize cross-pool patterns — they're more reliable.
-4. Summarize what you learned.
-
-Focus on: hold duration, entry/exit timing, what win rates look like, whether scalpers or holders dominate.`,
-          config.llm.maxSteps,
-          [],
-          "GENERAL"
-        );
-        console.log(`\n${reply}\n`);
-      });
       return;
     }
 

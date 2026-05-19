@@ -385,8 +385,7 @@ async function fetchTopMeteoraDlmmPoolsForMint(mint, minTvl = 0, limit = 2) {
 }
 
 async function fetchPoolDetailDirect(poolAddress) {
-  // Always use Meteora's public Pool Discovery API — the server-side endpoint
-  // (api.agentmeridian.xyz) returns stale/fee=0 data for some pools.
+  // Always use Meteora's public Pool Discovery API for current pool metrics.
   const discoveryBase = "https://pool-discovery-api.datapi.meteora.ag";
   const url = `${discoveryBase}/pools?page_size=1&filter_by=${encodeURIComponent(`pool_address=${poolAddress}`)}&timeframe=5m`;
   const res = await fetch(url);
