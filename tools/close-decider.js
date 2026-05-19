@@ -36,27 +36,51 @@ export function decideCloseAction(position, mgmtConfig = {}) {
   const minClaimAmount = numberOrNull(mgmtConfig.minClaimAmount) ?? 5;
   const minAgeBeforeYieldCheck = numberOrNull(mgmtConfig.minAgeBeforeYieldCheck) ?? 60;
 
+  // Priority 1: hard stop always wins, even during OOR recovery.
   if (pnlPct != null && pnlPct <= hardStopPct) {
     return { action: "close", priority: 1, reason: "hard_stop", pnl: pnlPct };
   }
 
+  // Priority 2: stop loss always wins, even during OOR recovery.
   if (pnlPct != null && pnlPct <= stopLossPct) {
     return { action: "close", priority: 2, reason: "stop_loss", pnl: pnlPct };
   }
 
-  if (pnlPct != null && pnlPct >= takeProfitPct) {
-    return { action: "close", priority: 3, reason: "take_profit", pnl: pnlPct };
+  // Priority 3: if an OOR position has recovered to breakeven/profit, exit.
+  if (inRange === false && oorMinutes != null && oorMinutes >= outOfRangeWaitMinutes) {
+    if (pnlPct != null && pnlPct >= 0) {
+      return { action: "close", priority: 3, reason: "oor_recovery_profit", pnl: pnlPct, oorMinutes };
+    }
+
+    const recoveryWindowMinutes = 60;
+    const recoveryMinLossPct = -3;
+    if (
+      pnlPct != null &&
+      pnlPct <= recoveryMinLossPct &&
+      oorMinutes < recoveryWindowMinutes
+    ) {
+      return { action: "stay", priority: 9, reason: "oor_hold_recovery", pnl: pnlPct, oorMinutes };
+    }
+
+    return { action: "close", priority: 8, reason: "oor_timeout", pnl: pnlPct, oorMinutes };
   }
 
+  // Priority 4: take profit for positions that are not in OOR recovery flow.
+  if (pnlPct != null && pnlPct >= takeProfitPct) {
+    return { action: "close", priority: 4, reason: "take_profit", pnl: pnlPct };
+  }
+
+  // Priority 5: trailing stop for scalping.
   if (
     peakPnlPct != null &&
     pnlPct != null &&
     peakPnlPct >= trailingTriggerPct &&
     pnlPct <= peakPnlPct - trailingDropPct
   ) {
-    return { action: "close", priority: 4, reason: "trailing_stop", pnl: pnlPct, peak: peakPnlPct };
+    return { action: "close", priority: 5, reason: "trailing_stop", pnl: pnlPct, peak: peakPnlPct };
   }
 
+  // Priority 6: slow bleed while still technically in range.
   if (
     ageMinutes != null &&
     pnlPct != null &&
@@ -67,26 +91,25 @@ export function decideCloseAction(position, mgmtConfig = {}) {
     inRange === true &&
     feePerTvl24h < minFeePerTvl24h
   ) {
-    return { action: "close", priority: 5, reason: "slow_bleed", pnl: pnlPct, feePerTvl: feePerTvl24h };
+    return { action: "close", priority: 6, reason: "slow_bleed", pnl: pnlPct, feePerTvl: feePerTvl24h };
   }
 
+  // Priority 7: stale low-yield capital.
   if (
     ageMinutes != null &&
     feePerTvl24h != null &&
     ageMinutes >= minAgeBeforeYieldCheck &&
     feePerTvl24h < minFeePerTvl24h
   ) {
-    return { action: "close", priority: 6, reason: "low_yield", feePerTvl: feePerTvl24h };
+    return { action: "close", priority: 7, reason: "low_yield", feePerTvl: feePerTvl24h };
   }
 
+  // Priority 8: price pumped far above the configured range.
   if (activeBin != null && upperBin != null && activeBin > upperBin + outOfRangeBinsToClose) {
-    return { action: "close", priority: 7, reason: "pumped_far_above_range", activeBin, upperBin };
+    return { action: "close", priority: 8, reason: "pumped_far_above_range", activeBin, upperBin };
   }
 
-  if (inRange === false && oorMinutes != null && oorMinutes >= outOfRangeWaitMinutes) {
-    return { action: "close", priority: 8, reason: "oor", pnl: pnlPct, oorMinutes };
-  }
-
+  // Priority 9: claim fees when no close rule is active.
   if (unclaimedFees != null && unclaimedFees >= minClaimAmount) {
     return { action: "claim", priority: 9, reason: "fees_available", amount: unclaimedFees };
   }

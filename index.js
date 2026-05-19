@@ -1541,6 +1541,10 @@ function closeReasonText(decision) {
       return "pumped far above range";
     case "oor":
       return "OOR";
+    case "oor_recovery_profit":
+      return `OOR recovery profit${decision.pnl != null ? ` - PnL ${decision.pnl}%` : ""}`;
+    case "oor_timeout":
+      return `OOR timeout${decision.pnl != null ? ` - PnL ${decision.pnl}%` : ""}`;
     default:
       return decision.reason || "close rule";
   }
