@@ -768,7 +768,7 @@ function fmtDeployUsd(value, digits = 0) {
   return formatted == null ? null : `$${formatted}`;
 }
 
-function buildAuthoritativeDeployReport({ args = {}, result = {} }) {
+function buildAuthoritativeDeployReport({ args = {}, result = {}, decision = {} }) {
   const wouldDeploy = result.would_deploy || {};
   const poolName = result.pool_name || args.pool_name || "Selected pool";
   const poolAddress = result.pool || args.pool_address || wouldDeploy.pool_address || null;
@@ -778,6 +778,7 @@ function buildAuthoritativeDeployReport({ args = {}, result = {} }) {
   const range = result.range_coverage || {};
   const prices = result.price_range || {};
   const dryRun = result.dry_run === true;
+  const selectionReason = decision.selection_reason || args.selection_reason || null;
 
   const rangeLine = prices.min != null && prices.max != null
     ? `Range: ${fmtDeployValue(prices.min, 8)} -> ${fmtDeployValue(prices.max, 8)}`
@@ -811,11 +812,23 @@ function buildAuthoritativeDeployReport({ args = {}, result = {} }) {
     rangeLine,
     coverageParts.length ? `Range cover: ${coverageParts.join(" | ")}` : null,
     result.bin_step != null ? `Bin step: ${result.bin_step}${result.base_fee != null ? ` | base fee ${fmtDeployPct(result.base_fee, 4)}` : ""}` : null,
+    selectionReason ? `\nWHY THIS WON\n${selectionReason}` : null,
     marketLines.length ? `\nMARKET\n${marketLines.join("\n")}` : null,
     auditLines.length ? `\nAUDIT\n${auditLines.join("\n")}` : null,
     tx ? `\nTx: ${tx}` : null,
     dryRun ? "\nNo transaction was sent because DRY_RUN=true." : null,
   ].filter(Boolean).join("\n");
+}
+
+function extractDecisionSection(text, heading) {
+  const source = String(text || "");
+  const pattern = new RegExp(
+    `\\b${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b\\s*\\n+([\\s\\S]*?)(?=\\n\\s*(?:WHY SKIPPED|WHY THIS WON|BEST LOOKING CANDIDATE|REJECTED|ACTION:|POOL_ADDRESS:|STRATEGY:|MARKET|AUDIT)\\b|$)`,
+    "i",
+  );
+  const match = source.match(pattern);
+  if (!match) return null;
+  return match[1].replace(/\s+\n/g, "\n").trim().slice(0, 700) || null;
 }
 
 function parseScreeningDeployDecision(content) {
@@ -832,6 +845,7 @@ function parseScreeningDeployDecision(content) {
       action: "DEPLOY",
       pool_address: poolMatch?.[1] || null,
       strategy: strategyMatch?.[1]?.toLowerCase() || null,
+      selection_reason: extractDecisionSection(text, "WHY THIS WON"),
     };
   }
   return { action: "NO_DEPLOY" };
@@ -868,6 +882,7 @@ function buildScreenerDeployParams({ decision, candidateEntry, deployAmount }) {
     volume_change_pct: pool.volume_change_pct,
     price_trend: pool.price_trend,
     fees_paid_sol: tokenInfo?.global_fees_sol,
+    selection_reason: decision.selection_reason,
   };
 }
 
@@ -1258,8 +1273,26 @@ IMPORTANT:
         const success = result?.success !== false && !result?.error && !result?.blocked;
         await liveMessage?.toolFinish("deploy_position", result, success);
         finalContent = success
-          ? buildAuthoritativeDeployReport({ args: params, result })
+          ? buildAuthoritativeDeployReport({ args: params, result, decision })
           : `ACTION: NO_DEPLOY\n\nDeploy blocked by executor.\n\nWHY SKIPPED\n${result?.reason || result?.error || "deploy_position failed"}`;
+        if (success && decision.selection_reason) {
+          appendDecision({
+            type: "deploy_reason",
+            actor: "SCREENER",
+            pool: params.pool_address,
+            pool_name: params.pool_name,
+            position: result?.position || null,
+            summary: "LLM selection rationale",
+            reason: decision.selection_reason,
+            metrics: {
+              strategy: params.strategy,
+              volume: params.volume ?? null,
+              fee_tvl_ratio: params.fee_tvl_ratio ?? null,
+              volatility: params.volatility ?? null,
+              organic_score: params.organic_score ?? null,
+            },
+          });
+        }
         if (!success) {
           appendDecision({
             type: "no_deploy",
