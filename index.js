@@ -40,7 +40,6 @@ import { BottomSpotLPStrategy } from "./strategies/index.js";
 import { extractCandlesFromIndicatorPayload } from "./strategies/bottomSpotLP.js";
 import { stageSignals, getAndClearStagedSignals } from "./signal-tracker.js";
 import { getWeightsSummary } from "./signal-weights.js";
-import { bootstrapHiveMind, ensureAgentId, getHiveMindPullMode, isHiveMindEnabled, pullHiveMindLessons, pullHiveMindPresets, registerHiveMindAgent, startHiveMindBackgroundSync } from "./hivemind.js";
 import { appendDecision } from "./decision-log.js";
 
 const APP_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -87,10 +86,6 @@ log("startup", "DLMM LP Agent starting...");
 log("startup", `PID: ${process.pid} | Mode: ${process.env.DRY_RUN === "true" ? "DRY RUN" : "LIVE"}`);
 log("startup", `Model: ${process.env.LLM_MODEL || "hermes-3-405b"}`);
 log("startup", `Lock file: ${LOCK_FILE} | exists: ${fs.existsSync(LOCK_FILE)}`);
-ensureAgentId();
-bootstrapHiveMind().catch((error) => log("hivemind_warn", `Bootstrap failed: ${error.message}`));
-startHiveMindBackgroundSync();
-
 // Check X sentiment on startup
 if (config.xSentiment?.enabled) {
   log("startup", "Checking X sentiment cookies...");
@@ -1653,14 +1648,12 @@ function describeLatestCandidates(limit = 5) {
 
 function formatWalletStatus(wallet, positions) {
   const deployAmount = computeDeployAmount(wallet.sol);
-  const hive = isHiveMindEnabled() ? "on" : "off";
   return [
     `Wallet: ${wallet.sol} SOL ($${wallet.sol_usd})`,
     `SOL price: $${wallet.sol_price}`,
     `Open positions: ${positions.total_positions}/${config.risk.maxPositions}`,
     `Next deploy amount: ${deployAmount} SOL`,
     `Dry run: ${process.env.DRY_RUN === "true" ? "yes" : "no"}`,
-    `HiveMind: ${hive}`,
   ].join("\n");
 }
 
@@ -1680,7 +1673,6 @@ function formatConfigSnapshot() {
     `Screening: ${config.screening.category} / ${config.screening.timeframe} | TVL ${config.screening.minTvl}-${config.screening.maxTvl}`,
     `GMGN interval: ${config.gmgn.interval} | OrderBy: ${config.gmgn.orderBy} | Dir: ${config.gmgn.direction}`,
     `Intervals: manage ${config.schedule.managementIntervalMin}m | screen ${config.schedule.screeningIntervalMin}m`,
-    `HiveMind: ${isHiveMindEnabled() ? "enabled" : "disabled"}${config.hiveMind.agentId ? ` | ${config.hiveMind.agentId}` : ""}`,
   ].join("\n");
 }
 
@@ -1800,6 +1792,8 @@ function settingValue(key) {
     slowBleedMinAge: config.management.slowBleedMinAge,
     slowBleedMinPnl: config.management.slowBleedMinPnl,
     slowBleedMaxPnl: config.management.slowBleedMaxPnl,
+    recoveryExitEnabled: config.management.recoveryExitEnabled,
+    recoveryExitDrawdownPct: config.management.recoveryExitDrawdownPct,
     hardStopPct: config.management.hardStopPct,
     hardStopBypassSuspicious: config.management.hardStopBypassSuspicious,
     trailingConfirmDelaySec: config.management.trailingConfirmDelaySec,
@@ -1879,7 +1873,6 @@ function settingValue(key) {
     xSentimentEnabled: config.xSentiment.enabled,
     minSentimentScore: config.xSentiment.minScore,
     xLookbackDays: config.xSentiment.lookbackDays,
-    hiveMindPullMode: config.hiveMind.pullMode,
     takeProfitFeePct: config.management.takeProfitPct,
     emergencyPriceDropPct: config.management.stopLossPct,
     spotMinVolume: config.strategy.spotMinVolume,
@@ -2243,6 +2236,8 @@ const SETTINGS_PAGES = [
       { key: "emergencyPriceDropPct", label: "Emergency drop %", digits: 1 },
       { key: "hardStopPct", label: "Hard stop %", digits: 1 },
       { key: "hardStopBypassSuspicious", label: "Hard bypass suspicious", type: "toggle" },
+      { key: "recoveryExitEnabled", label: "Recovery exit", type: "toggle" },
+      { key: "recoveryExitDrawdownPct", label: "Recovery drawdown %", digits: 1 },
       { key: "trailingTakeProfit", label: "Trailing TP", type: "toggle" },
       { key: "trailingTriggerPct", label: "Trail trigger %", digits: 1 },
       { key: "trailingDropPct", label: "Trail drop %", digits: 1 },
@@ -2295,7 +2290,6 @@ const SETTINGS_PAGES = [
       { key: "darwinFloor", label: "Darwin floor", digits: 2 },
       { key: "darwinCeiling", label: "Darwin ceiling", digits: 2 },
       { key: "darwinMinSamples", label: "Darwin min samples", digits: 0 },
-      { key: "hiveMindPullMode", label: "Hive pull mode", type: "select", options: [["auto", "Auto"], ["manual", "Manual"], ["off", "Off"]] },
     ],
   },
   {
@@ -2485,6 +2479,7 @@ async function applySettingsMenuCallback(msg) {
       minClaimAmount: "e.g. 5",
       slowBleedMinPnl: "e.g. -1.0",
       slowBleedMaxPnl: "e.g. 0.5",
+      recoveryExitDrawdownPct: "e.g. -5",
       hardStopPct: "e.g. -15",
       minSentimentScore: "e.g. -30",
       blockedLaunchpads: `e.g. pump.fun,letsbonk.fun`,
@@ -2578,7 +2573,7 @@ function formatHelpText() {
     "",
     "/help — show commands",
     "/status — wallet + positions snapshot",
-    "/wallet — wallet, deploy amount, HiveMind status",
+    "/wallet — wallet and deploy amount",
     "/positions — list open positions",
     "/pool <n> — detailed info for one open position",
     "/close <n> — close one position by index",
@@ -2592,8 +2587,6 @@ function formatHelpText() {
     "/candidates — show latest cached candidates",
     "/deploy <n> — deploy candidate by cached index",
     "/briefing — morning briefing",
-    "/hive — HiveMind sync status",
-    "/hive pull — manual HiveMind pull now",
     "/pause — stop cron cycles",
     "/resume — start cron cycles again",
     "/stop — shut down agent",
@@ -3009,33 +3002,7 @@ async function telegramHandler(msg) {
   }
 
   if (text === "/hive" || text === "/hive pull") {
-    try {
-      const enabled = isHiveMindEnabled();
-      const agentId = ensureAgentId();
-      if (!enabled) {
-        await sendMessage(`HiveMind: disabled\nAgent ID: ${agentId}\nSet hiveMindApiKey to connect.`).catch(() => {});
-        return;
-      }
-      const isManualPull = text === "/hive pull";
-      const pullMode = getHiveMindPullMode();
-      const [registerResult, lessons, presets] = await Promise.all([
-        registerHiveMindAgent({ reason: isManualPull ? "telegram_pull" : "telegram_status" }),
-        (pullMode === "auto" || isManualPull) ? pullHiveMindLessons(12) : Promise.resolve(null),
-        (pullMode === "auto" || isManualPull) ? pullHiveMindPresets() : Promise.resolve(null),
-      ]);
-      await sendMessage([
-        "HiveMind: enabled",
-        `Agent ID: ${agentId}`,
-        `URL: ${config.hiveMind.url}`,
-        `Pull mode: ${pullMode}`,
-        `Register: ${registerResult ? "ok" : "warn"}`,
-        `Shared lessons: ${Array.isArray(lessons) ? lessons.length : (pullMode === "manual" ? "manual" : 0)}`,
-        `Presets: ${Array.isArray(presets) ? presets.length : (pullMode === "manual" ? "manual" : 0)}`,
-        isManualPull ? "Manual pull: completed" : null,
-      ].join("\n")).catch(() => {});
-    } catch (e) {
-      await sendMessage(`HiveMind error: ${e.message}`).catch(() => {});
-    }
+    await sendMessage("HiveMind has been retired in this build.").catch(() => {});
     return;
   }
 

@@ -203,6 +203,8 @@ export const config = {
     slowBleedMinAge:       u.slowBleedMinAge        ?? 60,   // minimum age before slow bleed check activates
     slowBleedMinPnl:       u.slowBleedMinPnl        ?? -3,   // slow bleed: pnl lower bound (%)
     slowBleedMaxPnl:       u.slowBleedMaxPnl        ?? 2,    // slow bleed: pnl upper bound (%)
+    recoveryExitEnabled:   u.recoveryExitEnabled    ?? true,
+    recoveryExitDrawdownPct: u.recoveryExitDrawdownPct ?? -4,
     // Trailing take-profit
     trailingTakeProfit:    u.trailingTakeProfit    ?? true,
     trailingTriggerPct:    u.trailingTriggerPct    ?? 3,    // activate trailing at X% PnL
@@ -280,14 +282,6 @@ export const config = {
     SOL:  "So11111111111111111111111111111111111111112",
     USDC: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
     USDT: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
-  },
-
-  // ─── HiveMind ─────────────────────────
-  hiveMind: {
-    url: nonEmptyString(u.hiveMindUrl, process.env.HIVEMIND_URL),
-    apiKey: nonEmptyString(u.hiveMindApiKey, process.env.HIVEMIND_API_KEY),
-    agentId: u.agentId ?? null,
-    pullMode: u.hiveMindPullMode ?? "auto",
   },
 
   api: {

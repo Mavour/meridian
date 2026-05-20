@@ -36,6 +36,7 @@ export function decideCloseAction(position, mgmtConfig = {}) {
   const takeProfitPct = numberOrNull(mgmtConfig.takeProfitPct) ?? 8;
   const minClaimAmount = numberOrNull(mgmtConfig.minClaimAmount) ?? 5;
   const minAgeBeforeYieldCheck = numberOrNull(mgmtConfig.minAgeBeforeYieldCheck) ?? 60;
+  const recoveryExitEnabled = mgmtConfig.recoveryExitEnabled !== false;
   const recoveryExitDrawdownPct = numberOrNull(mgmtConfig.recoveryExitDrawdownPct) ?? -4;
 
   // Priority 1: hard stop always wins, even during OOR recovery.
@@ -72,6 +73,7 @@ export function decideCloseAction(position, mgmtConfig = {}) {
     pnlPct != null &&
     pnlPct >= 0 &&
     minPnlPct != null &&
+    recoveryExitEnabled &&
     minPnlPct <= recoveryExitDrawdownPct
   ) {
     return {

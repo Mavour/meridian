@@ -52,7 +52,6 @@ const ACTIVE_TOKEN_SWAPS = new Set();
 
 const SENSITIVE_CONFIG_KEYS = new Set([
   "gmgnApiKey",
-  "hiveMindApiKey",
 ]);
 
 function redactConfigValue(key, value) {
@@ -681,6 +680,8 @@ const toolMap = {
       emergencyPriceDropPct: ["management", "stopLossPct"],
       hardStopPct: ["management", "hardStopPct"],
       hardStopBypassSuspicious: ["management", "hardStopBypassSuspicious"],
+      recoveryExitEnabled: ["management", "recoveryExitEnabled"],
+      recoveryExitDrawdownPct: ["management", "recoveryExitDrawdownPct"],
       trailingConfirmDelaySec: ["management", "trailingConfirmDelaySec"],
       pnlPollIntervalSec: ["management", "pnlPollIntervalSec"],
       whaleGuardEnabled: ["whaleGuard", "enabled"],
@@ -729,11 +730,6 @@ const toolMap = {
       spotMinPrice1hChange:   ["strategy", "spotMinPrice1hChange"],
       spotMinVolatility:      ["strategy", "spotMinVolatility"],
       spotMinPrice30mFloor:   ["strategy", "spotMinPrice30mFloor"],
-      // hivemind
-      hiveMindUrl: ["hiveMind", "url"],
-      hiveMindApiKey: ["hiveMind", "apiKey"],
-      agentId: ["hiveMind", "agentId"],
-      hiveMindPullMode: ["hiveMind", "pullMode"],
       // GMGN screening
       gmgnApiKey: ["gmgn", "apiKey"],
       gmgnBaseUrl: ["gmgn", "baseUrl"],
