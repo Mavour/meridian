@@ -413,14 +413,30 @@ export async function confirmIndicatorPreset({
   preset = side === "entry" ? config.indicators.entryPreset : config.indicators.exitPreset,
   intervals = config.indicators.intervals,
   refresh = false,
+  force = false,
+  failClosed = false,
 } = {}) {
-  if (!config.indicators.enabled || !mint || !preset) {
+  if (!mint || !preset) {
+    return {
+      enabled: !!force,
+      confirmed: !force && !failClosed,
+      reason: "Indicator mint or preset missing",
+      intervals: [],
+    };
+  }
+
+  if (!config.indicators.enabled && !force) {
     return { enabled: false, confirmed: true, reason: "Indicators disabled or not configured", intervals: [] };
   }
 
   const targets = normalizeIntervals(intervals);
   if (targets.length === 0) {
-    return { enabled: false, confirmed: true, reason: "No indicator intervals configured", intervals: [] };
+    return {
+      enabled: !!force,
+      confirmed: !force && !failClosed,
+      reason: "No indicator intervals configured",
+      intervals: [],
+    };
   }
 
   const results = [];
@@ -453,11 +469,13 @@ export async function confirmIndicatorPreset({
   if (successful.length === 0) {
     return {
       enabled: true,
-      confirmed: true,
-      skipped: true,
+      confirmed: !failClosed,
+      skipped: !failClosed,
       preset,
       side,
-      reason: "Indicator API unavailable; falling back to existing logic",
+      reason: failClosed
+        ? "Indicator API unavailable; hard gate failed closed"
+        : "Indicator API unavailable; falling back to existing logic",
       intervals: results,
     };
   }
@@ -479,6 +497,18 @@ export async function confirmIndicatorPreset({
       : `${preset} not confirmed on ${successful.map((e) => e.interval).join(", ")}`,
     intervals: results,
   };
+}
+
+export async function confirmEntrySupertrendBreak({ mint, refresh = true } = {}) {
+  return confirmIndicatorPreset({
+    mint,
+    side: "entry",
+    preset: "supertrend_break",
+    intervals: ["5_MINUTE"],
+    refresh,
+    force: true,
+    failClosed: true,
+  });
 }
 
 // Keep for backward compat + other callers

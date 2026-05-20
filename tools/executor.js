@@ -21,6 +21,7 @@ import { blockDev, unblockDev, listBlockedDevs } from "../dev-blocklist.js";
 import { addSmartWallet, removeSmartWallet, listSmartWallets, checkSmartWalletsOnPool } from "../smart-wallets.js";
 import { getTokenInfo, getTokenHolders, getTokenNarrative } from "./token.js";
 import { fetchGmgnPriceAction } from "./gmgn.js";
+import { confirmEntrySupertrendBreak } from "./chart-indicators.js";
 import { config, reloadScreeningThresholds, MIN_SAFE_BINS_BELOW } from "../config.js";
 import { getRecentDecisions } from "../decision-log.js";
 import fs from "fs";
@@ -172,6 +173,25 @@ async function fetchFreshPoolDetail(poolAddress, timeframe = config.screening.ti
   if (!res.ok) throw new Error(`Pool Discovery API error: ${res.status} ${res.statusText}`);
   const data = await res.json();
   return (data?.data || [])[0] ?? null;
+}
+
+async function validateEntrySupertrendBreak({ baseMint, poolName, poolAddress }) {
+  if (!baseMint) {
+    return {
+      pass: false,
+      reason: "Supertrend 5m hard gate could not verify token mint before deploy.",
+    };
+  }
+
+  const confirmation = await confirmEntrySupertrendBreak({ mint: baseMint, refresh: true });
+  if (!confirmation?.confirmed) {
+    return {
+      pass: false,
+      reason: `Supertrend 5m hard gate rejected ${poolName || poolAddress}: ${confirmation?.reason || "not confirmed"}.`,
+    };
+  }
+
+  return { pass: true };
 }
 
 async function validateDeployPoolThresholds(args) {
@@ -349,6 +369,13 @@ async function validateDeployPoolThresholds(args) {
       reason: `Could not verify token audit for base mint ${baseMint || "unknown"}. Deploy blocked.`,
     };
   }
+
+  const supertrendCheck = await validateEntrySupertrendBreak({
+    baseMint,
+    poolName: detail?.name || args.pool_name,
+    poolAddress: args.pool_address,
+  });
+  if (!supertrendCheck.pass) return supertrendCheck;
 
   const tokenCreatedAt = numberOrNull(verifiedToken.created_at) ?? poolDetailCreatedAt(detail);
   const minTokenAgeHours = numberOrNull(config.screening.minTokenAgeHours);

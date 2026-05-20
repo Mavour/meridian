@@ -4,7 +4,7 @@ import { isDevBlocked, getBlockedDevs } from "../dev-blocklist.js";
 import { log } from "../logger.js";
 import { isBaseMintOnCooldown, isPoolOnCooldown } from "../pool-memory.js";
 import { isTokenWaveBlocked } from "../state.js";
-import { confirmIndicatorPreset } from "./chart-indicators.js";
+import { confirmEntrySupertrendBreak } from "./chart-indicators.js";
 import { discoverGmgnPools, fetchGmgnPriceAction, fetchGmgnTokenFees } from "./gmgn.js";
 import { fetchDexScreenerBoosts } from "./dexscreener.js";
 
@@ -1002,13 +1002,12 @@ export async function getTopCandidates({ limit = 10 } = {}) {
     }
   }
 
-  if (config.indicators.enabled && eligible.length > 0) {
+  if (eligible.length > 0) {
     const confirmations = await Promise.all(
       eligible.map(async (pool) => {
         try {
-          const confirmation = await confirmIndicatorPreset({
+          const confirmation = await confirmEntrySupertrendBreak({
             mint: pool.base?.mint,
-            side: "entry",
           });
           return { pool: pool.pool, confirmation };
         } catch (error) {
@@ -1016,9 +1015,9 @@ export async function getTopCandidates({ limit = 10 } = {}) {
             pool: pool.pool,
             confirmation: {
               enabled: true,
-              confirmed: true,
-              skipped: true,
-              reason: `Indicator confirmation unavailable: ${error.message}`,
+              confirmed: false,
+              skipped: false,
+              reason: `Supertrend 5m confirmation unavailable: ${error.message}`,
               intervals: [],
             },
           };
@@ -1031,13 +1030,13 @@ export async function getTopCandidates({ limit = 10 } = {}) {
       const confirmation = confirmationByPool.get(pool.pool);
       pool.indicator_confirmation = confirmation || null;
       if (!confirmation || confirmation.confirmed) return true;
-      pushFilteredReason(filteredOut, pool, `indicator reject: ${confirmation.reason}`);
-      log("screening", `Indicator rejected ${pool.name} (${pool.pool.slice(0, 8)}): ${confirmation.reason}`);
+      pushFilteredReason(filteredOut, pool, `supertrend 5m reject: ${confirmation.reason}`);
+      log("screening", `Supertrend 5m rejected ${pool.name} (${pool.pool.slice(0, 8)}): ${confirmation.reason}`);
       return false;
     });
     eligible.splice(0, eligible.length, ...confirmedEligible);
     if (eligible.length < before) {
-      log("screening", `Indicator confirmation removed ${before - eligible.length} candidate(s)`);
+      log("screening", `Supertrend 5m hard gate removed ${before - eligible.length} candidate(s)`);
     }
   }
 
