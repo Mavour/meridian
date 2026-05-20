@@ -162,7 +162,7 @@ All fields are optional — defaults shown. Edit `user-config.json`.
 | `outOfRangeWaitMinutes` | `30` | Minutes a position can be out of range before alerting / acting |
 | `whaleGuardEnabled` | `true` | Fast-close on Meteora pool whale activity signals |
 | `whaleGuardMinQuoteDrainUsd` | `12000` | Close when SOL/quote reserve drains by at least this USD value in the guard window |
-| `whaleGuardMinLiquidityDropPct` | `18` | Close when Meteora pool TVL drops by at least this percentage in the guard window |
+| `whaleGuardMinLiquidityDropPct` | `18` | Close when Meteora pool TVL drops by at least this percentage in the guard window, even if the USD drop threshold is not reached |
 
 ---
 

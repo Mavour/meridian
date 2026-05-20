@@ -124,6 +124,8 @@ function evaluateDelta(delta, cfg) {
     ? Math.abs(delta.tvlDeltaUsd)
     : 0;
   const baseIncreased = delta.baseDeltaAmount == null || delta.baseDeltaAmount > 0;
+  const tvlDropUsdTriggered = tvlDropUsd >= minTvlDropUsd;
+  const tvlDropPctTriggered = delta.tvlDropPct != null && delta.tvlDropPct >= minTvlDropPct;
 
   if (
     quoteDrainUsd >= minQuoteDrainUsd &&
@@ -137,9 +139,8 @@ function evaluateDelta(delta, cfg) {
   }
 
   if (
-    tvlDropUsd >= minTvlDropUsd &&
-    delta.tvlDropPct != null &&
-    delta.tvlDropPct >= minTvlDropPct
+    tvlDropUsdTriggered ||
+    tvlDropPctTriggered
   ) {
     return {
       action: "CLOSE",
