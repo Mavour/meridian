@@ -1545,6 +1545,8 @@ function closeReasonText(decision) {
       return "OOR";
     case "oor_recovery_profit":
       return `OOR recovery profit${decision.pnl != null ? ` - PnL ${decision.pnl}%` : ""}`;
+    case "drawdown_recovery_profit":
+      return `drawdown recovery profit${decision.pnl != null ? ` - PnL ${decision.pnl}%` : ""}${decision.minPnl != null ? ` after min ${decision.minPnl}%` : ""}`;
     case "oor_timeout":
       return `OOR timeout${decision.pnl != null ? ` - PnL ${decision.pnl}%` : ""}`;
     default:
@@ -1580,7 +1582,9 @@ function getDeterministicCloseRule(position, managementConfig) {
   }
 
   const decision = decideCloseAction(
-    pnlSuspect ? { ...position, pnl_pct: null, pnlPct: null } : position,
+    pnlSuspect
+      ? { ...position, pnl_pct: null, pnlPct: null, min_pnl_pct: tracked?.min_pnl_pct ?? null }
+      : { ...position, min_pnl_pct: tracked?.min_pnl_pct ?? position.min_pnl_pct ?? null },
     managementConfig,
   );
   if (decision.action === "close") {

@@ -227,6 +227,7 @@ export function trackPosition({
     closed_at: null,
     notes: [],
     peak_pnl_pct: 0,
+    min_pnl_pct: 0,
     pending_peak_pnl_pct: null,
     pending_peak_started_at: null,
     pending_trailing_current_pnl_pct: null,
@@ -591,6 +592,17 @@ export function updatePnlAndCheckExits(position_address, positionData, mgmtConfi
   }
 
   let changed = false;
+
+  if (
+    !pnl_pct_suspicious &&
+    currentPnlPct != null &&
+    Number.isFinite(Number(currentPnlPct)) &&
+    (pos.min_pnl_pct == null || currentPnlPct < pos.min_pnl_pct)
+  ) {
+    pos.min_pnl_pct = currentPnlPct;
+    changed = true;
+    log("state", `Position ${position_address} min PnL updated to ${currentPnlPct.toFixed(2)}%`);
+  }
 
   // Activate trailing TP once trigger threshold is reached
   if (mgmtConfig.trailingTakeProfit && !pos.trailing_active && (pos.peak_pnl_pct ?? 0) >= mgmtConfig.trailingTriggerPct) {

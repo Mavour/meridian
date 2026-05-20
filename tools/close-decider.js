@@ -13,6 +13,7 @@ function firstNumber(...values) {
 
 export function decideCloseAction(position, mgmtConfig = {}) {
   const pnlPct = firstNumber(position.pnlPct, position.pnl_pct);
+  const minPnlPct = firstNumber(position.minPnlPct, position.min_pnl_pct, position.lowestPnlPct, position.lowest_pnl_pct);
   const peakPnlPct = firstNumber(position.peakPnlPct, position.peak_pnl_pct, position.peak_pnl);
   const unclaimedFees = firstNumber(position.unclaimedFees, position.unclaimed_fees_usd, position.unclaimed_fees);
   const ageMinutes = firstNumber(position.ageMinutes, position.age_minutes);
@@ -35,6 +36,7 @@ export function decideCloseAction(position, mgmtConfig = {}) {
   const takeProfitPct = numberOrNull(mgmtConfig.takeProfitPct) ?? 8;
   const minClaimAmount = numberOrNull(mgmtConfig.minClaimAmount) ?? 5;
   const minAgeBeforeYieldCheck = numberOrNull(mgmtConfig.minAgeBeforeYieldCheck) ?? 60;
+  const recoveryExitDrawdownPct = numberOrNull(mgmtConfig.recoveryExitDrawdownPct) ?? -4;
 
   // Priority 1: hard stop always wins, even during OOR recovery.
   if (pnlPct != null && pnlPct <= hardStopPct) {
@@ -63,6 +65,22 @@ export function decideCloseAction(position, mgmtConfig = {}) {
     }
 
     return { action: "close", priority: 8, reason: "oor_timeout", pnl: pnlPct, oorMinutes };
+  }
+
+  // Priority 3b: non-OOR recovery exit after meaningful drawdown.
+  if (
+    pnlPct != null &&
+    pnlPct >= 0 &&
+    minPnlPct != null &&
+    minPnlPct <= recoveryExitDrawdownPct
+  ) {
+    return {
+      action: "close",
+      priority: 3,
+      reason: "drawdown_recovery_profit",
+      pnl: pnlPct,
+      minPnl: minPnlPct,
+    };
   }
 
   // Priority 4: take profit for positions that are not in OOR recovery flow.
