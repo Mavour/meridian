@@ -19,12 +19,14 @@ const TAG_COLORS = {
 };
 
 export default function LogTerminal({ lines = [], maxHeight = 260, compact = false }) {
-  const bottomRef = useRef(null);
   const containerRef = useRef(null);
   const autoScroll = useRef(true);
 
   useEffect(() => {
-    if (autoScroll.current) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = containerRef.current;
+    if (autoScroll.current && el) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }
   }, [lines]);
 
   const onScroll = () => {
@@ -43,7 +45,6 @@ export default function LogTerminal({ lines = [], maxHeight = 260, compact = fal
           <span className="log-msg">{l.msg}</span>
         </div>
       ))}
-      <div ref={bottomRef} />
     </div>
   );
 }

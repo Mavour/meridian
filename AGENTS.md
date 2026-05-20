@@ -127,13 +127,13 @@ Before `deploy_position` executes:
 Linear formula based on pool volatility (set in screener prompt, `index.js`). The lower/upper bounds are configurable, with a hard safety floor of 35 bins:
 
 ```
-bins_below = round(minBinsBelow + (volatility / 5) * (maxBinsBelow - minBinsBelow))
+bins_below = round(minBinsBelow + (volatility / 4) * (maxBinsBelow - minBinsBelow))
 clamped to [minBinsBelow, maxBinsBelow]
 ```
 
 - Volatility must be finite and > 0; zero/missing volatility is treated as an unusable feed
 - Low valid volatility → minBinsBelow
-- High volatility (5+) → maxBinsBelow
+- High volatility (4+) → maxBinsBelow
 - Any value in between is valid (continuous, not tiered)
 
 ---

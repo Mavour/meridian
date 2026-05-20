@@ -78,7 +78,7 @@ export function computeBinsBelow(volatility, cfg = config) {
 
   if (!Number.isFinite(vol) || vol <= 0) return defaultBins;
 
-  const bins = Math.round(minBins + (vol / 5) * (maxBins - minBins));
+  const bins = Math.round(minBins + (vol / 4) * (maxBins - minBins));
   return Math.min(maxBins, Math.max(minBins, bins));
 }
 

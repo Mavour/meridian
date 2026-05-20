@@ -16,7 +16,7 @@ export default function Logs() {
   const [logLines, setLogLines] = useState([]);
   const [tagFilter, setTagFilter] = useState(null);
   const [search, setSearch] = useState('');
-  const bottomRef = useRef(null);
+  const logContainerRef = useRef(null);
   const autoScroll = useRef(true);
 
   useEffect(() => {
@@ -41,7 +41,10 @@ export default function Logs() {
   }, [events, tagFilter]);
 
   useEffect(() => {
-    if (autoScroll.current) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = logContainerRef.current;
+    if (autoScroll.current && el) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }
   }, [logLines]);
 
   const filtered = search
@@ -84,6 +87,7 @@ export default function Logs() {
         scrollbarWidth:'thin',
         scrollbarColor:'#222 transparent',
       }}
+        ref={logContainerRef}
         onScroll={e => { const el = e.currentTarget; autoScroll.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 40; }}>
         {filtered.map((l, i) => (
           <div key={i} style={{ display:'grid', gridTemplateColumns:'80px 130px 1fr', gap:10, padding:'2px 0', borderBottom:'0.5px solid #111', fontSize:11, lineHeight:1.7 }}>
@@ -94,7 +98,6 @@ export default function Logs() {
             <span style={{ color:'#64748b', wordBreak:'break-word' }}>{l.msg}</span>
           </div>
         ))}
-        <div ref={bottomRef} />
       </div>
     </div>
   );
