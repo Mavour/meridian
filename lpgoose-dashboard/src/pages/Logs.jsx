@@ -35,9 +35,10 @@ export default function Logs() {
   useEffect(() => {
     const last = events[events.length - 1];
     if (last && last.type === 'log') {
+      if (tagFilter && last.data?.tag !== tagFilter) return;
       setLogLines(prev => [...prev.slice(-1000), last.data]);
     }
-  }, [events]);
+  }, [events, tagFilter]);
 
   useEffect(() => {
     if (autoScroll.current) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });

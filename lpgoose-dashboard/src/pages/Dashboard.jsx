@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext, useMemo } from 'react';
+import { useEffect, useState, useContext, useMemo, useRef } from 'react';
 import { AlertTriangle, Crosshair, ShieldCheck, TrendingUp } from 'lucide-react';
 import { WSContext } from '../App';
 import StatCard from '../components/StatCard';
@@ -6,6 +6,8 @@ import PositionCard from '../components/PositionCard';
 import WaveChips from '../components/WaveChips';
 import LogTerminal from '../components/LogTerminal';
 import ClosedTable from '../components/ClosedTable';
+
+const POSITION_REFRESH_MS = 10_000;
 
 function formatUsd(value) {
   const n = Number(value || 0);
@@ -48,15 +50,30 @@ export default function Dashboard() {
   const [positions, setPositions] = useState([]);
   const [waves, setWaves] = useState({});
   const [config, setConfig] = useState({});
+  const positionsLoading = useRef(false);
+
+  const loadPositions = () => {
+    if (positionsLoading.current) return;
+    positionsLoading.current = true;
+    fetch('/api/positions')
+      .then((r) => r.json())
+      .then((d) => setPositions(d.positions || []))
+      .catch(() => {})
+      .finally(() => { positionsLoading.current = false; });
+  };
 
   const reload = () => {
     fetch('/api/performance').then((r) => r.json()).then(setPerf).catch(() => {});
-    fetch('/api/positions').then((r) => r.json()).then((d) => setPositions(d.positions || [])).catch(() => {});
+    loadPositions();
     fetch('/api/waves').then((r) => r.json()).then(setWaves).catch(() => {});
     fetch('/api/config').then((r) => r.json()).then(setConfig).catch(() => {});
   };
 
-  useEffect(() => { reload(); }, []);
+  useEffect(() => {
+    reload();
+    const id = window.setInterval(loadPositions, POSITION_REFRESH_MS);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const last = events[events.length - 1];

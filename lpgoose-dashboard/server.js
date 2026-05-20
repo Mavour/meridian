@@ -16,6 +16,7 @@ loadEnv({
 });
 const MERIDIAN_PATH = process.env.MERIDIAN_PATH || path.join(__dirname, '..');
 const PORT = parseInt(process.env.DASHBOARD_PORT || '3001');
+const LOG_DIR = path.join(MERIDIAN_PATH, 'logs');
 
 // ── helpers ──────────────────────────────────────────
 function readJson(file) {
@@ -38,7 +39,7 @@ function maskConfig(obj) {
 
 function todayLog() {
   const d = new Date().toISOString().slice(0,10);
-  return path.join(MERIDIAN_PATH, 'logs', `agent-${d}.log`);
+  return path.join(LOG_DIR, `agent-${d}.log`);
 }
 
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
@@ -540,32 +541,67 @@ wss.on('connection', async (ws) => {
 });
 
 // ── File watchers ─────────────────────────────────────
-let logFilePos = existsSync(todayLog()) ? statSync(todayLog()).size : 0;
+const logTailState = new Map();
 
-chokidar.watch(todayLog(), { usePolling: false }).on('change', (filePath) => {
+function shouldTailLog(filePath) {
+  const name = path.basename(filePath || '');
+  return /^agent-\d{4}-\d{2}-\d{2}\.log$/.test(name) && path.resolve(filePath) === path.resolve(todayLog());
+}
+
+function emitLogLine(parsed) {
+  broadcast('log', parsed);
+  if (parsed.tag === 'DEPLOY' && parsed.msg.includes('SUCCESS')) {
+    broadcast('alert', { kind: 'deploy', msg: parsed.msg });
+  }
+  if (parsed.tag === 'STATE' && parsed.msg.includes('Stop loss')) {
+    broadcast('alert', { kind: 'sl', msg: parsed.msg });
+  }
+  if (parsed.tag === 'STATE' && parsed.msg.includes('Trailing TP')) {
+    broadcast('alert', { kind: 'tp', msg: parsed.msg });
+  }
+}
+
+function tailLogFile(filePath, { fromStart = false } = {}) {
+  if (!shouldTailLog(filePath) || !existsSync(filePath)) return;
+
   const size = statSync(filePath).size;
-  if (size <= logFilePos) return;
-  const stream = createReadStream(filePath, { start: logFilePos, encoding: 'utf8' });
-  let buf = '';
+  const state = logTailState.get(filePath) || { pos: fromStart ? 0 : size, partial: '' };
+  if (size < state.pos) {
+    state.pos = 0;
+    state.partial = '';
+  }
+  if (size === state.pos) {
+    logTailState.set(filePath, state);
+    return;
+  }
+
+  const stream = createReadStream(filePath, { start: state.pos, end: size - 1, encoding: 'utf8' });
+  let buf = state.partial || '';
   stream.on('data', chunk => { buf += chunk; });
   stream.on('end', () => {
-    logFilePos = size;
-    buf.split('\n').filter(Boolean).forEach(raw => {
+    state.pos = size;
+    const parts = buf.split(/\r?\n/);
+    state.partial = parts.pop() || '';
+    parts.filter(Boolean).forEach(raw => {
       const parsed = parseLogLine(raw);
-      if (!parsed) return;
-      broadcast('log', parsed);
-      if (parsed.tag === 'DEPLOY' && parsed.msg.includes('SUCCESS')) {
-        broadcast('alert', { kind: 'deploy', msg: parsed.msg });
-      }
-      if (parsed.tag === 'STATE' && parsed.msg.includes('Stop loss')) {
-        broadcast('alert', { kind: 'sl', msg: parsed.msg });
-      }
-      if (parsed.tag === 'STATE' && parsed.msg.includes('Trailing TP')) {
-        broadcast('alert', { kind: 'tp', msg: parsed.msg });
-      }
+      if (parsed) emitLogLine(parsed);
     });
+    logTailState.set(filePath, state);
   });
-});
+  stream.on('error', () => {
+    logTailState.set(filePath, state);
+  });
+}
+
+tailLogFile(todayLog());
+
+chokidar.watch(LOG_DIR, {
+  ignoreInitial: true,
+  depth: 0,
+  usePolling: true,
+  interval: 1000,
+}).on('add', (filePath) => tailLogFile(filePath, { fromStart: true }))
+  .on('change', (filePath) => tailLogFile(filePath));
 
 chokidar.watch([
   path.join(MERIDIAN_PATH, 'state.json'),
