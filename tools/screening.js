@@ -198,6 +198,12 @@ function getPoolBaseMint(pool) {
     null;
 }
 
+function isSolQuotePool(pool) {
+  const quoteMint = pool?.quote?.mint || pool?.token_y?.address || pool?.quote_mint || null;
+  const quoteSymbol = pool?.quote?.symbol || pool?.token_y?.symbol || null;
+  return quoteMint === config.tokens.SOL || (!quoteMint && quoteSymbol === "SOL");
+}
+
 function getVolatilityTimeframe(sourceTimeframe) {
   const source = String(sourceTimeframe || "").trim();
   const sourceMinutes = TIMEFRAME_MINUTES[source];
@@ -748,6 +754,10 @@ export async function getTopCandidates({ limit = 10 } = {}) {
       }
       if (!isUsableVolatility(p.volatility)) {
         pushFilteredReason(filteredOut, p, `volatility ${p.volatility ?? "unknown"} unusable`);
+        return false;
+      }
+      if (!isSolQuotePool(p)) {
+        pushFilteredReason(filteredOut, p, `quote token ${p.quote?.symbol || p.quote?.mint || "unknown"} is not SOL`);
         return false;
       }
       if (occupiedPools.has(p.pool)) {

@@ -1522,6 +1522,8 @@ function formatCandidates(candidates) {
 
 function closeReasonText(decision) {
   switch (decision.reason) {
+    case "empty_position":
+      return "empty failed-deploy position cleanup";
     case "hard_stop":
       return "hard stop";
     case "stop_loss":

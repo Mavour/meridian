@@ -27,6 +27,10 @@ import { normalizeMint } from "./wallet.js";
 import { appendDecision } from "../decision-log.js";
 import { getAndClearStagedSignals } from "../signal-tracker.js";
 
+function isSolMint(mint) {
+  return mint === config.tokens.SOL;
+}
+
 // ─── Lazy SDK loader ───────────────────────────────────────────
 // @meteora-ag/dlmm → @coral-xyz/anchor uses CJS directory imports
 // that break in ESM on Node 24. Dynamic import defers loading until
@@ -361,6 +365,7 @@ export async function deployPosition({
   const { StrategyType, getBinIdFromPrice, getPriceOfBinByBinId } = await getDLMM();
   const pool = await getPool(pool_address);
   const baseMint = pool.lbPair.tokenXMint.toString();
+  const quoteMint = pool.lbPair.tokenYMint.toString();
   if (isBaseMintOnCooldown(baseMint)) {
     log("deploy", `Base mint ${baseMint.slice(0, 8)} is on cooldown — skipping deploy for pool ${pool_address.slice(0, 8)}`);
     return { success: false, error: "Token on cooldown — recently closed out-of-range too many times. Try a different token." };
@@ -411,6 +416,12 @@ export async function deployPosition({
     throw new Error(
       "Single-side SOL deploy cannot use bins_above or upside_pct. Use amount_y with bins_below only; the upper bin is the SDK active bin.",
     );
+  }
+  if (isSingleSidedSol && !isSolMint(quoteMint)) {
+    return {
+      success: false,
+      error: `SOL-only deploy blocked: pool quote token is ${quoteMint}, not SOL. Use only SOL-quoted pools for amount_y/amount_sol deploys.`,
+    };
   }
   if (isSingleSidedSol) {
     activeBinsAbove = 0;
@@ -506,8 +517,11 @@ export async function deployPosition({
   log("deploy", `Amount: ${finalAmountX} X, ${finalAmountY} Y`);
   log("deploy", `Position: ${newPosition.publicKey.toString()}`);
 
+  const txHashes = [];
+  let createdEmptyPosition = false;
+  let addLiquiditySucceeded = false;
+
   try {
-    const txHashes = [];
 
     if (isWideRange) {
       // ── Wide Range Path (>69 bins) ─────────────────────────────────
@@ -530,6 +544,7 @@ export async function deployPosition({
         txHashes.push(txHash);
         log("deploy", `Create tx ${i + 1}/${createTxArray.length}: ${txHash}`);
       }
+      createdEmptyPosition = true;
 
       // Phase 2: Add liquidity (may be multiple txs)
       const addTxs = await pool.addLiquidityByStrategyChunkable({
@@ -544,6 +559,7 @@ export async function deployPosition({
       for (let i = 0; i < addTxArray.length; i++) {
         const txHash = await sendAndConfirmTransaction(getConnection(), addTxArray[i], [wallet]);
         txHashes.push(txHash);
+        addLiquiditySucceeded = true;
         log("deploy", `Add liquidity tx ${i + 1}/${addTxArray.length}: ${txHash}`);
       }
     } else {
@@ -630,6 +646,19 @@ export async function deployPosition({
     };
   } catch (error) {
     log("deploy_error", error.message);
+    if (createdEmptyPosition && !addLiquiditySucceeded) {
+      try {
+        const closeTx = await pool.closePosition({
+          owner: wallet.publicKey,
+          position: { publicKey: newPosition.publicKey },
+        });
+        const cleanupTx = await sendAndConfirmTransaction(getConnection(), closeTx, [wallet]);
+        log("deploy_warn", `Cleaned up empty failed-deploy position ${newPosition.publicKey.toString()}: ${cleanupTx}`);
+        _positionsCacheAt = 0;
+      } catch (cleanupError) {
+        log("deploy_warn", `Failed to clean up empty position ${newPosition.publicKey.toString()}: ${cleanupError.message}`);
+      }
+    }
     return { success: false, error: error.message };
   }
 }

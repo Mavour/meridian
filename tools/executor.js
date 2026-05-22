@@ -137,6 +137,20 @@ function poolDetailBaseMint(pool) {
   return pool?.token_x?.address ?? pool?.base?.mint ?? pool?.base_mint ?? null;
 }
 
+function poolDetailQuoteMint(pool) {
+  return pool?.token_y?.address ?? pool?.quote?.mint ?? pool?.quote_mint ?? null;
+}
+
+function poolDetailQuoteSymbol(pool) {
+  return pool?.token_y?.symbol ?? pool?.quote?.symbol ?? null;
+}
+
+function isSolQuotePool(pool) {
+  const quoteMint = poolDetailQuoteMint(pool);
+  const quoteSymbol = poolDetailQuoteSymbol(pool);
+  return quoteMint === config.tokens.SOL || (!quoteMint && quoteSymbol === "SOL");
+}
+
 function poolDetailCreatedAt(pool) {
   return numberOrNull(pool?.token_x?.created_at ?? pool?.base_token_created_at);
 }
@@ -265,6 +279,12 @@ async function validateDeployPoolThresholds(args) {
   const deployAmountYForShape = numberOrNull(args.amount_y ?? args.amount_sol ?? 0) ?? 0;
   const deployAmountXForShape = numberOrNull(args.amount_x ?? 0) ?? 0;
   const isSingleSideSolShape = deployAmountYForShape > 0 && deployAmountXForShape <= 0;
+  if (isSingleSideSolShape && !isSolQuotePool(detail)) {
+    return {
+      pass: false,
+      reason: `SOL-only deploy blocked: pool quote is ${poolDetailQuoteSymbol(detail) || poolDetailQuoteMint(detail) || "unknown"}, not SOL.`,
+    };
+  }
   const codeSelectedStrategy = selectStrategy({
     ...detail,
     volatility,

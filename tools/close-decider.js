@@ -16,6 +16,7 @@ export function decideCloseAction(position, mgmtConfig = {}) {
   const minPnlPct = firstNumber(position.minPnlPct, position.min_pnl_pct, position.lowestPnlPct, position.lowest_pnl_pct);
   const peakPnlPct = firstNumber(position.peakPnlPct, position.peak_pnl_pct, position.peak_pnl);
   const unclaimedFees = firstNumber(position.unclaimedFees, position.unclaimed_fees_usd, position.unclaimed_fees);
+  const totalValue = firstNumber(position.totalValue, position.total_value_usd, position.value_usd);
   const ageMinutes = firstNumber(position.ageMinutes, position.age_minutes);
   const inRange = position.inRange ?? position.in_range;
   const oorMinutes = firstNumber(position.oorMinutes, position.minutes_out_of_range);
@@ -38,6 +39,17 @@ export function decideCloseAction(position, mgmtConfig = {}) {
   const minAgeBeforeYieldCheck = numberOrNull(mgmtConfig.minAgeBeforeYieldCheck) ?? 60;
   const recoveryExitEnabled = mgmtConfig.recoveryExitEnabled !== false;
   const recoveryExitDrawdownPct = numberOrNull(mgmtConfig.recoveryExitDrawdownPct) ?? -4;
+
+  if (
+    ageMinutes != null &&
+    ageMinutes >= 5 &&
+    totalValue === 0 &&
+    unclaimedFees === 0 &&
+    pnlPct === 0 &&
+    feePerTvl24h === 0
+  ) {
+    return { action: "close", priority: 0, reason: "empty_position", ageMinutes };
+  }
 
   // Priority 1: hard stop always wins, even during OOR recovery.
   if (pnlPct != null && pnlPct <= hardStopPct) {
