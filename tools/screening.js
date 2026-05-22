@@ -7,6 +7,7 @@ import { isTokenWaveBlocked } from "../state.js";
 import { confirmEntrySupertrendBreak } from "./chart-indicators.js";
 import { discoverGmgnPools, fetchGmgnPriceAction, fetchGmgnTokenFees } from "./gmgn.js";
 import { fetchDexScreenerBoosts } from "./dexscreener.js";
+import { evaluatePaidPromotionRisk } from "./paid-promotion.js";
 
 const DATAPI_JUP = "https://datapi.jup.ag/v1";
 
@@ -988,7 +989,7 @@ export async function getTopCandidates({ limit = 10 } = {}) {
       }
     }
     const maxDexBoosts = config.screening.maxDexBoosts;
-    if (maxDexBoosts != null && maxDexBoosts >= 0) {
+    if (config.screening.paidPromotionBlockEnabled === false && maxDexBoosts != null && maxDexBoosts >= 0) {
       const before = eligible.length;
       eligible.splice(0, eligible.length, ...eligible.filter((p) => {
         if (p.dex_boosts != null && p.dex_boosts > maxDexBoosts) {
@@ -1000,6 +1001,34 @@ export async function getTopCandidates({ limit = 10 } = {}) {
       }));
       if (eligible.length < before) log("screening", `DexScreener boost filter removed ${before - eligible.length} pool(s)`);
     }
+  }
+
+  if (eligible.length > 0 && config.screening.paidPromotionBlockEnabled !== false) {
+    const paidPromotionResults = await Promise.allSettled(
+      eligible.map((p) => evaluatePaidPromotionRisk({
+        poolAddress: p.pool,
+        baseMint: p.base?.mint,
+        symbol: p.base?.symbol,
+        name: p.name,
+        dexBoosts: p.dex_boosts,
+      }))
+    );
+    const paidRiskByPool = new Map();
+    for (let i = 0; i < eligible.length; i++) {
+      const result = paidPromotionResults[i];
+      if (result.status !== "fulfilled") continue;
+      eligible[i].paid_promotion_risk = result.value;
+      paidRiskByPool.set(eligible[i].pool, result.value);
+    }
+    const before = eligible.length;
+    eligible.splice(0, eligible.length, ...eligible.filter((p) => {
+      const risk = paidRiskByPool.get(p.pool);
+      if (!risk?.blocked) return true;
+      log("screening", `Filtered paid promotion ${p.name}: ${risk.reason}`);
+      pushFilteredReason(filteredOut, p, risk.reason);
+      return false;
+    }));
+    if (eligible.length < before) log("screening", `Paid promotion filter removed ${before - eligible.length} pool(s)`);
   }
 
   if (eligible.length > 0) {

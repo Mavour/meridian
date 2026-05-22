@@ -22,6 +22,7 @@ import { addSmartWallet, removeSmartWallet, listSmartWallets, checkSmartWalletsO
 import { getTokenInfo, getTokenHolders, getTokenNarrative } from "./token.js";
 import { fetchGmgnPriceAction } from "./gmgn.js";
 import { confirmEntrySupertrendBreak } from "./chart-indicators.js";
+import { evaluatePaidPromotionRisk } from "./paid-promotion.js";
 import { config, reloadScreeningThresholds, MIN_SAFE_BINS_BELOW } from "../config.js";
 import { getRecentDecisions } from "../decision-log.js";
 import fs from "fs";
@@ -419,6 +420,21 @@ async function validateDeployPoolThresholds(args) {
   if (maxBotHoldersPct != null && botPct == null) {
     return { pass: false, reason: "Bot holders percentage is unavailable. Deploy blocked." };
   }
+
+  const paidPromotionRisk = await evaluatePaidPromotionRisk({
+    poolAddress: args.pool_address,
+    baseMint,
+    symbol: verifiedToken.symbol,
+    name: verifiedToken.name || detail?.name || args.pool_name,
+    tokenInfo: verifiedToken,
+  });
+  if (paidPromotionRisk.blocked) {
+    return {
+      pass: false,
+      reason: `${paidPromotionRisk.reason}. Deploy blocked.`,
+    };
+  }
+
   if (maxBotHoldersPct != null && botPct != null && botPct > maxBotHoldersPct) {
     return {
       pass: false,
@@ -820,6 +836,8 @@ const toolMap = {
       blockedSymbols: ["screening", "blockedSymbols"],
       cgBlockRank: ["screening", "cgBlockRank"],
       postCloseReentryCooldownMin: ["screening", "postCloseReentryCooldownMin"],
+      paidPromotionBlockEnabled: ["screening", "paidPromotionBlockEnabled"],
+      paidPromotionCooldownHours: ["screening", "paidPromotionCooldownHours"],
       maxWavesPerToken: ["screening", "maxWavesPerToken"],
       maxLossesPerToken: ["screening", "maxLossesPerToken"],
       waveBlockHours: ["screening", "waveBlockHours"],

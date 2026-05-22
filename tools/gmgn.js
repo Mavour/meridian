@@ -604,6 +604,46 @@ export async function fetchGmgnTokenInfo(mint) {
   }
 }
 
+const GMGN_PAID_PROMO_RE = /\b(paid\s*promotion|dspaid|ds\s*paid|kol\s*shill|paid\s*shill|paid\s*kol|kol\s*paid)\b/i;
+
+function findPaidPromotionText(value, path = "") {
+  if (value == null) return null;
+  if (typeof value === "string") {
+    return GMGN_PAID_PROMO_RE.test(value) ? { path, value } : null;
+  }
+  if (typeof value !== "object") return null;
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      const match = findPaidPromotionText(value[i], `${path}[${i}]`);
+      if (match) return match;
+    }
+    return null;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    if (GMGN_PAID_PROMO_RE.test(key)) return { path: path ? `${path}.${key}` : key, value: key };
+    const match = findPaidPromotionText(child, path ? `${path}.${key}` : key);
+    if (match) return match;
+  }
+  return null;
+}
+
+export async function fetchGmgnPaidPromotionSignal(mint) {
+  try {
+    const payload = await gmgnFetch("/v1/token/info", { params: { chain: "sol", address: mint } });
+    const info = payload?.data?.data || payload?.data || payload;
+    const match = findPaidPromotionText(info);
+    if (!match) return { detected: false };
+    return {
+      detected: true,
+      reason: `GMGN paid promotion label at ${match.path}: ${String(match.value).slice(0, 80)}`,
+      match,
+    };
+  } catch (e) {
+    log("gmgn", `fetchGmgnPaidPromotionSignal failed for ${mint?.slice(0, 8)}: ${e.message}`);
+    return { detected: false, unavailable: true, error: e.message };
+  }
+}
+
 export async function fetchGmgnTokenFees(mint) {
   // Fetch token-level total fees from GMGN — matches value shown on GMGN chart.
   // Used by non-GMGN screening paths (meteora/okx) to get accurate fee data.

@@ -82,6 +82,9 @@ Sets defined in `agent.js:6-7`. If you add a tool, also add it to the relevant s
 | minTokenFeesSol | screening | 30 |
 | maxBundlersPct | screening | 30 |
 | maxTop10Pct | screening | 60 |
+| maxDexBoosts | screening | 150 |
+| paidPromotionBlockEnabled | screening | true |
+| paidPromotionCooldownHours | screening | 24 |
 | blockedLaunchpads | screening | [] |
 | deployAmountSol | management | 0.5 |
 | maxDeployAmount | risk | 50 |
