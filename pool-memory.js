@@ -264,6 +264,31 @@ export function setPostCloseCooldown(poolAddress, baseMint, reason) {
   return cooldownUntil;
 }
 
+/**
+ * Set a hard 24h cooldown after whale-driven exits.
+ * Blocks the exact pool and every known pool for the same base mint.
+ */
+export function setWhaleExitCooldown(poolAddress, baseMint) {
+  if (!poolAddress) return null;
+
+  const db = load();
+  const entry = db[poolAddress] || { name: poolAddress.slice(0, 8) };
+  if (!db[poolAddress]) db[poolAddress] = entry;
+  if (baseMint && !entry.base_mint) entry.base_mint = baseMint;
+
+  const cooldownHours = 24;
+  const reason = "whale exit — 24h cooldown";
+  const cooldownUntil = setPoolCooldown(entry, cooldownHours, reason);
+
+  if (baseMint) {
+    setBaseMintCooldown(db, baseMint, cooldownHours, reason);
+  }
+
+  save(db);
+  log("pool-memory", `🐋 Whale exit cooldown 24h for ${entry.name}`);
+  return cooldownUntil;
+}
+
 // ─── Read ──────────────────────────────────────────────────────
 
 /**
