@@ -181,7 +181,6 @@ HARD RULE (enforced at code level):
 - fees_paid_sol < ${config.screening.minTokenFeesSol} SOL → IMMEDIATE REJECT.
 - bots > ${config.screening.maxBotHoldersPct}% → hard-filtered before you see the candidate list.
 - maxVolatility: ${config.screening.maxVolatility} → SKIP if pool volatility exceeds this value.
-- paid promotion / dsPaid / KOL shill signals → hard-filtered and blocked before deploy_position.
 
 MANDATORY DEPLOY PARAMETER — fees_paid_sol:
 You MUST pass fees_paid_sol (from the token audit data) as an explicit argument when calling deploy_position.

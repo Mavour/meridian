@@ -112,8 +112,6 @@ export const config = {
     fallingKnife1hThreshold: u.fallingKnife1hThreshold ?? -25,
     maxVolatility:       u.maxVolatility       ?? 7,   // max pool volatility (filters high-vol pools)
     maxDexBoosts:       u.maxDexBoosts       ?? 150, // max DexScreener active boosts (null = no filter)
-    paidPromotionBlockEnabled: u.paidPromotionBlockEnabled ?? true,
-    paidPromotionCooldownHours: u.paidPromotionCooldownHours ?? 24,
     singleSideSolEntryGateEnabled: u.singleSideSolEntryGateEnabled ?? false,
     singleSideSolMin1hChange: u.singleSideSolMin1hChange ?? 0,
     singleSideSolMinRetest1hChange: u.singleSideSolMinRetest1hChange ?? -7,
@@ -410,8 +408,6 @@ export function reloadScreeningThresholds() {
     if (fresh.blockedLaunchpads !== undefined) s.blockedLaunchpads = fresh.blockedLaunchpads;
     if (fresh.maxVolatility !== undefined) s.maxVolatility = fresh.maxVolatility;
     if (fresh.maxDexBoosts !== undefined) s.maxDexBoosts = fresh.maxDexBoosts;
-    if (fresh.paidPromotionBlockEnabled !== undefined) s.paidPromotionBlockEnabled = fresh.paidPromotionBlockEnabled;
-    if (fresh.paidPromotionCooldownHours !== undefined) s.paidPromotionCooldownHours = fresh.paidPromotionCooldownHours;
     const minBinsBelow = numericConfig(fresh.minBinsBelow) ?? config.strategy.minBinsBelow;
     const maxBinsBelow = numericConfig(fresh.maxBinsBelow) ?? numericConfig(fresh.binsBelow) ?? config.strategy.maxBinsBelow;
     const defaultBinsBelow = numericConfig(fresh.defaultBinsBelow) ?? numericConfig(fresh.binsBelow) ?? config.strategy.defaultBinsBelow ?? maxBinsBelow;

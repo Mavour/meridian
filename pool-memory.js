@@ -289,34 +289,6 @@ export function setWhaleExitCooldown(poolAddress, baseMint) {
   return cooldownUntil;
 }
 
-/**
- * Set a cooldown after paid promotion signals.
- * Blocks the exact pool and every known pool for the same base mint.
- */
-export function setPaidPromotionCooldown(poolAddress, baseMint, name = null) {
-  const cooldownHours = Math.max(0, Number(config?.screening?.paidPromotionCooldownHours ?? 24));
-  if (cooldownHours <= 0 || (!poolAddress && !baseMint)) return null;
-
-  const db = load();
-  let entry = poolAddress ? db[poolAddress] : null;
-  if (poolAddress && !entry) {
-    entry = { name: name || poolAddress.slice(0, 8) };
-    db[poolAddress] = entry;
-  }
-  if (entry) {
-    if (name) entry.name = name;
-    if (baseMint && !entry.base_mint) entry.base_mint = baseMint;
-  }
-
-  const reason = `paid promotion - ${cooldownHours}h cooldown`;
-  const cooldownUntil = entry ? setPoolCooldown(entry, cooldownHours, reason) : null;
-  const mintCooldownUntil = baseMint ? setBaseMintCooldown(db, baseMint, cooldownHours, reason) : null;
-
-  save(db);
-  log("pool-memory", `Paid promotion cooldown ${cooldownHours}h for ${name || entry?.name || baseMint?.slice(0, 8) || poolAddress?.slice(0, 8)}`);
-  return cooldownUntil || mintCooldownUntil;
-}
-
 // ─── Read ──────────────────────────────────────────────────────
 
 /**
