@@ -307,6 +307,18 @@ function pushEvent(state, event) {
   }
 }
 
+export function isWhaleExitReason(reason) {
+  const text = String(reason || "").toLowerCase();
+  if (!text) return false;
+  if (/\b(no|not|bukan|non)[\s_-]+whale/.test(text)) return false;
+  return (
+    text.includes("whale activity detected") ||
+    /\bwhale[\s_-]*guard\b/.test(text) ||
+    /\bwhale[\s_-]*dump\b/.test(text) ||
+    /\bwhale[\s_-]*exit\b/.test(text)
+  );
+}
+
 /**
  * Mark a position as closed.
  */
@@ -367,7 +379,7 @@ export function recordClose(position_address, reason, pnl_pct = null) {
 
   // Post-close cooldown: prevent immediate redeploy to same pool/token
   if (pos?.pool && !pos?.rebalance_count) {
-    if (lowerReason.includes("whale")) {
+    if (isWhaleExitReason(reason)) {
       setWhaleExitCooldown(pos.pool, pos.token_mint || null);
     } else {
       setPostCloseCooldown(pos.pool, pos.token_mint || null, reason);
