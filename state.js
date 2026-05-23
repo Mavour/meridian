@@ -18,6 +18,7 @@ const WAVE_FILE = "./wave-history.json";
 
 const MAX_RECENT_EVENTS = 20;
 const MAX_INSTRUCTION_LENGTH = 280;
+const MIN_WAVE_LOSS_PCT = -1.0;
 const MAX_WAVES_BEFORE_BLOCK  = () => config?.screening?.maxWavesPerToken  ?? 3;
 const MAX_LOSSES_BEFORE_BLOCK = () => config?.screening?.maxLossesPerToken ?? 1; // block after N losses in window
 const WAVE_BLOCK_HOURS        = () => config?.screening?.waveBlockHours    ?? 48; // how long wave block lasts
@@ -333,11 +334,12 @@ export function recordClose(position_address, reason, pnl_pct = null) {
 
   // Wave tracking: record once per position when PnL is known.
   // Win: PnL >= 1.0% (real profit)
-  // Loss: PnL < -5.0% (significant loss) — excludes "pumped above range" / OOR where PnL is just gas/fees
+  // Loss: PnL <= -1.0% (significant loss) - excludes noise and OOR where PnL is just gas/fees
   const lowerReason = String(reason || "").toLowerCase();
   const isOorClose = /pumped.*above|out.*of.*range|\boor\b|above.*range/.test(lowerReason);
+  // Tiny negative closes are usually fees/slippage noise; only block waves on meaningful losses.
   const isProfitClose = pnl_pct != null && pnl_pct >= 1.0;
-      const isLossClose = pnl_pct != null && pnl_pct < 0 && !isOorClose;
+  const isLossClose = pnl_pct != null && pnl_pct <= MIN_WAVE_LOSS_PCT && !isOorClose;
 
   if (!pos.waveRecorded && (isProfitClose || isLossClose)) {
     const waveState = loadWaves();
@@ -374,6 +376,9 @@ export function recordClose(position_address, reason, pnl_pct = null) {
   } else if (!pos.waveRecorded && isOorClose) {
     // OOR / pumped above range: mark as recorded but do NOT count as win or loss
     log("state", `Wave skip for ${pos.pool_name || pos.pool}: OOR/pumped above range (PnL ${pnl_pct?.toFixed?.(2) ?? "unknown"}%) — not counted`);
+    pos.waveRecorded = true;
+  } else if (!pos.waveRecorded && pnl_pct != null) {
+    log("state", `Wave skip for ${pos.pool_name || pos.pool}: neutral PnL ${pnl_pct.toFixed(2)}% (loss threshold ${MIN_WAVE_LOSS_PCT}%)`);
     pos.waveRecorded = true;
   }
 

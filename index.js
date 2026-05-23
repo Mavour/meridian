@@ -986,7 +986,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
       const narrativeText = n?.narrative || null;
       if (isTokenWaveBlocked(pool.base?.mint, null, narrativeText) || isTokenWaveBlocked(pool.base?.symbol, null, narrativeText)) {
         log("screening", `Filtered wave-blocked token ${pool.name} (${pool.base?.mint?.slice(0, 8)})`);
-        filteredOut.push({ name: pool.name, reason: "wave blocked (max profitable exits in window)" });
+        filteredOut.push({ name: pool.name, reason: "wave blocked (max wins/losses in window)" });
         return false;
       }
       if (isBaseMintOnCooldown(pool.base?.mint)) {

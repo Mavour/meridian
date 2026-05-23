@@ -779,7 +779,7 @@ export async function getTopCandidates({ limit = 10 } = {}) {
       }
       if (isTokenWaveBlocked(p.base?.mint) || isTokenWaveBlocked(p.base?.symbol)) {
         log("screening", `Filtered wave-blocked token ${p.base?.symbol} (${p.base?.mint?.slice(0, 8)})`);
-        pushFilteredReason(filteredOut, p, "wave blocked (max profitable exits in 24h)");
+        pushFilteredReason(filteredOut, p, "wave blocked (max wins/losses in window)");
         return false;
       }
       // Max volatility filter
