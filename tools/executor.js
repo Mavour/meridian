@@ -860,6 +860,7 @@ const toolMap = {
       maxWavesPerToken: ["screening", "maxWavesPerToken"],
       maxLossesPerToken: ["screening", "maxLossesPerToken"],
       waveBlockHours: ["screening", "waveBlockHours"],
+      downtrendProtectionEnabled: ["screening", "downtrendProtectionEnabled"],
       fallingKnife5mThreshold: ["screening", "fallingKnife5mThreshold"],
       fallingKnife1hThreshold: ["screening", "fallingKnife1hThreshold"],
       maxDexBoosts: ["screening", "maxDexBoosts"],
@@ -874,6 +875,7 @@ const toolMap = {
       // management extended
       positionSizePct: ["management", "positionSizePct"],
       outOfRangeWaitMinutes: ["management", "outOfRangeWaitMinutes"],
+      slowBleedExitEnabled: ["management", "slowBleedExitEnabled"],
       slowBleedMinAge: ["management", "slowBleedMinAge"],
       slowBleedMinPnl: ["management", "slowBleedMinPnl"],
       slowBleedMaxPnl: ["management", "slowBleedMaxPnl"],

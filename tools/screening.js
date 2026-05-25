@@ -803,30 +803,32 @@ export async function getTopCandidates({ limit = 10 } = {}) {
       // Trend filter — avoid falling knife (downtrend still accelerating)
       const price1h = numeric(p.price_1h_change);
       const price5m = numeric(p.price_5m_change);
-      const fk5m = config.screening.fallingKnife5mThreshold ?? -20;
-      const fk1h = config.screening.fallingKnife1hThreshold ?? -25;
-      // Accelerating dump: both negative and 5m is deeper than 1h
-      if (price1h != null && price5m != null && price1h < 0 && price5m < 0 && price5m < price1h - 1) {
-        log("screening", `Filtered accelerating dump ${p.name}: 1h=${price1h}% 5m=${price5m}% (dump accelerating)`);
-        pushFilteredReason(filteredOut, p, `accelerating dump 1h=${price1h}% 5m=${price5m}%`);
-        return false;
-      }
-      // Falling knife (Gemini spec): crash instant for potential quick rebound
-      if (price1h != null && price5m != null && price5m < fk5m && price1h < fk1h) {
-        log("screening", `Filtered falling knife ${p.name}: 5m=${price5m}% 1h=${price1h}%`);
-        pushFilteredReason(filteredOut, p, `falling knife 5m=${price5m}% 1h=${price1h}%`);
-        return false;
-      }
-      // If both 1h and 5m are deeply red = no stabilization yet
-      if (price1h != null && price1h < -5 && price5m != null && price5m < -3) {
-        log("screening", `Filtered deepening downtrend ${p.name}: 1h=${price1h}% 5m=${price5m}%`);
-        pushFilteredReason(filteredOut, p, `deepening downtrend 1h=${price1h}% 5m=${price5m}%`);
-        return false;
-      }
-      if (price1h != null && price1h < -15) {
-        log("screening", `Filtered deep dump ${p.name}: ${price1h}% in 1h`);
-        pushFilteredReason(filteredOut, p, `deep dump ${price1h}% in 1h`);
-        return false;
+      if (config.screening.downtrendProtectionEnabled !== false) {
+        const fk5m = config.screening.fallingKnife5mThreshold ?? -20;
+        const fk1h = config.screening.fallingKnife1hThreshold ?? -25;
+        // Accelerating dump: both negative and 5m is deeper than 1h
+        if (price1h != null && price5m != null && price1h < 0 && price5m < 0 && price5m < price1h - 1) {
+          log("screening", `Filtered accelerating dump ${p.name}: 1h=${price1h}% 5m=${price5m}% (dump accelerating)`);
+          pushFilteredReason(filteredOut, p, `accelerating dump 1h=${price1h}% 5m=${price5m}%`);
+          return false;
+        }
+        // Falling knife (Gemini spec): crash instant for potential quick rebound
+        if (price1h != null && price5m != null && price5m < fk5m && price1h < fk1h) {
+          log("screening", `Filtered falling knife ${p.name}: 5m=${price5m}% 1h=${price1h}%`);
+          pushFilteredReason(filteredOut, p, `falling knife 5m=${price5m}% 1h=${price1h}%`);
+          return false;
+        }
+        // If both 1h and 5m are deeply red = no stabilization yet
+        if (price1h != null && price1h < -5 && price5m != null && price5m < -3) {
+          log("screening", `Filtered deepening downtrend ${p.name}: 1h=${price1h}% 5m=${price5m}%`);
+          pushFilteredReason(filteredOut, p, `deepening downtrend 1h=${price1h}% 5m=${price5m}%`);
+          return false;
+        }
+        if (price1h != null && price1h < -15) {
+          log("screening", `Filtered deep dump ${p.name}: ${price1h}% in 1h`);
+          pushFilteredReason(filteredOut, p, `deep dump ${price1h}% in 1h`);
+          return false;
+        }
       }
       const singleSideEntry = evaluateSingleSideSolEntry(p);
       p.single_side_entry = singleSideEntry;

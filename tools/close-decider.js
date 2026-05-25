@@ -28,6 +28,7 @@ export function decideCloseAction(position, mgmtConfig = {}) {
   const stopLossPct = numberOrNull(mgmtConfig.stopLossPct) ?? -12;
   const trailingTriggerPct = numberOrNull(mgmtConfig.trailingTriggerPct) ?? 5;
   const trailingDropPct = numberOrNull(mgmtConfig.trailingDropPct) ?? 2.5;
+  const slowBleedExitEnabled = mgmtConfig.slowBleedExitEnabled !== false;
   const slowBleedMinAge = numberOrNull(mgmtConfig.slowBleedMinAge) ?? 30;
   const slowBleedMinPnl = numberOrNull(mgmtConfig.slowBleedMinPnl) ?? -2;
   const slowBleedMaxPnl = numberOrNull(mgmtConfig.slowBleedMaxPnl) ?? 1.5;
@@ -114,6 +115,7 @@ export function decideCloseAction(position, mgmtConfig = {}) {
 
   // Priority 6: slow bleed while still technically in range.
   if (
+    slowBleedExitEnabled &&
     ageMinutes != null &&
     pnlPct != null &&
     feePerTvl24h != null &&

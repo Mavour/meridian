@@ -17,34 +17,32 @@ export function buildSystemPrompt(agentType, portfolio, positions, stateSummary 
   const fibEntryBlock = config.indicators.fibEntryConfig?.enabled
     ? `- **FIBONACCI ENTRY ZONE (5M)**: hard filter is enabled. Current price must be between fib ${config.indicators.fibEntryConfig.entryBelowFib ?? 0.236} and fib ${config.indicators.fibEntryConfig.entryAboveFib ?? 0.5} on the 5m swing. Do NOT entry above fib ${config.indicators.fibEntryConfig.entryBelowFib ?? 0.236} (too close to high/ATH; dump risk). Do NOT entry below fib ${config.indicators.fibEntryConfig.entryAboveFib ?? 0.5} (deep retrace/falling risk). If fib_entry_confirmation is rejected, output NO DEPLOY for that candidate.`
     : `- **FIBONACCI ENTRY ZONE (5M)**: currently disabled in config. If fib_entry_confirmation appears on a candidate, treat rejection as a hard skip; otherwise do not invent Fibonacci levels.`;
+  const downtrendRiskBlock = config.screening.downtrendProtectionEnabled === false
+    ? `- **DOWNTREND PROTECTION**: disabled in config. Do not hard-skip solely for accelerating dump, falling knife, deepening downtrend, slow bleed, or deep 1h dump labels unless another enabled risk rule also fails.`
+    : `- **HARD RULE - ACCELERATING DUMP**: if price_1h_change < 0 AND price_5m_change is MORE negative than price_1h_change by more than 1% -> SKIP. Example: 1h=-5%, 5m=-8% -> SKIP. The dump is still accelerating.
+- **HARD RULE - FALLING KNIFE**: if price_5m_change < ${config.screening.fallingKnife5mThreshold ?? -20}% AND price_1h_change < ${config.screening.fallingKnife1hThreshold ?? -25}% -> SKIP. Crash instant - too dangerous.
+- **HARD RULE - DEEPENING DOWNTREND**: if price_1h_change < -5% AND price_5m_change < -3% -> SKIP. No stabilization yet.
+- **HARD RULE - SLOW BLEED**: if price_1h_change < 0, price_5m_change <= 0, and fee_active_tvl_ratio is weak or fading -> SKIP. Do not LP into a token drifting down without buy pressure.
+- price_1h_change < -15% -> SKIP (too deep).
+- If ALL candidates show falling knife or slow bleed, output NO DEPLOY.`;
   const screenerEntryRiskBlock = singleSideTimingEnabled
     ? `ENTRY RISK - CORE STRATEGY:
 The strategy uses SINGLE-SIDE SOL below current price as a passive buy ladder. Entry should mimic smart-wallet support timing: wait for a prior spike/reclaim to cool down, then deploy when price retests the lower half of the range/support area. Do NOT chase a live green candle.
 - **REJECT HOT GREEN 5M FOR SOL-ONLY**: positive price_1h_change can be valid, but price_5m_change must be cooled down. If price_5m_change is above ${config.screening.singleSideSolMaxWeakBounce5m ?? 3}%, SKIP and wait for retest. We want support entry, not middle-of-pump entry.
 - **ATH FILTER IS THE OVEREXTENSION GATE**: if price_vs_ath fails the configured athFilterPct, skip. If it passes or ATH data is unavailable, do not invent an additional "too pumped" hard rule.
 ${fibEntryBlock}
-- **HARD RULE - ACCELERATING DUMP**: if price_1h_change < 0 AND price_5m_change is MORE negative than price_1h_change by more than 1% -> SKIP. Example: 1h=-5%, 5m=-8% -> SKIP. The dump is still accelerating.
-- **HARD RULE - FALLING KNIFE**: if price_5m_change < ${config.screening.fallingKnife5mThreshold ?? -20}% AND price_1h_change < ${config.screening.fallingKnife1hThreshold ?? -25}% -> SKIP. Crash instant - too dangerous.
-- **HARD RULE - DEEPENING DOWNTREND**: if price_1h_change < -5% AND price_5m_change < -3% -> SKIP. No stabilization yet.
-- **HARD RULE - SLOW BLEED**: if price_1h_change < 0, price_5m_change <= 0, and fee_active_tvl_ratio is weak or fading -> SKIP. Do not LP into a token drifting down without buy pressure.
+${downtrendRiskBlock}
 - **SMART-WALLET RETEST SETUP**: 24h red + 6h green + 1h mild red OR small green + 5m small green is VALID. It means macro cooled down, mid-term demand returned, and the latest pullback is starting to bounce.
 - **HARD RULE - SINGLE-SIDE SOL TIMING**: this agent is SOL-only with bins_above=0. Deploy only after reclaim/rebound confirmation AND a support retest. Smart-wallet retest is present when price_24h_change < 0, price_6h_change > 0, price_1h_change is between ${config.screening.singleSideSolMinRetest1hChange ?? -7}% and ${config.screening.singleSideSolMaxRetest1hChange ?? 6}%, and price_5m_change is between 0% and ${config.screening.singleSideSolMaxWeakBounce5m ?? 3}%. If short-term price change < ${config.screening.singleSideSolMax5mPullback ?? -2}% -> SKIP. If short-term price change > ${config.screening.singleSideSolMaxWeakBounce5m ?? 3}% -> SKIP because range will likely go OOR right/above immediately.
-- price_1h_change < -15% -> SKIP (too deep).
 - fee_active_tvl_ratio < ${config.screening.minFeeActiveTvlRatio}% -> SKIP (no buy pressure).
-- If ALL candidates show falling knife or slow bleed, output NO DEPLOY.
 
 IMPORTANT: We are trying to avoid slow rugs, slow bleeding charts, fake volume, over-ATH entries, and middle-of-pump SOL-only entries. A green 1h is fine only if the 5m candle has cooled into support/retest conditions.`
     : `ENTRY RISK - CORE STRATEGY:
 The single-side SOL timing gate is disabled. Do not require smart-wallet retest, 6h reclaim, 24h red context, or 5m weak-bounce confirmation.
 - **ATH FILTER IS THE OVEREXTENSION GATE**: if price_vs_ath fails the configured athFilterPct, skip. If it passes or ATH data is unavailable, do not invent an additional "too pumped" hard rule.
 ${fibEntryBlock}
-- **HARD RULE - ACCELERATING DUMP**: if price_1h_change < 0 AND price_5m_change is MORE negative than price_1h_change by more than 1% -> SKIP. Example: 1h=-5%, 5m=-8% -> SKIP. The dump is still accelerating.
-- **HARD RULE - FALLING KNIFE**: if price_5m_change < ${config.screening.fallingKnife5mThreshold ?? -20}% AND price_1h_change < ${config.screening.fallingKnife1hThreshold ?? -25}% -> SKIP. Crash instant - too dangerous.
-- **HARD RULE - DEEPENING DOWNTREND**: if price_1h_change < -5% AND price_5m_change < -3% -> SKIP. No stabilization yet.
-- **HARD RULE - SLOW BLEED**: if price_1h_change < 0, price_5m_change <= 0, and fee_active_tvl_ratio is weak or fading -> SKIP. Do not LP into a token drifting down without buy pressure.
-- price_1h_change < -15% -> SKIP (too deep).
+${downtrendRiskBlock}
 - fee_active_tvl_ratio < ${config.screening.minFeeActiveTvlRatio}% -> SKIP (no buy pressure).
-- If ALL candidates show falling knife or slow bleed, output NO DEPLOY.
 
 IMPORTANT: Timing retest is disabled by config. Use only hard risk filters, pool quality, whale/safety data, and strategy/range rules.`;
   // MANAGER gets a leaner prompt — positions are pre-loaded in the goal, not repeated here
@@ -86,6 +84,7 @@ Rationale: negative sentiment signals distribution risk. Exit at BEP or better. 
 
 RULE 3 — SLOW BLEED / SLOW RUG PROTECTION (AUTO-ENFORCED — HIGHEST PRIORITY AFTER SL):
 If ALL of these are true → CLOSE immediately, no hesitation, no "wait and see":
+- slowBleedExitEnabled must not be false
 - age_minutes >= ${config.management.slowBleedMinAge ?? 20}
 - pnl_pct is between ${config.management.slowBleedMinPnl ?? -1}% and ${config.management.slowBleedMaxPnl ?? 0.5}% (shallow loss or tiny profit — going NOWHERE)
 - fee_per_tvl_24h < ${config.management.minFeePerTvl24h ?? 7}% (fees are NOT covering IL)

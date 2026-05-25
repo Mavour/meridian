@@ -109,6 +109,7 @@ export const config = {
     minTokenAgeHours:   u.minTokenAgeHours   ?? null, // null = no minimum
     maxTokenAgeHours:   u.maxTokenAgeHours   ?? null, // null = no maximum
     athFilterPct:       u.athFilterPct       ?? null, // e.g. -20 = only deploy if price is >= 20% below ATH
+    downtrendProtectionEnabled: u.downtrendProtectionEnabled ?? true,
     fallingKnife5mThreshold: u.fallingKnife5mThreshold ?? -20,
     fallingKnife1hThreshold: u.fallingKnife1hThreshold ?? -25,
     maxVolatility:       u.maxVolatility       ?? 7,   // max pool volatility (filters high-vol pools)
@@ -201,6 +202,7 @@ export const config = {
     gasReserve:            u.gasReserve            ?? 0.2,
     positionSizePct:       u.positionSizePct       ?? 0.35,
     // Time-aware exit parameters
+    slowBleedExitEnabled:  u.slowBleedExitEnabled ?? true,
     slowBleedMinAge:       u.slowBleedMinAge        ?? 60,   // minimum age before slow bleed check activates
     slowBleedMinPnl:       u.slowBleedMinPnl        ?? -3,   // slow bleed: pnl lower bound (%)
     slowBleedMaxPnl:       u.slowBleedMaxPnl        ?? 2,    // slow bleed: pnl upper bound (%)
@@ -442,6 +444,7 @@ export function reloadScreeningThresholds() {
     if (fresh.spotMinPrice30mFloor != null) config.strategy.spotMinPrice30mFloor = fresh.spotMinPrice30mFloor;
     if (fresh.spotMinVolume != null) config.strategy.spotMinVolume = fresh.spotMinVolume;
     if (fresh.spotMinFeeActiveTvlRatio != null) config.strategy.spotMinFeeActiveTvlRatio = fresh.spotMinFeeActiveTvlRatio;
+    if (fresh.downtrendProtectionEnabled !== undefined) config.screening.downtrendProtectionEnabled = fresh.downtrendProtectionEnabled;
     if (fresh.fallingKnife5mThreshold != null) config.screening.fallingKnife5mThreshold = fresh.fallingKnife5mThreshold;
     if (fresh.fallingKnife1hThreshold != null) config.screening.fallingKnife1hThreshold = fresh.fallingKnife1hThreshold;
     if (fresh.singleSideSolEntryGateEnabled !== undefined) config.screening.singleSideSolEntryGateEnabled = fresh.singleSideSolEntryGateEnabled;
@@ -452,6 +455,7 @@ export function reloadScreeningThresholds() {
     if (fresh.singleSideSolWeakTrendMax1h != null) config.screening.singleSideSolWeakTrendMax1h = fresh.singleSideSolWeakTrendMax1h;
     if (fresh.singleSideSolMaxWeakBounce5m != null) config.screening.singleSideSolMaxWeakBounce5m = fresh.singleSideSolMaxWeakBounce5m;
     if (fresh.singleSideSolMinFeeActiveTvlRatio != null) config.screening.singleSideSolMinFeeActiveTvlRatio = fresh.singleSideSolMinFeeActiveTvlRatio;
+    if (fresh.slowBleedExitEnabled !== undefined) config.management.slowBleedExitEnabled = fresh.slowBleedExitEnabled;
   } catch { /* ignore */ }
   try {
     const freshGmgn = readJsonIfExists(GMGN_CONFIG_PATH);
