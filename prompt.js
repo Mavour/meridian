@@ -15,7 +15,7 @@ export function buildSystemPrompt(agentType, portfolio, positions, stateSummary 
   const s = config.screening;
   const singleSideTimingEnabled = config.screening.singleSideSolEntryGateEnabled !== false;
   const fibEntryBlock = config.indicators.fibEntryConfig?.enabled
-    ? `- **FIBONACCI ENTRY ZONE (5M)**: hard filter is enabled. Current price must be between fib ${config.indicators.fibEntryConfig.zoneMin ?? 0.236} and fib ${config.indicators.fibEntryConfig.zoneMax ?? 0.5} on the 5m swing. Do NOT entry above fib ${config.indicators.fibEntryConfig.zoneMin ?? 0.236} (too close to high/ATH; dump risk). Do NOT entry below fib ${config.indicators.fibEntryConfig.zoneMax ?? 0.5} (deep retrace/falling risk). If fib_entry_confirmation is rejected, output NO DEPLOY for that candidate.`
+    ? `- **FIBONACCI ENTRY ZONE (5M)**: hard filter is enabled. Current price must be between fib ${config.indicators.fibEntryConfig.entryBelowFib ?? 0.236} and fib ${config.indicators.fibEntryConfig.entryAboveFib ?? 0.5} on the 5m swing. Do NOT entry above fib ${config.indicators.fibEntryConfig.entryBelowFib ?? 0.236} (too close to high/ATH; dump risk). Do NOT entry below fib ${config.indicators.fibEntryConfig.entryAboveFib ?? 0.5} (deep retrace/falling risk). If fib_entry_confirmation is rejected, output NO DEPLOY for that candidate.`
     : `- **FIBONACCI ENTRY ZONE (5M)**: currently disabled in config. If fib_entry_confirmation appears on a candidate, treat rejection as a hard skip; otherwise do not invent Fibonacci levels.`;
   const screenerEntryRiskBlock = singleSideTimingEnabled
     ? `ENTRY RISK - CORE STRATEGY:

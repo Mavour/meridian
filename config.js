@@ -323,8 +323,8 @@ export const config = {
       interval: indicatorUserConfig.fibEntryConfig?.interval ?? "5_MINUTE",
       requireRsiBelow: indicatorUserConfig.fibEntryConfig?.requireRsiBelow ?? 70,
       requireBullishSupertrend: indicatorUserConfig.fibEntryConfig?.requireBullishSupertrend ?? false,
-      zoneMin: indicatorUserConfig.fibEntryConfig?.zoneMin ?? 0.236,
-      zoneMax: indicatorUserConfig.fibEntryConfig?.zoneMax ?? 0.5,
+      entryBelowFib: indicatorUserConfig.fibEntryConfig?.entryBelowFib ?? 0.236,
+      entryAboveFib: indicatorUserConfig.fibEntryConfig?.entryAboveFib ?? 0.5,
     },
   },
 

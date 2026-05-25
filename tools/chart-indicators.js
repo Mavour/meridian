@@ -17,6 +17,7 @@ import crypto from "crypto";
 
 const DEFAULT_INTERVALS = ["5_MINUTE"];
 const DEFAULT_CANDLES = 298;
+const FIB_KEYS = ["0.236", "0.382", "0.500", "0.618", "0.786"];
 const SUPPORTED_INTERVALS = new Set([
   "1_MINUTE",
   "5_MINUTE",
@@ -30,6 +31,22 @@ const SUPPORTED_INTERVALS = new Set([
 function safeNumber(value, fallback = null) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function resolveFibKey(value) {
+  const target = Number(value);
+  if (!Number.isFinite(target)) return null;
+
+  let best = null;
+  let bestDiff = Infinity;
+  for (const key of FIB_KEYS) {
+    const diff = Math.abs(Number(key) - target);
+    if (diff < bestDiff) {
+      best = key;
+      bestDiff = diff;
+    }
+  }
+  return best;
 }
 
 // ─── GMGN API Key ────────────────────────────────────
@@ -335,11 +352,11 @@ function evaluatePreset(side, preset, payload) {
       }
 
       const fibConfig = config.indicators.fibEntryConfig || {};
-      const zoneMinKey = Number(fibConfig.zoneMin ?? 0.236).toFixed(3);
-      const zoneMaxKey = Number(fibConfig.zoneMax ?? 0.5).toFixed(3);
+      const belowKey = resolveFibKey(fibConfig.entryBelowFib ?? 0.236);
+      const aboveKey = resolveFibKey(fibConfig.entryAboveFib ?? 0.5);
       const fibonacciLevels = payload?.latest?.fibonacci?.levels || {};
-      const fibShallow = safeNumber(fibonacciLevels[zoneMinKey]);
-      const fibDeep = safeNumber(fibonacciLevels[zoneMaxKey]);
+      const fibShallow = belowKey ? safeNumber(fibonacciLevels[belowKey]) : null;
+      const fibDeep = aboveKey ? safeNumber(fibonacciLevels[aboveKey]) : null;
       const requireRsiBelow = safeNumber(fibConfig.requireRsiBelow, 70);
 
       if (close == null || fibShallow == null || fibDeep == null) {
@@ -350,7 +367,7 @@ function evaluatePreset(side, preset, payload) {
       const upper = Math.max(fibShallow, fibDeep);
       const inZone = close >= lower && close <= upper;
       const rsiOk = requireRsiBelow == null || rsi == null || rsi < requireRsiBelow;
-      const zoneText = `${lower}-${upper}`;
+      const zoneText = `${aboveKey}:${lower}-${belowKey}:${upper}`;
 
       return {
         confirmed: inZone && rsiOk,
@@ -563,7 +580,7 @@ export async function confirmFibEntryZone(mint, options = {}) {
       interval,
       candles: options.candles ?? config.indicators.candles ?? DEFAULT_CANDLES,
       rsiLength: options.rsiLength ?? config.indicators.rsiLength ?? 2,
-      refresh: options.refresh ?? true,
+      refresh: options.refresh ?? false,
     });
     const result = evaluatePreset("entry", "fibo_entry_zone", payload);
 

@@ -121,8 +121,8 @@
       "interval": "5_MINUTE",
       "requireRsiBelow": 70,
       "requireBullishSupertrend": false,
-      "zoneMin": 0.236,
-      "zoneMax": 0.5
+      "entryBelowFib": 0.236,
+      "entryAboveFib": 0.5
     }
   },
   "bottomSpotLP": {
