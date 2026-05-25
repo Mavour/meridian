@@ -293,7 +293,7 @@ export const config = {
   api: {
     url: null,
     publicApiKey: null,
-    lpAgentRelayEnabled: false,
+    lpAgentRelayEnabled: u.lpAgentRelayEnabled ?? false,
   },
 
   jupiter: {

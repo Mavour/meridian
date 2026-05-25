@@ -1973,6 +1973,12 @@ function settingValue(key) {
     indicatorCandles: config.indicators.candles,
     rsiOversold: config.indicators.rsiOversold,
     rsiOverbought: config.indicators.rsiOverbought,
+    fibEntryEnabled: config.indicators.fibEntryConfig?.enabled,
+    fibEntryInterval: config.indicators.fibEntryConfig?.interval,
+    fibEntryRequireRsiBelow: config.indicators.fibEntryConfig?.requireRsiBelow,
+    fibEntryRequireBullishSupertrend: config.indicators.fibEntryConfig?.requireBullishSupertrend,
+    fibEntryBelowFib: config.indicators.fibEntryConfig?.entryBelowFib,
+    fibEntryAboveFib: config.indicators.fibEntryConfig?.entryAboveFib,
     // ── Bottom Spot LP ──
     bottomSpotEnabled: config.bottomSpotLP.enabled,
     bottomSpotDeployAmountSol: config.bottomSpotLP.deployAmountSol,
@@ -1996,6 +2002,7 @@ function settingValue(key) {
     bottomSpotFeesForReposition: config.bottomSpotLP.feesForReposition,
     bottomSpotEnableTAExit: config.bottomSpotLP.enableTAExit,
     bottomSpotMaxOpenPositions: config.bottomSpotLP.maxOpenPositions,
+    bottomSpotLogLevel: config.bottomSpotLP.logLevel,
     // ── Advanced ──
     darwinEnabled: config.darwin.enabled,
     darwinWindowDays: config.darwin.windowDays,
@@ -2008,6 +2015,7 @@ function settingValue(key) {
     xSentimentEnabled: config.xSentiment.enabled,
     minSentimentScore: config.xSentiment.minScore,
     xLookbackDays: config.xSentiment.lookbackDays,
+    lpAgentRelayEnabled: config.api.lpAgentRelayEnabled,
     takeProfitFeePct: config.management.takeProfitPct,
     emergencyPriceDropPct: config.management.stopLossPct,
     spotMinVolume: config.strategy.spotMinVolume,
@@ -2097,6 +2105,7 @@ const MENU_INTEGER_KEYS = new Set([
   "indicatorCandles",
   "rsiOversold",
   "rsiOverbought",
+  "fibEntryRequireRsiBelow",
   "bottomSpotMinTvl",
   "bottomSpotMaxTvl",
   "bottomSpotMinVolume",
@@ -2106,6 +2115,11 @@ const MENU_INTEGER_KEYS = new Set([
   "bottomSpotOutOfRangeWaitMinutes",
   "bottomSpotOutOfRangeTolerance",
   "bottomSpotMaxOpenPositions",
+  "whaleGuardCooldownMinutes",
+  "whaleGuardWindowMinutes",
+  "whaleGuardMinNetWithdrawUsd",
+  "whaleGuardMinQuoteDrainUsd",
+  "whaleGuardMinTvlDropUsd",
   "xLookbackDays",
   "pnlPollIntervalSec",
   "pnlPollAdaptiveEnabled",
@@ -2179,6 +2193,9 @@ const MENU_NON_NEGATIVE_KEYS = new Set([
   "indicatorCandles",
   "rsiOversold",
   "rsiOverbought",
+  "fibEntryRequireRsiBelow",
+  "fibEntryBelowFib",
+  "fibEntryAboveFib",
   "xLookbackDays",
   "pnlPollIntervalSec",
   "pnlPollAdaptiveEnabled",
@@ -2220,6 +2237,13 @@ const MENU_NON_NEGATIVE_KEYS = new Set([
   "bottomSpotOutOfRangeTolerance",
   "bottomSpotFeesForReposition",
   "bottomSpotMaxOpenPositions",
+  "whaleGuardCooldownMinutes",
+  "whaleGuardWindowMinutes",
+  "whaleGuardMinNetWithdrawUsd",
+  "whaleGuardMinQuoteDrainUsd",
+  "whaleGuardMinTvlDropUsd",
+  "whaleGuardMinLiquidityDropPct",
+  "whaleGuardMinTvlDropPct",
 ]);
 
 function sanitizeMenuValue(key, value) {
@@ -2237,6 +2261,7 @@ function sanitizeMenuValue(key, value) {
   if (MENU_NON_NEGATIVE_KEYS.has(key)) value = Math.max(0, value);
   if (key === "maxPositions") value = Math.max(1, value);
   if (key === "rsiLength") value = Math.max(2, value);
+  if (["fibEntryBelowFib", "fibEntryAboveFib"].includes(key)) value = Math.max(0, Math.min(1, value));
   if (["minBinsBelow", "maxBinsBelow", "defaultBinsBelow"].includes(key)) value = Math.max(35, value);
   if (key === "maxBinsBelow") value = Math.max(value, Number(config.strategy.minBinsBelow ?? 35));
   if (key === "defaultBinsBelow") {
@@ -2304,6 +2329,7 @@ const SETTINGS_PAGES = [
     fields: [
       { key: "excludeHighSupplyConcentration", label: "Supply concentration", type: "toggle" },
       { key: "maxBundlePct", label: "Max bundle %", digits: 0 },
+      { key: "maxBundlersPct", label: "Max bundlers %", digits: 0 },
       { key: "maxBotHoldersPct", label: "Max bot holders %", digits: 0 },
       { key: "maxTop10Pct", label: "Max top10 %", digits: 0 },
       { key: "avoidPvpSymbols", label: "Avoid PVP", type: "toggle" },
@@ -2328,6 +2354,13 @@ const SETTINGS_PAGES = [
     label: "Single SOL",
     fields: [
       { key: "singleSideSolEntryGateEnabled", label: "Entry gate", type: "toggle" },
+      { key: "singleSideSolMin1hChange", label: "Min 1h %", digits: 1 },
+      { key: "singleSideSolMinRetest1hChange", label: "Retest min 1h %", digits: 1 },
+      { key: "singleSideSolMaxRetest1hChange", label: "Retest max 1h %", digits: 1 },
+      { key: "singleSideSolMax5mPullback", label: "Max 5m pullback %", digits: 1 },
+      { key: "singleSideSolWeakTrendMax1h", label: "Weak trend max 1h %", digits: 1 },
+      { key: "singleSideSolMaxWeakBounce5m", label: "Max weak bounce 5m %", digits: 1 },
+      { key: "singleSideSolMinFeeActiveTvlRatio", label: "Min fee/aTVL %", digits: 2 },
     ],
   },
   {
@@ -2368,9 +2401,14 @@ const SETTINGS_PAGES = [
       { key: "repeatDeployCooldownMinFeeEarnedPct", label: "Repeat min fee %", digits: 1 },
       { key: "repeatDeployCooldownScope", label: "Repeat scope", type: "select", options: [["token", "Token"], ["pool", "Pool"], ["both", "Both"]] },
       { key: "whaleGuardEnabled", label: "Whale guard", type: "toggle" },
+      { key: "whaleGuardSource", label: "Whale source", type: "select", options: [["meteora", "Meteora"], ["gmgn", "GMGN"]] },
       { key: "whaleGuardMinQuoteDrainUsd", label: "Whale quote $", digits: 0 },
+      { key: "whaleGuardMinNetWithdrawUsd", label: "Whale net $", digits: 0 },
+      { key: "whaleGuardMinTvlDropUsd", label: "Whale TVL $", digits: 0 },
       { key: "whaleGuardMinLiquidityDropPct", label: "Whale TVL drop %", digits: 1 },
       { key: "whaleGuardWindowMinutes", label: "Whale window m", digits: 0 },
+      { key: "whaleGuardCooldownMinutes", label: "Whale cooldown m", digits: 0 },
+      { key: "whaleGuardRequireBaseIncreaseForQuoteDrain", label: "Whale base inc", type: "toggle" },
     ],
   },
   {
@@ -2436,6 +2474,7 @@ const SETTINGS_PAGES = [
       { key: "minSentimentScore", label: "Min X score", digits: 0 },
       { key: "xLookbackDays", label: "X lookback days", digits: 0 },
       { key: "darwinEnabled", label: "Darwin signals", type: "toggle" },
+      { key: "lpAgentRelayEnabled", label: "LPAgent relay", type: "toggle" },
       { key: "darwinWindowDays", label: "Darwin window d", digits: 0 },
       { key: "darwinRecalcEvery", label: "Darwin recalc every", digits: 0 },
       { key: "darwinBoost", label: "Darwin boost", digits: 2 },
@@ -2458,6 +2497,12 @@ const SETTINGS_PAGES = [
       { key: "indicatorCandles", label: "Candles", digits: 0 },
       { key: "rsiOversold", label: "RSI oversold", digits: 0 },
       { key: "rsiOverbought", label: "RSI overbought", digits: 0 },
+      { key: "fibEntryEnabled", label: "Fib entry gate", type: "toggle" },
+      { key: "fibEntryInterval", label: "Fib interval", type: "select", options: [["1_MINUTE", "1m"], ["5_MINUTE", "5m"], ["15_MINUTE", "15m"], ["1_HOUR", "1h"]] },
+      { key: "fibEntryRequireRsiBelow", label: "Fib RSI below", digits: 0 },
+      { key: "fibEntryRequireBullishSupertrend", label: "Fib bullish ST", type: "toggle" },
+      { key: "fibEntryBelowFib", label: "Entry below fib", digits: 3 },
+      { key: "fibEntryAboveFib", label: "Entry above fib", digits: 3 },
     ],
   },
   {
@@ -2486,6 +2531,7 @@ const SETTINGS_PAGES = [
       { key: "bottomSpotOutOfRangeWaitMinutes", label: "OOR wait m", digits: 0 },
       { key: "bottomSpotOutOfRangeTolerance", label: "OOR tolerance m", digits: 0 },
       { key: "bottomSpotFeesForReposition", label: "Reposition fees %", digits: 1 },
+      { key: "bottomSpotLogLevel", label: "Log level", type: "select", options: [["verbose", "Verbose"], ["info", "Info"], ["silent", "Silent"]] },
     ],
   },
 ];

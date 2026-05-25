@@ -815,6 +815,12 @@ const toolMap = {
       rsiOversold: ["indicators", "rsiOversold", ["chartIndicators", "rsiOversold"]],
       rsiOverbought: ["indicators", "rsiOverbought", ["chartIndicators", "rsiOverbought"]],
       requireAllIntervals: ["indicators", "requireAllIntervals", ["chartIndicators", "requireAllIntervals"]],
+      fibEntryEnabled: ["indicators", "fibEntryConfig", "enabled", ["chartIndicators", "fibEntryConfig", "enabled"]],
+      fibEntryInterval: ["indicators", "fibEntryConfig", "interval", ["chartIndicators", "fibEntryConfig", "interval"]],
+      fibEntryRequireRsiBelow: ["indicators", "fibEntryConfig", "requireRsiBelow", ["chartIndicators", "fibEntryConfig", "requireRsiBelow"]],
+      fibEntryRequireBullishSupertrend: ["indicators", "fibEntryConfig", "requireBullishSupertrend", ["chartIndicators", "fibEntryConfig", "requireBullishSupertrend"]],
+      fibEntryBelowFib: ["indicators", "fibEntryConfig", "entryBelowFib", ["chartIndicators", "fibEntryConfig", "entryBelowFib"]],
+      fibEntryAboveFib: ["indicators", "fibEntryConfig", "entryAboveFib", ["chartIndicators", "fibEntryConfig", "entryAboveFib"]],
       // Bottom Spot LP
       bottomSpotEnabled: ["bottomSpotLP", "enabled", ["bottomSpotLP", "enabled"]],
       bottomSpotDeployAmountSol: ["bottomSpotLP", "deployAmountSol", ["bottomSpotLP", "deployAmountSol"]],
@@ -838,6 +844,7 @@ const toolMap = {
       bottomSpotFeesForReposition: ["bottomSpotLP", "feesForReposition", ["bottomSpotLP", "feesForReposition"]],
       bottomSpotEnableTAExit: ["bottomSpotLP", "enableTAExit", ["bottomSpotLP", "enableTAExit"]],
       bottomSpotMaxOpenPositions: ["bottomSpotLP", "maxOpenPositions", ["bottomSpotLP", "maxOpenPositions"]],
+      bottomSpotLogLevel: ["bottomSpotLP", "logLevel", ["bottomSpotLP", "logLevel"]],
       // x sentiment
       xSentimentEnabled: ["xSentiment", "enabled"],
       xSentimentLookbackDays: ["xSentiment", "lookbackDays"],
@@ -891,6 +898,7 @@ const toolMap = {
       darwinFloor: ["darwin", "weightFloor"],
       darwinCeiling: ["darwin", "weightCeiling"],
       darwinMinSamples: ["darwin", "minSamples"],
+      lpAgentRelayEnabled: ["api", "lpAgentRelayEnabled"],
       // indicators extended
       indicatorCandles: ["indicators", "candles", ["chartIndicators", "candles"]],
       rsiOversold: ["indicators", "rsiOversold", ["chartIndicators", "rsiOversold"]],
@@ -991,8 +999,8 @@ const toolMap = {
     let wroteUserConfig = false;
     let wroteGmgnConfig = false;
     for (const [key, val] of Object.entries(applied)) {
-      const [section, field, third] = CONFIG_MAP[key] || [];
-      const persistPath = Array.isArray(third) ? third : null;
+      const [section, field, third, fourth] = CONFIG_MAP[key] || [];
+      const persistPath = Array.isArray(third) ? third : Array.isArray(fourth) ? fourth : null;
       const nestedField = typeof third === "string" ? third : null;
       if (section === "gmgn") {
         if (nestedField) {
