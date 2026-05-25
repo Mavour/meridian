@@ -216,7 +216,13 @@ export const config = {
     // Trailing stop confirmation
     trailingConfirmDelaySec: u.trailingConfirmDelaySec ?? 10,     // seconds to wait for trailing drop confirmation
     // PnL polling
-    pnlPollIntervalSec:    u.pnlPollIntervalSec    ?? 10,         // how often to poll PnL (seconds)
+    pnlPollIntervalSec:    u.pnlPollIntervalSec    ?? 10,         // legacy fixed poll interval (seconds)
+    pnlPollAdaptiveEnabled: u.pnlPollAdaptiveEnabled ?? true,
+    pnlPollNormalIntervalSec: u.pnlPollNormalIntervalSec ?? 30,
+    pnlPollFastIntervalSec: u.pnlPollFastIntervalSec ?? 10,
+    pnlPollUrgentIntervalSec: u.pnlPollUrgentIntervalSec ?? 5,
+    pnlPollNewPositionMinutes: u.pnlPollNewPositionMinutes ?? 10,
+    exitSnapshotMaxDiffPct: u.exitSnapshotMaxDiffPct ?? 1.5,
     // SOL mode — positions, PnL, and balances reported in SOL instead of USD
     solMode:               u.solMode               ?? false,
   },

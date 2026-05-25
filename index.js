@@ -248,6 +248,56 @@ function buildStrategyGuideBlock(activeStrategy) {
   }
   return `No active strategy guide - use /menu strategy=${config.strategy.strategy}, dynamicStrategyEnabled=${config.strategy.dynamicStrategyEnabled}, bins_above=0, SOL only.`;
 }
+
+function buildExitSnapshot(position, source = "pnl_poll") {
+  if (!position) return null;
+  return {
+    source,
+    captured_at: new Date().toISOString(),
+    position: position.position ?? null,
+    pair: position.pair ?? null,
+    pnl_pct: position.pnl_pct ?? null,
+    pnl_usd: position.pnl_true_usd ?? (!config.management.solMode ? position.pnl_usd : null),
+    pnl_sol: config.management.solMode ? (position.pnl_usd ?? null) : null,
+    total_value_usd: position.total_value_true_usd ?? (!config.management.solMode ? position.total_value_usd : null),
+    total_value_sol: config.management.solMode ? (position.total_value_usd ?? null) : null,
+    fees_usd: (position.collected_fees_true_usd ?? 0) + (position.unclaimed_fees_true_usd ?? 0),
+    fees_sol: config.management.solMode
+      ? (position.collected_fees_usd ?? 0) + (position.unclaimed_fees_usd ?? 0)
+      : null,
+    in_range: position.in_range ?? null,
+    lower_bin: position.lower_bin ?? null,
+    active_bin: position.active_bin ?? null,
+    upper_bin: position.upper_bin ?? null,
+    minutes_out_of_range: position.minutes_out_of_range ?? null,
+    age_minutes: position.age_minutes ?? null,
+  };
+}
+
+function pnlPollIntervalMs(trackedPositions) {
+  const m = config.management;
+  const legacy = Math.max(5, Number(m.pnlPollIntervalSec || 10));
+  if (m.pnlPollAdaptiveEnabled === false) return legacy * 1000;
+
+  const urgent = Math.max(5, Number(m.pnlPollUrgentIntervalSec ?? 5));
+  const fast = Math.max(urgent, Number(m.pnlPollFastIntervalSec ?? 10));
+  const normal = Math.max(fast, Number(m.pnlPollNormalIntervalSec ?? 30));
+  const newPositionMinutes = Math.max(0, Number(m.pnlPollNewPositionMinutes ?? 10));
+
+  if (_closingPositions.size > 0) return urgent * 1000;
+
+  const now = Date.now();
+  for (const pos of trackedPositions || []) {
+    if (pos.confirmed_trailing_exit_until || pos.pending_trailing_current_pnl_pct != null) return urgent * 1000;
+    if (pos.trailing_active || pos.out_of_range_since) return fast * 1000;
+    if (pos.deployed_at && newPositionMinutes > 0) {
+      const ageMinutes = (now - new Date(pos.deployed_at).getTime()) / 60000;
+      if (Number.isFinite(ageMinutes) && ageMinutes <= newPositionMinutes) return fast * 1000;
+    }
+  }
+
+  return normal * 1000;
+}
 function scheduleTrailingDropConfirmation(positionAddress) {
   if (!positionAddress || _trailingDropConfirmTimers.has(positionAddress)) return;
 
@@ -289,6 +339,7 @@ async function executeInstantClose(position, reason) {
     const result = await executeTool("close_position", {
       position_address: position.position,
       reason: reason,
+      exit_snapshot: buildExitSnapshot(position, "instant_close"),
       _suppress_close_notify: true,
     });
 
@@ -1412,10 +1463,14 @@ Summarize the current portfolio health, total fees earned, and performance of al
 
   // Lightweight PnL poller — updates trailing TP state between management cycles, no LLM
   let _pnlPollBusy = false;
-  const pollIntervalSec = config.management.pnlPollIntervalSec ?? 10;
+  let _lastPnlPollAt = 0;
   const pnlPollInterval = setInterval(async () => {
     if (_managementBusy || _screeningBusy || _pnlPollBusy) return;
-    if (getTrackedPositions(true).length === 0) return;
+    const trackedPositions = getTrackedPositions(true);
+    if (trackedPositions.length === 0) return;
+    const intervalMs = pnlPollIntervalMs(trackedPositions);
+    if (Date.now() - _lastPnlPollAt < intervalMs) return;
+    _lastPnlPollAt = Date.now();
     _pnlPollBusy = true;
     try {
       const result = await getMyPositions({ force: true, silent: true }).catch(() => null);
@@ -1435,6 +1490,7 @@ Summarize the current portfolio health, total fees earned, and performance of al
           executeTool("close_position", {
             position_address: p.position,
             reason,
+            exit_snapshot: buildExitSnapshot(p, "whale_guard"),
           }).catch((e) => log("cron_error", `Whale guard close failed for ${p.pair}: ${e.message}`));
           break;
         }
@@ -1462,6 +1518,7 @@ Summarize the current portfolio health, total fees earned, and performance of al
             executeTool("close_position", {
               position_address: p.position,
               reason: exit.reason,
+              exit_snapshot: buildExitSnapshot(p, "trailing_tp"),
             }).catch((e) => log("cron_error", `Fast close failed for ${p.pair}: ${e.message}`));
             break;
           }
@@ -1473,6 +1530,7 @@ Summarize the current portfolio health, total fees earned, and performance of al
           executeTool("close_position", {
             position_address: p.position,
             reason: exit.reason,
+            exit_snapshot: buildExitSnapshot(p, "exit_rule"),
           }).catch((e) => log("cron_error", `Fast close failed for ${p.pair}: ${e.message}`));
           break;
         }
@@ -1484,6 +1542,7 @@ Summarize the current portfolio health, total fees earned, and performance of al
           executeTool("close_position", {
             position_address: p.position,
             reason: closeRule.reason,
+            exit_snapshot: buildExitSnapshot(p, `deterministic_${closeRule.rule}`),
           }).catch((e) => log("cron_error", `Fast close failed for ${p.pair}: ${e.message}`));
           break;
         }
@@ -1491,7 +1550,7 @@ Summarize the current portfolio health, total fees earned, and performance of al
     } finally {
       _pnlPollBusy = false;
     }
-  }, Math.max(5, Number(pollIntervalSec || 10)) * 1000);
+  }, Math.max(5, Number(config.management.pnlPollUrgentIntervalSec ?? 5)) * 1000);
 
   _cronTasks = [mgmtTask, screenTask, healthTask, briefingTask, briefingWatchdog];
   // Store interval ref so stopCronJobs can clear it
@@ -1767,6 +1826,12 @@ function settingValue(key) {
     stopLossPct: config.management.stopLossPct,
     trailingTriggerPct: config.management.trailingTriggerPct,
     trailingDropPct: config.management.trailingDropPct,
+    pnlPollAdaptiveEnabled: config.management.pnlPollAdaptiveEnabled,
+    pnlPollNormalIntervalSec: config.management.pnlPollNormalIntervalSec,
+    pnlPollFastIntervalSec: config.management.pnlPollFastIntervalSec,
+    pnlPollUrgentIntervalSec: config.management.pnlPollUrgentIntervalSec,
+    pnlPollNewPositionMinutes: config.management.pnlPollNewPositionMinutes,
+    exitSnapshotMaxDiffPct: config.management.exitSnapshotMaxDiffPct,
     managementIntervalMin: config.schedule.managementIntervalMin,
     screeningIntervalMin: config.schedule.screeningIntervalMin,
     healthCheckIntervalMin: config.schedule.healthCheckIntervalMin,
@@ -1847,6 +1912,12 @@ function settingValue(key) {
     hardStopBypassSuspicious: config.management.hardStopBypassSuspicious,
     trailingConfirmDelaySec: config.management.trailingConfirmDelaySec,
     pnlPollIntervalSec: config.management.pnlPollIntervalSec,
+    pnlPollAdaptiveEnabled: config.management.pnlPollAdaptiveEnabled,
+    pnlPollNormalIntervalSec: config.management.pnlPollNormalIntervalSec,
+    pnlPollFastIntervalSec: config.management.pnlPollFastIntervalSec,
+    pnlPollUrgentIntervalSec: config.management.pnlPollUrgentIntervalSec,
+    pnlPollNewPositionMinutes: config.management.pnlPollNewPositionMinutes,
+    exitSnapshotMaxDiffPct: config.management.exitSnapshotMaxDiffPct,
     pnlSanityMaxDiffPct: config.management.pnlSanityMaxDiffPct,
     minSolToOpen: config.management.minSolToOpen,
     repeatDeployCooldownEnabled: config.management.repeatDeployCooldownEnabled,
@@ -2032,6 +2103,12 @@ const MENU_INTEGER_KEYS = new Set([
   "bottomSpotMaxOpenPositions",
   "xLookbackDays",
   "pnlPollIntervalSec",
+  "pnlPollAdaptiveEnabled",
+  "pnlPollNormalIntervalSec",
+  "pnlPollFastIntervalSec",
+  "pnlPollUrgentIntervalSec",
+  "pnlPollNewPositionMinutes",
+  "exitSnapshotMaxDiffPct",
   "trailingConfirmDelaySec",
   "maxSteps",
   "maxTokens",
@@ -2099,6 +2176,12 @@ const MENU_NON_NEGATIVE_KEYS = new Set([
   "rsiOverbought",
   "xLookbackDays",
   "pnlPollIntervalSec",
+  "pnlPollAdaptiveEnabled",
+  "pnlPollNormalIntervalSec",
+  "pnlPollFastIntervalSec",
+  "pnlPollUrgentIntervalSec",
+  "pnlPollNewPositionMinutes",
+  "exitSnapshotMaxDiffPct",
   "trailingConfirmDelaySec",
   "maxSteps",
   "maxTokens",
@@ -2303,6 +2386,12 @@ const SETTINGS_PAGES = [
       { key: "trailingConfirmDelaySec", label: "Trail confirm s", digits: 0 },
       { key: "pnlSanityMaxDiffPct", label: "PnL sanity diff %", digits: 1 },
       { key: "pnlPollIntervalSec", label: "PnL poll s", digits: 0 },
+      { key: "pnlPollAdaptiveEnabled", label: "Adaptive poll", type: "toggle" },
+      { key: "pnlPollNormalIntervalSec", label: "Poll normal s", digits: 0 },
+      { key: "pnlPollFastIntervalSec", label: "Poll fast s", digits: 0 },
+      { key: "pnlPollUrgentIntervalSec", label: "Poll urgent s", digits: 0 },
+      { key: "pnlPollNewPositionMinutes", label: "Poll new pos m", digits: 0 },
+      { key: "exitSnapshotMaxDiffPct", label: "Exit snap diff %", digits: 1 },
       { key: "minFeePerTvl24h", label: "Yield floor %", digits: 1 },
       { key: "minAgeBeforeYieldCheck", label: "Yield check age", digits: 0 },
       { key: "slowBleedMinAge", label: "Slow bleed age", digits: 0 },

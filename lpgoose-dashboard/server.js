@@ -80,6 +80,16 @@ function round(value, digits = 4) {
   return Math.round(n * factor) / factor;
 }
 
+function estimatePnlSol(record, pnlUsd) {
+  const existing = firstNumber(record.pnl_sol);
+  if (existing != null) return existing;
+  const amountSol = firstNumber(record.amount_sol, record.initial_value_sol);
+  const initialUsd = firstNumber(record.initial_value_usd);
+  if (pnlUsd == null || amountSol == null || initialUsd == null || amountSol <= 0 || initialUsd <= 0) return null;
+  const entrySolPrice = initialUsd / amountSol;
+  return entrySolPrice > 0 ? pnlUsd / entrySolPrice : null;
+}
+
 function uiAmount(raw, decimals = 0) {
   const n = asNumber(raw);
   if (n == null) return null;
@@ -427,8 +437,9 @@ app.get('/api/performance', (req, res) => {
       const pnlUsd = firstNumber(p.pnl_usd, p.pnl_amount, p.fees_earned_usd != null && p.final_value_usd != null && p.initial_value_usd != null
         ? p.final_value_usd + p.fees_earned_usd - p.initial_value_usd
         : null);
-      const pnlSol = firstNumber(p.pnl_sol);
-      const pnlDisplay = solMode ? firstNumber(pnlSol, p.pnl_display_value, pnlUsd) : pnlUsd;
+      const pnlSol = estimatePnlSol(p, pnlUsd);
+      const pnlDisplay = solMode ? firstNumber(pnlSol, p.pnl_display_value) : pnlUsd;
+      const pnlDisplayUnit = solMode && pnlDisplay != null ? 'SOL' : 'USD';
       const timestamp = p.recorded_at || p.closed_at || p.created_at || null;
       return {
         position: p.position || null,
@@ -438,9 +449,10 @@ app.get('/api/performance', (req, res) => {
         timestamp,
         pnl_amount: pnlDisplay ?? 0,
         pnl_display_value: pnlDisplay ?? 0,
-        pnl_display_unit: displayUnit,
+        pnl_display_unit: pnlDisplayUnit,
         pnl_usd: pnlUsd ?? 0,
         pnl_sol: pnlSol ?? null,
+        pnl_sol_estimated: p.pnl_sol == null && pnlSol != null,
         pnl_pct: firstNumber(p.pnl_pct, p.pnl_percent, 0),
         is_win: (pnlDisplay ?? 0) > 0,
         hold_duration: firstNumber(p.minutes_held, p.hold_duration, p.minutes_in_range, 0),

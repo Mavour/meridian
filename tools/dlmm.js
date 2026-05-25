@@ -1291,7 +1291,7 @@ async function finalizeAlreadyClosedPosition({
   };
 }
 
-export async function closePosition({ position_address, reason }) {
+export async function closePosition({ position_address, reason, exit_snapshot = null }) {
   position_address = normalizeMint(position_address);
   if (process.env.DRY_RUN === "true") {
     return { dry_run: true, would_close: position_address, message: "DRY RUN — no transaction sent" };
@@ -1517,6 +1517,7 @@ export async function closePosition({ position_address, reason }) {
       let feesSol = null;
       let pnlSol = null;
       let pnlSource = "unset";
+      let pnlReconcileWarning = null;
 
       try {
         const closedUrl = `https://dlmm.datapi.meteora.ag/positions/${poolAddress}/pnl?user=${wallet.publicKey.toString()}&status=closed&pageSize=50&page=1`;
@@ -1594,6 +1595,14 @@ export async function closePosition({ position_address, reason }) {
 
       const closeBaseMint = pool.lbPair.tokenXMint.toString();
       const postCloseErrors = [];
+      if (exit_snapshot?.pnl_pct != null && Number.isFinite(Number(exit_snapshot.pnl_pct))) {
+        const diff = Math.abs(Number(exit_snapshot.pnl_pct) - Number(pnlPct));
+        const maxDiff = Number(config.management.exitSnapshotMaxDiffPct ?? 1.5);
+        if (Number.isFinite(diff) && Number.isFinite(maxDiff) && diff > maxDiff) {
+          pnlReconcileWarning = `exit snapshot pnl ${Number(exit_snapshot.pnl_pct).toFixed(2)}% differs from closed pnl ${Number(pnlPct).toFixed(2)}% by ${diff.toFixed(2)}%`;
+          log("close_warn", `PnL reconcile warning for ${position_address.slice(0, 8)}: ${pnlReconcileWarning}`);
+        }
+      }
       try {
         recordClose(position_address, reason || "agent decision", pnlPct);
       } catch (error) {
@@ -1630,6 +1639,8 @@ export async function closePosition({ position_address, reason }) {
           pnl_sol: pnlSol,
           pnl_pct: pnlPct,
           pnl_source: pnlSource,
+          pnl_reconcile_warning: pnlReconcileWarning,
+          exit_snapshot,
           minutes_in_range: minutesHeld - minutesOOR,
           minutes_held: minutesHeld,
           close_reason: reason || "agent decision",
@@ -1661,6 +1672,8 @@ export async function closePosition({ position_address, reason }) {
             fees_usd: feesUsd,
             fees_sol: feesSol,
             pnl_source: pnlSource,
+            pnl_reconcile_warning: pnlReconcileWarning,
+            exit_snapshot,
             minutes_held: minutesHeld,
           },
         });
@@ -1684,6 +1697,8 @@ export async function closePosition({ position_address, reason }) {
         pnl_display_value: config.management.solMode ? pnlSol : pnlTrueUsd,
         pnl_display_unit: config.management.solMode ? "SOL" : "USD",
         pnl_source: pnlSource,
+        pnl_reconcile_warning: pnlReconcileWarning,
+        exit_snapshot,
         fees_usd: feesUsd,
         fees_sol: feesSol,
         final_value_usd: finalValueUsd,
