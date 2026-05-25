@@ -6,6 +6,14 @@ import { HoldScatter } from '../components/charts/HoldScatter';
 
 const sectionLabel = { fontSize: 10, color: '#66758d', textTransform: 'uppercase', letterSpacing: 1, margin: '16px 0 8px' };
 
+function formatPnl(value, unit = 'USD') {
+  const n = Number(value || 0);
+  const sign = n >= 0 ? '+' : '-';
+  return unit === 'SOL'
+    ? `${sign}${Math.abs(n).toFixed(4)} SOL`
+    : `${sign}$${Math.abs(n).toFixed(2)}`;
+}
+
 function tradePnl(trade) {
   const n = Number(trade.pnl_amount ?? trade.pnl_usd ?? 0);
   return Number.isFinite(n) ? n : 0;
@@ -60,6 +68,7 @@ export default function Performance() {
   const trades = useMemo(() => Array.isArray(perf?.trades) ? perf.trades : [], [perf]);
   const cumData = useMemo(() => buildCumulativeData(trades), [trades]);
   const wlbData = useMemo(() => buildWinLossData(trades), [trades]);
+  const pnlUnit = perf?.display_unit || 'USD';
 
   return (
     <main className="page-shell">
@@ -75,22 +84,22 @@ export default function Performance() {
         <div className="stat-card">
           <div className="card-label">Avg Win / Loss</div>
           <div className="stat-value">
-            <span className="positive">+${(perf?.avg_win || 0).toFixed(2)}</span>
+            <span className="positive">{formatPnl(perf?.avg_win || 0, pnlUnit)}</span>
             <span style={{ fontSize: 14, color: '#66758d', margin: '0 4px' }}>/</span>
-            <span className="negative">-${Math.abs(perf?.avg_loss || 0).toFixed(2)}</span>
+            <span className="negative">{formatPnl(perf?.avg_loss || 0, pnlUnit)}</span>
           </div>
         </div>
         <div className="stat-card">
           <div className="card-label">Total PnL</div>
           <div className={`stat-value ${(perf?.total_pnl || 0) >= 0 ? 'positive' : 'negative'}`}>
-            {(perf?.total_pnl || 0) >= 0 ? '+' : ''}${(perf?.total_pnl || 0).toFixed(2)}
+            {formatPnl(perf?.total_pnl || 0, pnlUnit)}
           </div>
         </div>
       </div>
 
       <div style={sectionLabel}>Cumulative PnL</div>
       <div className="panel" style={{ padding: 16 }}>
-        <CumPnlChart data={cumData} loading={loading} />
+        <CumPnlChart data={cumData} loading={loading} unit={pnlUnit} />
       </div>
 
       <div className="chart-grid" style={{ gap: 8, marginTop: 16 }}>

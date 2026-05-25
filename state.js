@@ -329,6 +329,7 @@ export function recordClose(position_address, reason, pnl_pct = null) {
   if (!pos) return;
   pos.closed = true;
   pos.closed_at = new Date().toISOString();
+  if (!Array.isArray(pos.notes)) pos.notes = [];
   pos.notes.push(`Closed at ${pos.closed_at}: ${reason}`);
   pushEvent(state, { action: "close", position: position_address, pool_name: pos.pool_name || pos.pool, reason });
 

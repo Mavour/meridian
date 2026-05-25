@@ -95,8 +95,12 @@ function readState() {
   return readJson(path.join(MERIDIAN_PATH, 'state.json')) || {};
 }
 
+function readUserConfig() {
+  return readJson(path.join(MERIDIAN_PATH, 'user-config.json')) || {};
+}
+
 function getRpcUrl() {
-  const cfg = readJson(path.join(MERIDIAN_PATH, 'user-config.json')) || {};
+  const cfg = readUserConfig();
   return process.env.RPC_URL || cfg.rpcUrl || null;
 }
 
@@ -414,12 +418,17 @@ app.get('/api/positions', async (req, res) => {
 
 app.get('/api/performance', (req, res) => {
   const data = readJson(path.join(MERIDIAN_PATH, 'lessons.json')) || {};
+  const cfg = readUserConfig();
+  const solMode = cfg.solMode === true;
+  const displayUnit = solMode ? 'SOL' : 'USD';
   const perf = data.performance || [];
   const trades = perf
     .map((p, index) => {
-      const pnlAmount = firstNumber(p.pnl_usd, p.pnl_amount, p.fees_earned_usd != null && p.final_value_usd != null && p.initial_value_usd != null
+      const pnlUsd = firstNumber(p.pnl_usd, p.pnl_amount, p.fees_earned_usd != null && p.final_value_usd != null && p.initial_value_usd != null
         ? p.final_value_usd + p.fees_earned_usd - p.initial_value_usd
         : null);
+      const pnlSol = firstNumber(p.pnl_sol);
+      const pnlDisplay = solMode ? firstNumber(pnlSol, p.pnl_display_value, pnlUsd) : pnlUsd;
       const timestamp = p.recorded_at || p.closed_at || p.created_at || null;
       return {
         position: p.position || null,
@@ -427,13 +436,17 @@ app.get('/api/performance', (req, res) => {
         pool_name: p.pool_name || p.pool || `Trade ${index + 1}`,
         trade_index: index + 1,
         timestamp,
-        pnl_amount: pnlAmount ?? 0,
-        pnl_usd: pnlAmount ?? 0,
+        pnl_amount: pnlDisplay ?? 0,
+        pnl_display_value: pnlDisplay ?? 0,
+        pnl_display_unit: displayUnit,
+        pnl_usd: pnlUsd ?? 0,
+        pnl_sol: pnlSol ?? null,
         pnl_pct: firstNumber(p.pnl_pct, p.pnl_percent, 0),
-        is_win: (pnlAmount ?? 0) > 0,
+        is_win: (pnlDisplay ?? 0) > 0,
         hold_duration: firstNumber(p.minutes_held, p.hold_duration, p.minutes_in_range, 0),
         minutes_held: firstNumber(p.minutes_held, p.hold_duration, p.minutes_in_range, 0),
         fees_earned_usd: firstNumber(p.fees_earned_usd, 0),
+        fees_earned_sol: firstNumber(p.fees_earned_sol, 0),
       };
     })
     .sort((a, b) => {
@@ -442,8 +455,8 @@ app.get('/api/performance', (req, res) => {
       return at - bt;
     })
     .map((trade, index) => ({ ...trade, trade_index: index + 1 }));
-  const wins = perf.filter(p => (p.pnl_usd||0) > 0);
-  const losses = perf.filter(p => (p.pnl_usd||0) < 0);
+  const wins = trades.filter(p => (p.pnl_display_value||0) > 0);
+  const losses = trades.filter(p => (p.pnl_display_value||0) < 0);
   const today = new Date(); today.setHours(0,0,0,0);
   const todayPerf = perf.filter(p => new Date(p.recorded_at) >= today);
   const todayFees = todayPerf.reduce((s,p) => s + (p.fees_earned_usd||0), 0);
@@ -452,14 +465,18 @@ app.get('/api/performance', (req, res) => {
     total: perf.length,
     wins: wins.length,
     losses: losses.length,
-    win_rate: perf.length ? Math.round(wins.length/perf.length*100*10)/10 : 0,
-    avg_win: wins.length ? wins.reduce((s,p)=>s+(p.pnl_usd||0),0)/wins.length : 0,
-    avg_loss: losses.length ? losses.reduce((s,p)=>s+(p.pnl_usd||0),0)/losses.length : 0,
-    total_pnl: perf.reduce((s,p)=>s+(p.pnl_usd||0),0),
+    win_rate: trades.length ? Math.round(wins.length/trades.length*100*10)/10 : 0,
+    avg_win: wins.length ? wins.reduce((s,p)=>s+(p.pnl_display_value||0),0)/wins.length : 0,
+    avg_loss: losses.length ? losses.reduce((s,p)=>s+(p.pnl_display_value||0),0)/losses.length : 0,
+    total_pnl: trades.reduce((s,p)=>s+(p.pnl_display_value||0),0),
+    total_pnl_usd: trades.reduce((s,p)=>s+(p.pnl_usd||0),0),
+    total_pnl_sol: trades.reduce((s,p)=>s+(p.pnl_sol||0),0),
+    display_unit: displayUnit,
+    sol_mode: solMode,
     today_fees_usd: todayFees,
     today_fees_sol: todayFeesSol,
     trades,
-    recent: perf.slice(-20).reverse(),
+    recent: trades.slice(-20).reverse(),
   });
 });
 

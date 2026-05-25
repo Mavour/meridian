@@ -1511,9 +1511,12 @@ export async function closePosition({ position_address, reason }) {
       let pnlPct = 0;
       let finalValueUsd = 0;
       let initialUsd = 0;
+      let finalValueSol = null;
+      let initialSol = null;
       let feesUsd = tracked.total_fees_claimed_usd || 0;
       let feesSol = null;
       let pnlSol = null;
+      let pnlSource = "unset";
 
       try {
         const closedUrl = `https://dlmm.datapi.meteora.ag/positions/${poolAddress}/pnl?user=${wallet.publicKey.toString()}&status=closed&pageSize=50&page=1`;
@@ -1524,25 +1527,31 @@ export async function closePosition({ position_address, reason }) {
             const posEntry = (data.positions || []).find(p => p.positionAddress === position_address);
             if (posEntry) {
               const nextPnlUsd = safeNum(posEntry.pnlUsd);
-              const nextPnlValue = config.management.solMode ? getClosedPnlValue(posEntry, true) : nextPnlUsd;
+              const nextPnlSol = getClosedPnlValue(posEntry, true);
+              const nextPnlValue = config.management.solMode ? nextPnlSol : nextPnlUsd;
               const nextPnlPct = getClosedPnlPct(posEntry, config.management.solMode);
               const nextFinalValueUsd = parseFloat(posEntry.allTimeWithdrawals?.total?.usd || 0);
               const nextInitialUsd = parseFloat(posEntry.allTimeDeposits?.total?.usd || 0);
+              const nextFinalValueSol = maybeNum(posEntry.allTimeWithdrawals?.total?.sol);
+              const nextInitialSol = maybeNum(posEntry.allTimeDeposits?.total?.sol);
               const nextFeesUsd = parseFloat(posEntry.allTimeFees?.total?.usd || 0) || feesUsd;
 
               if (shouldRejectClosedPnl(nextPnlPct, reason || tracked?.close_reason)) {
                 log("close_warn", `Rejected unsettled closed PnL for ${position_address.slice(0, 8)} on attempt ${attempt + 1}/6: ${nextPnlPct.toFixed(2)}%`);
               } else {
                 pnlTrueUsd    = nextPnlUsd;
-                pnlUsd        = nextPnlValue;
+                pnlUsd        = nextPnlUsd;
                 pnlPct        = nextPnlPct;
                 finalValueUsd = nextFinalValueUsd;
                 initialUsd    = nextInitialUsd;
+                finalValueSol = nextFinalValueSol;
+                initialSol    = nextInitialSol;
                 feesUsd       = nextFeesUsd;
                 // Read SOL values directly from Meteora API — same fields used by management cycle
                 feesSol = parseFloat(posEntry.allTimeFees?.total?.sol || 0) || null;
-                pnlSol  = parseFloat(posEntry.pnlSol || 0) || null;
-                log("close", `Closed PnL from API: pnl=${pnlUsd.toFixed(2)} ${config.management.solMode ? "SOL" : "USD"} (${pnlPct.toFixed(2)}%), withdrawn=${finalValueUsd.toFixed(2)} USD, deposited=${initialUsd.toFixed(2)} USD`);
+                pnlSol  = nextPnlSol || null;
+                pnlSource = "meteora_closed_api";
+                log("close", `Closed PnL from API: pnl=${nextPnlValue.toFixed(config.management.solMode ? 4 : 2)} ${config.management.solMode ? "SOL" : "USD"} (${pnlPct.toFixed(2)}%), withdrawn=${finalValueUsd.toFixed(2)} USD, deposited=${initialUsd.toFixed(2)} USD`);
                 break;
               }
             } else {
@@ -1559,12 +1568,14 @@ export async function closePosition({ position_address, reason }) {
         const cachedPos = _positionsCache?.positions?.find(p => p.position === position_address);
         if (cachedPos) {
           pnlTrueUsd    = cachedPos.pnl_true_usd ?? (config.management.solMode ? 0 : cachedPos.pnl_usd) ?? 0;
-          pnlUsd        = config.management.solMode ? (cachedPos.pnl_usd ?? 0) : pnlTrueUsd;
+          pnlUsd        = pnlTrueUsd;
           pnlPct        = cachedPos.pnl_pct   ?? 0;
           feesUsd       = (cachedPos.collected_fees_true_usd || 0) + (cachedPos.unclaimed_fees_true_usd || 0);
           if (config.management.solMode) {
             pnlSol = cachedPos.pnl_usd ?? null;
             feesSol = (cachedPos.collected_fees_usd || 0) + (cachedPos.unclaimed_fees_usd || 0);
+            finalValueSol = cachedPos.total_value_usd ?? null;
+            initialSol = tracked.amount_sol ?? null;
           }
           initialUsd    = tracked.initial_value_usd || 0;
           if (initialUsd > 0) {
@@ -1576,58 +1587,87 @@ export async function closePosition({ position_address, reason }) {
             initialUsd = Math.max(0, finalValueUsd + feesUsd - pnlTrueUsd);
           }
           // SOL values not available in cache fallback — pnlSol/feesSol stay null
+          pnlSource = "pre_close_cache";
           log("close_warn", `Using cached pnl fallback because closed API has not settled yet`);
         }
       }
 
-      recordClose(position_address, reason || "agent decision", pnlPct);
       const closeBaseMint = pool.lbPair.tokenXMint.toString();
-      const signalSnapshot = resolvePerformanceSignalSnapshot({
-        poolAddress,
-        baseMint: closeBaseMint,
-        tracked,
-      });
+      const postCloseErrors = [];
+      try {
+        recordClose(position_address, reason || "agent decision", pnlPct);
+      } catch (error) {
+        postCloseErrors.push(`recordClose: ${error.message}`);
+        log("close_warn", `recordClose failed after successful close: ${error.message}`);
+      }
+      try {
+        const signalSnapshot = resolvePerformanceSignalSnapshot({
+          poolAddress,
+          baseMint: closeBaseMint,
+          tracked,
+        });
 
-      await recordPerformance({
-        position: position_address,
-        pool: poolAddress,
-        pool_name: tracked.pool_name || poolMeta.name || poolAddress.slice(0, 8),
-        base_mint: closeBaseMint,
-        strategy: tracked.strategy,
-        bin_range: tracked.bin_range,
-        bin_step: tracked.bin_step || null,
-        volatility: tracked.volatility ?? null,
-        fee_tvl_ratio: tracked.fee_tvl_ratio || null,
-        organic_score: tracked.organic_score || null,
-        amount_sol: tracked.amount_sol,
-        fees_earned_usd: feesUsd,
-        final_value_usd: finalValueUsd,
-        initial_value_usd: initialUsd,
-        minutes_in_range: minutesHeld - minutesOOR,
-        minutes_held: minutesHeld,
-        close_reason: reason || "agent decision",
-        signal_snapshot: signalSnapshot,
-      });
-
-      appendDecision({
-        type: "close",
-        actor: "MANAGER",
-        pool: poolAddress,
-        pool_name: tracked.pool_name || poolMeta.name || poolAddress.slice(0, 8),
-        position: position_address,
-        summary: `Closed at ${pnlPct.toFixed(2)}%`,
-        reason: reason || "agent decision",
-        risks: [
-          minutesOOR > 0 ? `out of range ${minutesOOR}m` : null,
-          tracked.volatility != null ? `volatility ${tracked.volatility}` : null,
-        ].filter(Boolean),
-        metrics: {
-          pnl_usd: pnlUsd,
+        await recordPerformance({
+          position: position_address,
+          pool: poolAddress,
+          pool_name: tracked.pool_name || poolMeta.name || poolAddress.slice(0, 8),
+          base_mint: closeBaseMint,
+          strategy: tracked.strategy,
+          bin_range: tracked.bin_range,
+          bin_step: tracked.bin_step || null,
+          volatility: tracked.volatility ?? null,
+          fee_tvl_ratio: tracked.fee_tvl_ratio || null,
+          organic_score: tracked.organic_score || null,
+          amount_sol: tracked.amount_sol,
+          fees_earned_usd: feesUsd,
+          fees_earned_sol: feesSol,
+          final_value_usd: finalValueUsd,
+          initial_value_usd: initialUsd,
+          final_value_sol: finalValueSol,
+          initial_value_sol: initialSol,
+          pnl_usd: pnlTrueUsd,
+          pnl_true_usd: pnlTrueUsd,
+          pnl_sol: pnlSol,
           pnl_pct: pnlPct,
-          fees_usd: feesUsd,
+          pnl_source: pnlSource,
+          minutes_in_range: minutesHeld - minutesOOR,
           minutes_held: minutesHeld,
-        },
-      });
+          close_reason: reason || "agent decision",
+          signal_snapshot: signalSnapshot,
+        });
+      } catch (error) {
+        postCloseErrors.push(`recordPerformance: ${error.message}`);
+        log("close_warn", `recordPerformance failed after successful close: ${error.message}`);
+      }
+      try {
+        appendDecision({
+          type: "close",
+          actor: "MANAGER",
+          pool: poolAddress,
+          pool_name: tracked.pool_name || poolMeta.name || poolAddress.slice(0, 8),
+          position: position_address,
+          summary: `Closed at ${pnlPct.toFixed(2)}%`,
+          reason: reason || "agent decision",
+          risks: [
+            minutesOOR > 0 ? `out of range ${minutesOOR}m` : null,
+            tracked.volatility != null ? `volatility ${tracked.volatility}` : null,
+          ].filter(Boolean),
+          metrics: {
+            pnl_usd: pnlTrueUsd,
+            pnl_sol: pnlSol,
+            pnl_display_value: config.management.solMode ? pnlSol : pnlTrueUsd,
+            pnl_display_unit: config.management.solMode ? "SOL" : "USD",
+            pnl_pct: pnlPct,
+            fees_usd: feesUsd,
+            fees_sol: feesSol,
+            pnl_source: pnlSource,
+            minutes_held: minutesHeld,
+          },
+        });
+      } catch (error) {
+        postCloseErrors.push(`appendDecision: ${error.message}`);
+        log("close_warn", `appendDecision failed after successful close: ${error.message}`);
+      }
 
       return {
         success: true,
@@ -1637,13 +1677,22 @@ export async function closePosition({ position_address, reason }) {
         claim_txs: claimTxHashes,
         close_txs: closeTxHashes,
         txs: txHashes,
-        pnl_usd: pnlUsd,
+        pnl_usd: pnlTrueUsd,
+        pnl_true_usd: pnlTrueUsd,
         pnl_pct: pnlPct,
         pnl_sol: pnlSol,
+        pnl_display_value: config.management.solMode ? pnlSol : pnlTrueUsd,
+        pnl_display_unit: config.management.solMode ? "SOL" : "USD",
+        pnl_source: pnlSource,
         fees_usd: feesUsd,
         fees_sol: feesSol,
+        final_value_usd: finalValueUsd,
+        initial_value_usd: initialUsd,
+        final_value_sol: finalValueSol,
+        initial_value_sol: initialSol,
         base_mint: closeBaseMint,
         hold_time_minutes: minutesHeld,
+        post_close_errors: postCloseErrors,
       };
     }
 

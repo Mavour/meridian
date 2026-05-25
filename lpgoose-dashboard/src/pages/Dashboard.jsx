@@ -14,6 +14,13 @@ function formatUsd(value) {
   return `${n >= 0 ? '+' : '-'}$${Math.abs(n).toFixed(2)}`;
 }
 
+function formatPnl(value, unit = 'USD') {
+  const n = Number(value || 0);
+  return unit === 'SOL'
+    ? `${n >= 0 ? '+' : '-'}${Math.abs(n).toFixed(4)} SOL`
+    : formatUsd(n);
+}
+
 function computeScreening(logs) {
   const recent = logs.slice(-120);
   const counts = {
@@ -86,6 +93,7 @@ export default function Dashboard() {
   const screeningBars = useMemo(() => computeScreening(logEvents), [logEvents]);
   const peakPnlByPosition = useMemo(() => computePeakPnlByPosition(logEvents), [logEvents]);
   const todayFeesUsd = Number(perf?.today_fees_usd || 0);
+  const pnlUnit = perf?.display_unit || 'USD';
   const maxPositions = config.maxPositions ?? '-';
   const openLimit = `${positions.length} / ${maxPositions}`;
   const healthTone = positions.length >= Number(maxPositions || 999) ? 'warn' : 'good';
@@ -101,12 +109,12 @@ export default function Dashboard() {
             </div>
             <p className="panel-copy">
               {perf?.total || 0} closed positions · {perf?.win_rate || 0}% win rate · avg win/loss
-              {' '}+${Number(perf?.avg_win || 0).toFixed(2)} / -${Math.abs(Number(perf?.avg_loss || 0)).toFixed(2)}
+              {' '}{formatPnl(perf?.avg_win || 0, pnlUnit)} / {formatPnl(perf?.avg_loss || 0, pnlUnit)}
             </p>
           </div>
           <div className="capital-pnl">
             <span>All-time PnL</span>
-            <strong className={perf?.total_pnl >= 0 ? 'positive' : 'negative'}>{formatUsd(perf?.total_pnl)}</strong>
+            <strong className={perf?.total_pnl >= 0 ? 'positive' : 'negative'}>{formatPnl(perf?.total_pnl, pnlUnit)}</strong>
           </div>
         </div>
 

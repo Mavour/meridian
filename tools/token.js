@@ -85,10 +85,20 @@ export async function getTokenInfo({ query }) {
     // Enrich global_fees_sol with GMGN total_fee — matches GMGN chart value
     // OKX/Jupiter fees only cover one pool; GMGN covers all pools for the token
     try {
-      const { fetchGmgnTokenFees } = await import("./gmgn.js");
-      const gmgnFees = await fetchGmgnTokenFees(results[0].mint);
-      if (gmgnFees != null && gmgnFees > 0) {
-        results[0].global_fees_sol = gmgnFees;
+      const { fetchGmgnTokenAudit } = await import("./gmgn.js");
+      const gmgnAudit = await fetchGmgnTokenAudit(results[0].mint);
+      if (gmgnAudit?.global_fees_sol != null && gmgnAudit.global_fees_sol > 0) {
+        results[0].global_fees_sol = gmgnAudit.global_fees_sol;
+      }
+      if (gmgnAudit) {
+        results[0].gmgn_audit = gmgnAudit;
+        results[0].audit = {
+          ...(results[0].audit || {}),
+          top_holders_pct: gmgnAudit.top_holders_pct != null ? gmgnAudit.top_holders_pct.toFixed(2) : results[0].audit?.top_holders_pct,
+          bot_holders_pct: gmgnAudit.bot_holders_pct != null ? gmgnAudit.bot_holders_pct.toFixed(2) : results[0].audit?.bot_holders_pct,
+          source: "gmgn+jupiter_authority",
+        };
+        if (gmgnAudit.bundler_pct != null) results[0].bundle_pct = gmgnAudit.bundler_pct.toFixed(2);
       }
     } catch (_) {}
   }

@@ -178,6 +178,8 @@ All candidates are pre-loaded. Your job: evaluate candidates using REAL DATA fro
 ⚠️ CRITICAL — NO HALLUCINATION: You MUST call the actual tool to perform any action. NEVER claim a deploy happened unless you actually called deploy_position and got a real tool result back.
 
 HARD RULE (enforced at code level):
+- top10 > ${config.screening.maxTop10Pct}% => HARD REJECT. Do not analyze further and do not call deploy_position.
+- GMGN token-level holder/fee metrics are the source of truth when available.
 - fees_paid_sol < ${config.screening.minTokenFeesSol} SOL → IMMEDIATE REJECT.
 - bots > ${config.screening.maxBotHoldersPct}% → hard-filtered before you see the candidate list.
 - maxVolatility: ${config.screening.maxVolatility} → SKIP if pool volatility exceeds this value.
@@ -189,7 +191,6 @@ For Meteora-sourced candidates, price_5m_change/1h/6h/24h may be enriched from G
 If fees_paid_sol is missing or unavailable, DO NOT deploy — re-fetch the audit data first.
 
 RISK SIGNALS (guidelines — use judgment):
-- top10 > ${config.screening.maxTop10Pct}% → concentrated, risky
 - rugpull flag from OKX → major negative score penalty and default to SKIP; only override if smart wallets are present
 - wash trading flag from OKX → treat as disqualifying
 - PVP symbol conflict → major negative
@@ -219,7 +220,7 @@ DEPLOY DECISION:
 
 DEPLOY RULES:
 - COMPOUNDING: Use the deploy amount from the goal EXACTLY. Do NOT default to a smaller number.
-- strategy and bins are normalized in executor.js from live pool volatility, fee/active-TVL, and volume. Pass the candidate metrics; do not invent custom bins.
+- strategy is enforced by executor.js: /menu strategy is used when dynamicStrategyEnabled=false; otherwise code may select spot vs bid_ask from live metrics. Pass the candidate metrics; do not invent custom bins.
 - Single-side SOL deploys must keep amount_x=0 and bins_above=0. The executor recalculates bins_below with the configured hard formula.
 - Bin steps must be [${config.screening.minBinStep}-${config.screening.maxBinStep}].
 

@@ -618,6 +618,28 @@ export async function fetchGmgnTokenFees(mint) {
   }
 }
 
+export async function fetchGmgnTokenAudit(mint) {
+  try {
+    const payload = await gmgnFetch("/v1/token/info", { params: { chain: "sol", address: mint } });
+    const info = payload?.data?.data || payload?.data || payload;
+    const stat = info?.stat || {};
+    return {
+      global_fees_sol: num(info?.total_fee) || null,
+      trade_fee_sol: num(info?.trade_fee) || null,
+      top_holders_pct: ratioPct(stat.top_10_holder_rate),
+      bot_holders_pct: ratioPct(stat.bot_degen_rate),
+      bundler_pct: ratioPct(stat.top_bundler_trader_percentage),
+      insider_pct: ratioPct(stat.top_rat_trader_percentage),
+      fresh_wallet_pct: ratioPct(stat.fresh_wallet_rate),
+      dev_team_hold_pct: ratioPct(stat.dev_team_hold_rate),
+      source: "gmgn",
+    };
+  } catch (e) {
+    log("gmgn", `fetchGmgnTokenAudit failed for ${mint?.slice(0, 8)}: ${e.message}`);
+    return null;
+  }
+}
+
 export async function fetchGmgnPriceAction(mint) {
   try {
     const payload = await gmgnFetch("/v1/token/info", { params: { chain: "sol", address: mint } });

@@ -88,6 +88,9 @@ export function computeBinsAbove(strategy, { singleSideSol = true } = {}) {
 }
 
 export function selectStrategy(pool, cfg = config) {
+  if (cfg.strategy?.dynamicStrategyEnabled === false) {
+    return String(cfg.strategy?.strategy || "bid_ask").toLowerCase();
+  }
   const vol = numberOrNull(pool?.volatility) ?? 0;
   const feeTvl = numberOrNull(pool?.fee_active_tvl_ratio ?? pool?.fee_tvl_ratio) ?? 0;
   const volume = numberOrNull(pool?.volume ?? pool?.volume_window ?? pool?.volume_24h) ?? 0;

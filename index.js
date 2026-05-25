@@ -162,6 +162,17 @@ function sanitizeUntrustedPromptText(text, maxLen = 500) {
   return cleaned ? JSON.stringify(cleaned) : null;
 }
 
+function percentNumber(value) {
+  if (value == null || value === "") return null;
+  const n = Number(String(value).replace("%", ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function gmgnRateToPct(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n * 100 : null;
+}
+
 function shouldUsePnlRecheck() {
   return true;
 }
@@ -191,10 +202,10 @@ function schedulePeakConfirmation(positionAddress) {
  */
 function resolveStrategyForPool(pool) {
   const activeStrategy = getActiveStrategy();
-  const globalStrategy = activeStrategy?.lp_strategy || config.strategy.strategy;
+  const globalStrategy = config.strategy.strategy || activeStrategy?.lp_strategy || "bid_ask";
 
   if (config.strategy.dynamicStrategyEnabled === false) {
-    return { strategy: globalStrategy, reason: "dynamic strategy disabled" };
+    return { strategy: globalStrategy, reason: "dynamic strategy disabled; using /menu strategy" };
   }
 
   const price1h  = pool.price_1h_change ?? null;
@@ -227,6 +238,15 @@ function resolveStrategyForPool(pool) {
     strategy: "bid_ask",
     reason: "market heuristic: sideways/consolidation (1h=" + price1h + "%, 5m=" + price5m + "%, vol=" + volatility + ")",
   };
+}
+
+function buildStrategyGuideBlock(activeStrategy) {
+  if (activeStrategy) {
+    const binsAbove = activeStrategy.range?.bins_above ?? 0;
+    const deposit = activeStrategy.entry?.single_side === "sol" ? "SOL only (amount_y, amount_x=0)" : "dual-sided";
+    return `ACTIVE STRATEGY GUIDE: ${activeStrategy.name} - LP guide: ${activeStrategy.lp_strategy} | /menu strategy source-of-truth: ${config.strategy.strategy} | dynamicStrategyEnabled=${config.strategy.dynamicStrategyEnabled} | bins_above: ${binsAbove} (FIXED - never change) | deposit: ${deposit} | best for: ${activeStrategy.best_for}`;
+  }
+  return `No active strategy guide - use /menu strategy=${config.strategy.strategy}, dynamicStrategyEnabled=${config.strategy.dynamicStrategyEnabled}, bins_above=0, SOL only.`;
 }
 function scheduleTrailingDropConfirmation(positionAddress) {
   if (!positionAddress || _trailingDropConfirmTimers.has(positionAddress)) return;
@@ -630,7 +650,7 @@ function mergeBottomSpotPoolData(pool, tokenInfo) {
   return {
     ...pool,
     token_info: tokenInfo || null,
-    fees_paid_sol: tokenInfo?.global_fees_sol ?? pool.gmgn_total_fee_sol ?? pool.global_fees_sol ?? null,
+    fees_paid_sol: pool.gmgn_total_fee_sol ?? tokenInfo?.global_fees_sol ?? pool.global_fees_sol ?? null,
   };
 }
 
@@ -943,10 +963,6 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
 
     // Load active strategy
     const activeStrategy = getActiveStrategy();
-    const strategyBlock = activeStrategy
-      ? `ACTIVE STRATEGY: ${activeStrategy.name} — LP: ${activeStrategy.lp_strategy} | bins_above: ${activeStrategy.range?.bins_above ?? 0} (FIXED — never change) | deposit: ${activeStrategy.entry?.single_side === "sol" ? "SOL only (amount_y, amount_x=0)" : "dual-sided"} | best for: ${activeStrategy.best_for}`
-      : `No active strategy — use strategy=${config.strategy.strategy}, bins_above=0, SOL only.`;
-
     // Fetch top candidates, then recon each sequentially with a small delay to avoid 429s
     const topCandidates = await getTopCandidates({ limit: 10 }).catch((e) => ({ _error: e.message }));
     if (topCandidates?._error) {
@@ -1005,8 +1021,39 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
         return false;
       }
 
-      // GMGN upstream already filters platforms/bundlers/bots; skip Jupiter-only filters
-      if (pool.gmgn) return true;
+      const top10Pct = percentNumber(
+        pool.gmgn_token_info_top10_pct ??
+        pool.gmgn_top10_holder_pct ??
+        ti?.audit?.top_holders_pct
+      );
+      const gmgnTop10MaxPct = gmgnRateToPct(config.gmgn?.maxTop10HolderRate);
+      const maxTop10Pct = [
+        percentNumber(config.screening.maxTop10Pct),
+        gmgnTop10MaxPct,
+      ].filter((v) => v != null && v > 0).reduce((min, v) => Math.min(min, v), Infinity);
+      if (Number.isFinite(maxTop10Pct)) {
+        if (top10Pct == null) {
+          log("screening", `Top-holder filter: dropped ${pool.name} - top10 unavailable`);
+          filteredOut.push({ name: pool.name, reason: "top10 holders unavailable" });
+          return false;
+        }
+        if (top10Pct > maxTop10Pct) {
+          log("screening", `Top-holder filter: dropped ${pool.name} - top10 ${top10Pct}% > ${maxTop10Pct}%`);
+          filteredOut.push({ name: pool.name, reason: `top10 holders ${top10Pct}% > max ${maxTop10Pct}%` });
+          return false;
+        }
+      }
+
+      if (pool.gmgn) {
+        const gmgnBotPct = percentNumber(pool.gmgn_bot_degen_pct);
+        const maxBotHoldersPct = percentNumber(config.screening.maxBotHoldersPct);
+        if (gmgnBotPct != null && maxBotHoldersPct != null && gmgnBotPct > maxBotHoldersPct) {
+          log("screening", `GMGN bot-holder filter: dropped ${pool.name} - bots ${gmgnBotPct}% > ${maxBotHoldersPct}%`);
+          filteredOut.push({ name: pool.name, reason: `GMGN bot holders ${gmgnBotPct}% > ${maxBotHoldersPct}%` });
+          return false;
+        }
+        return true;
+      }
 
       // X Sentiment hard filter - reject if negative
       if (config.xSentiment?.enabled && xs?.score != null && xs.score < config.xSentiment.minScore) {
@@ -1085,9 +1132,9 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
       : "";
 
     const candidateBlocks = passing.map(({ pool, sw, n, ti, mem, xs }, i) => {
-      const botPct = ti?.audit?.bot_holders_pct ?? "?";
-      const top10Pct = ti?.audit?.top_holders_pct ?? "?";
-      const feesSol = ti?.global_fees_sol ?? "?";
+      const botPct = pool.gmgn_bot_degen_pct ?? ti?.audit?.bot_holders_pct ?? "?";
+      const top10Pct = pool.gmgn_token_info_top10_pct ?? pool.gmgn_top10_holder_pct ?? ti?.audit?.top_holders_pct ?? "?";
+      const feesSol = pool.gmgn_total_fee_sol ?? ti?.global_fees_sol ?? "?";
       const launchpad = ti?.launchpad ?? null;
       const priceChange = ti?.stats_1h?.price_change;
       const netBuyers = ti?.stats_1h?.net_buyers;
@@ -1201,7 +1248,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
 
 const { content } = await agentLoop(`
 SCREENING CYCLE
-${strategyBlock}
+${buildStrategyGuideBlock(activeStrategy)}
 Positions: ${prePositions.total_positions}/${config.risk.maxPositions} | SOL: ${currentBalance.sol.toFixed(3)} | Deploy: ${deployAmount} SOL${recentlyClosedBlock}
 
 PRE-LOADED CANDIDATES (${passing.length} pools):
@@ -1211,7 +1258,7 @@ STEPS:
 0. DECISION ONLY: do not call deploy_position. First output ACTION: DEPLOY with POOL_ADDRESS and STRATEGY, or ACTION: NO_DEPLOY. The system will execute deploy_position only after reading ACTION: DEPLOY.
 1. Pick the best candidate based on narrative quality, smart wallets, and pool metrics.
 2. Do not execute deploy_position. Only choose whether the system should deploy after your final answer.
-   Use the candidate's recommended_strategy (spot or bid_ask). Override ONLY with strong justification.
+   If dynamicStrategyEnabled=false, use the /menu strategy. If true, use the candidate's recommended_strategy.
 3. If one pool qualifies, report in this exact format:
    ACTION: DEPLOY
    POOL_ADDRESS: <pool address>

@@ -95,6 +95,10 @@ function buildSignalSnapshot(perf) {
  */
 export async function recordPerformance(perf) {
   const data = load();
+  const numOrNull = (value) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  };
 
   // Guard against unit-mixed records where a SOL-sized final value is
   // accidentally written into a USD field (e.g. final_value_usd = 2 for a 2 SOL close).
@@ -112,10 +116,12 @@ export async function recordPerformance(perf) {
     return;
   }
 
-  const pnl_usd = (perf.final_value_usd + perf.fees_earned_usd) - perf.initial_value_usd;
-  const pnl_pct = perf.initial_value_usd > 0
+  const pnl_usd = numOrNull(perf.pnl_true_usd ?? perf.pnl_usd) ??
+    ((perf.final_value_usd + perf.fees_earned_usd) - perf.initial_value_usd);
+  const pnl_sol = numOrNull(perf.pnl_sol);
+  const pnl_pct = numOrNull(perf.pnl_pct) ?? (perf.initial_value_usd > 0
     ? (pnl_usd / perf.initial_value_usd) * 100
-    : 0;
+    : 0);
   const range_efficiency = perf.minutes_held > 0
     ? (perf.minutes_in_range / perf.minutes_held) * 100
     : 0;
@@ -137,6 +143,7 @@ export async function recordPerformance(perf) {
     ...perf,
     signal_snapshot: signalSnapshot,
     pnl_usd: Math.round(pnl_usd * 100) / 100,
+    pnl_sol: pnl_sol != null ? Math.round(pnl_sol * 10000) / 10000 : null,
     pnl_pct: Math.round(pnl_pct * 100) / 100,
     range_efficiency: Math.round(range_efficiency * 10) / 10,
     recorded_at: new Date().toISOString(),

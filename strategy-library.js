@@ -11,12 +11,78 @@ import { log } from "./logger.js";
 
 const STRATEGY_FILE = "./strategy-library.json";
 
+const DEFAULT_LIBRARY = {
+  active: "single_side_bid_ask",
+  strategies: {
+    single_side_bid_ask: {
+      id: "single_side_bid_ask",
+      name: "Single-Side SOL Bid-Ask",
+      author: "system",
+      lp_strategy: "bid_ask",
+      token_criteria: {
+        notes: "Use only after GMGN holder and fee hard filters pass. Best when price is cooling down or retesting support, not during an extended green candle.",
+      },
+      entry: {
+        condition: "SOL-only passive buy ladder below current active bin; wait for pullback/retest timing.",
+        single_side: "sol",
+      },
+      range: {
+        bins_above: 0,
+        notes: "bins_above is fixed at 0. bins_below is calculated by code from volatility and config.",
+      },
+      exit: {
+        notes: "Fast deterministic manager exits remain source-of-truth: trailing TP, hard stop, low yield, OOR, whale guard.",
+      },
+      best_for: "Sideways or choppy memecoin flow where price can dip into the SOL ladder and rebound.",
+      raw: "Built-in guide for single-side SOL bid_ask mode.",
+      added_at: "2026-05-25T00:00:00.000Z",
+      updated_at: "2026-05-25T00:00:00.000Z",
+    },
+    single_side_spot: {
+      id: "single_side_spot",
+      name: "Single-Side SOL Spot",
+      author: "system",
+      lp_strategy: "spot",
+      token_criteria: {
+        notes: "Use only after GMGN holder and fee hard filters pass. Best for clean uptrend or reclaim where uniform below-range liquidity is preferred.",
+      },
+      entry: {
+        condition: "SOL-only uniform distribution below current active bin; avoid rug tokens and avoid overextended candles.",
+        single_side: "sol",
+      },
+      range: {
+        bins_above: 0,
+        notes: "bins_above is fixed at 0. bins_below is calculated by code from volatility and config.",
+      },
+      exit: {
+        notes: "Fast deterministic manager exits remain source-of-truth: trailing TP, hard stop, low yield, OOR, whale guard.",
+      },
+      best_for: "Cleaner upward momentum after support/retest confirmation when /menu strategy is spot or dynamic strategy selects spot.",
+      raw: "Built-in guide for single-side SOL spot mode.",
+      added_at: "2026-05-25T00:00:00.000Z",
+      updated_at: "2026-05-25T00:00:00.000Z",
+    },
+  },
+};
+
+function withDefaults(data) {
+  const parsed = data && typeof data === "object" ? data : {};
+  const strategies = {
+    ...DEFAULT_LIBRARY.strategies,
+    ...(parsed.strategies || {}),
+  };
+  const active = parsed.active && strategies[parsed.active]
+    ? parsed.active
+    : DEFAULT_LIBRARY.active;
+  return { active, strategies };
+}
+
 function load() {
-  if (!fs.existsSync(STRATEGY_FILE)) return { active: null, strategies: {} };
+  if (!fs.existsSync(STRATEGY_FILE)) return withDefaults(null);
   try {
-    return JSON.parse(fs.readFileSync(STRATEGY_FILE, "utf8"));
+    return withDefaults(JSON.parse(fs.readFileSync(STRATEGY_FILE, "utf8")));
   } catch {
-    return { active: null, strategies: {} };
+    return withDefaults(null);
   }
 }
 

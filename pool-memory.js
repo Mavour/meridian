@@ -36,6 +36,27 @@ function save(data) {
   fs.writeFileSync(POOL_MEMORY_FILE, JSON.stringify(data, null, 2));
 }
 
+function ensurePoolEntry(db, poolAddress, seed = {}) {
+  if (!poolAddress) return null;
+  if (!db[poolAddress] || typeof db[poolAddress] !== "object") {
+    db[poolAddress] = {};
+  }
+  const entry = db[poolAddress];
+  entry.name = seed.name || entry.name || seed.pool_name || poolAddress.slice(0, 8);
+  entry.base_mint = seed.base_mint || entry.base_mint || null;
+  if (!Array.isArray(entry.deploys)) entry.deploys = [];
+  if (!Array.isArray(entry.notes)) entry.notes = [];
+  if (!Array.isArray(entry.snapshots)) entry.snapshots = [];
+  entry.total_deploys = Number.isFinite(Number(entry.total_deploys)) ? Number(entry.total_deploys) : entry.deploys.length;
+  entry.avg_pnl_pct = Number.isFinite(Number(entry.avg_pnl_pct)) ? Number(entry.avg_pnl_pct) : 0;
+  entry.win_rate = Number.isFinite(Number(entry.win_rate)) ? Number(entry.win_rate) : 0;
+  entry.adjusted_win_rate = Number.isFinite(Number(entry.adjusted_win_rate)) ? Number(entry.adjusted_win_rate) : 0;
+  entry.adjusted_win_rate_sample_count = Number.isFinite(Number(entry.adjusted_win_rate_sample_count)) ? Number(entry.adjusted_win_rate_sample_count) : 0;
+  entry.last_deployed_at = entry.last_deployed_at || null;
+  entry.last_outcome = entry.last_outcome || null;
+  return entry;
+}
+
 function isOorCloseReason(reason) {
   const text = String(reason || "").trim().toLowerCase();
   return text === "oor" || text.includes("out of range") || text.includes("oor");
@@ -102,24 +123,10 @@ export function recordPoolDeploy(poolAddress, deployData) {
   if (!poolAddress) return;
 
   const db = load();
-
-  if (!db[poolAddress]) {
-    db[poolAddress] = {
-      name: deployData.pool_name || poolAddress.slice(0, 8),
-      base_mint: deployData.base_mint || null,
-      deploys: [],
-      total_deploys: 0,
-      avg_pnl_pct: 0,
-      win_rate: 0,
-      adjusted_win_rate: 0,
-      adjusted_win_rate_sample_count: 0,
-      last_deployed_at: null,
-      last_outcome: null,
-      notes: [],
-    };
-  }
-
-  const entry = db[poolAddress];
+  const entry = ensurePoolEntry(db, poolAddress, {
+    pool_name: deployData.pool_name,
+    base_mint: deployData.base_mint,
+  });
 
   const deploy = {
     deployed_at: deployData.deployed_at || null,
@@ -243,8 +250,7 @@ export function setPostCloseCooldown(poolAddress, baseMint, reason) {
   if (cooldownMin <= 0) return null;
 
   const db = load();
-  const entry = db[poolAddress] || { name: poolAddress.slice(0, 8) };
-  if (!db[poolAddress]) db[poolAddress] = entry;
+  const entry = ensurePoolEntry(db, poolAddress, { base_mint: baseMint });
 
   const cooldownUntil = new Date(Date.now() + cooldownMin * 60 * 1000).toISOString();
   entry.cooldown_until = cooldownUntil;
@@ -272,8 +278,7 @@ export function setWhaleExitCooldown(poolAddress, baseMint) {
   if (!poolAddress) return null;
 
   const db = load();
-  const entry = db[poolAddress] || { name: poolAddress.slice(0, 8) };
-  if (!db[poolAddress]) db[poolAddress] = entry;
+  const entry = ensurePoolEntry(db, poolAddress, { base_mint: baseMint });
   if (baseMint && !entry.base_mint) entry.base_mint = baseMint;
 
   const cooldownHours = 24;
@@ -338,27 +343,9 @@ export function getPoolMemory({ pool_address }) {
 export function recordPositionSnapshot(poolAddress, snapshot) {
   if (!poolAddress) return;
   const db = load();
+  const entry = ensurePoolEntry(db, poolAddress, { name: snapshot.pair });
 
-  if (!db[poolAddress]) {
-    db[poolAddress] = {
-      name: snapshot.pair || poolAddress.slice(0, 8),
-      base_mint: null,
-      deploys: [],
-      total_deploys: 0,
-      avg_pnl_pct: 0,
-      win_rate: 0,
-      adjusted_win_rate: 0,
-      adjusted_win_rate_sample_count: 0,
-      last_deployed_at: null,
-      last_outcome: null,
-      notes: [],
-      snapshots: [],
-    };
-  }
-
-  if (!db[poolAddress].snapshots) db[poolAddress].snapshots = [];
-
-  db[poolAddress].snapshots.push({
+  entry.snapshots.push({
     ts: new Date().toISOString(),
     position: snapshot.position,
     pnl_pct: snapshot.pnl_pct ?? null,
@@ -370,8 +357,8 @@ export function recordPositionSnapshot(poolAddress, snapshot) {
   });
 
   // Keep last 48 snapshots (~4h at 5min intervals)
-  if (db[poolAddress].snapshots.length > 48) {
-    db[poolAddress].snapshots = db[poolAddress].snapshots.slice(-48);
+  if (entry.snapshots.length > 48) {
+    entry.snapshots = entry.snapshots.slice(-48);
   }
 
   save(db);
@@ -384,7 +371,7 @@ export function recordPositionSnapshot(poolAddress, snapshot) {
 export function recallForPool(poolAddress) {
   if (!poolAddress) return null;
   const db = load();
-  const entry = db[poolAddress];
+  const entry = db[poolAddress] ? ensurePoolEntry(db, poolAddress) : null;
   if (!entry) return null;
 
   const lines = [];
@@ -434,22 +421,9 @@ export function addPoolNote({ pool_address, note }) {
   if (!safeNote) return { error: "note required" };
 
   const db = load();
+  const entry = ensurePoolEntry(db, pool_address);
 
-  if (!db[pool_address]) {
-    db[pool_address] = {
-      name: pool_address.slice(0, 8),
-      base_mint: null,
-      deploys: [],
-      total_deploys: 0,
-      avg_pnl_pct: 0,
-      win_rate: 0,
-      last_deployed_at: null,
-      last_outcome: null,
-      notes: [],
-    };
-  }
-
-  db[pool_address].notes.push({
+  entry.notes.push({
     note: safeNote,
     added_at: new Date().toISOString(),
   });
