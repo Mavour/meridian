@@ -318,6 +318,14 @@ export const config = {
     rsiOversold: indicatorUserConfig.rsiOversold ?? 30,
     rsiOverbought: indicatorUserConfig.rsiOverbought ?? 80,
     requireAllIntervals: indicatorUserConfig.requireAllIntervals ?? false,
+    fibEntryConfig: {
+      enabled: indicatorUserConfig.fibEntryConfig?.enabled ?? false,
+      interval: indicatorUserConfig.fibEntryConfig?.interval ?? "5_MINUTE",
+      requireRsiBelow: indicatorUserConfig.fibEntryConfig?.requireRsiBelow ?? 70,
+      requireBullishSupertrend: indicatorUserConfig.fibEntryConfig?.requireBullishSupertrend ?? false,
+      zoneMin: indicatorUserConfig.fibEntryConfig?.zoneMin ?? 0.236,
+      zoneMax: indicatorUserConfig.fibEntryConfig?.zoneMax ?? 0.5,
+    },
   },
 
   bottomSpotLP: {

@@ -223,6 +223,8 @@ function buildSignalSummary(payload) {
     supertrendDirection: String(supertrend.direction || "unknown"),
     supertrendBreakUp: !!latest?.states?.supertrendBreakUp,
     supertrendBreakDown: !!latest?.states?.supertrendBreakDown,
+    fib236: safeNumber(fibonacciLevels["0.236"]),
+    fib382: safeNumber(fibonacciLevels["0.382"]),
     fib50: safeNumber(fibonacciLevels["0.500"]),
     fib618: safeNumber(fibonacciLevels["0.618"]),
     fib786: safeNumber(fibonacciLevels["0.786"]),
@@ -327,6 +329,39 @@ function evaluatePreset(side, preset, payload) {
       return side === "entry"
         ? { confirmed: close != null && lowerBand != null && close <= lowerBand && rsi != null && rsi <= oversold, reason: "Close at/below lower band with RSI oversold", signal: summary }
         : { confirmed: close != null && upperBand != null && close >= upperBand && rsi != null && rsi >= overbought, reason: "Close at/above upper band with RSI overbought", signal: summary };
+    case "fibo_entry_zone": {
+      if (side !== "entry") {
+        return { confirmed: false, reason: "Fib entry zone only applies to entry", signal: summary };
+      }
+
+      const fibConfig = config.indicators.fibEntryConfig || {};
+      const zoneMinKey = Number(fibConfig.zoneMin ?? 0.236).toFixed(3);
+      const zoneMaxKey = Number(fibConfig.zoneMax ?? 0.5).toFixed(3);
+      const fibonacciLevels = payload?.latest?.fibonacci?.levels || {};
+      const fibShallow = safeNumber(fibonacciLevels[zoneMinKey]);
+      const fibDeep = safeNumber(fibonacciLevels[zoneMaxKey]);
+      const requireRsiBelow = safeNumber(fibConfig.requireRsiBelow, 70);
+
+      if (close == null || fibShallow == null || fibDeep == null) {
+        return { confirmed: false, reason: "Missing price or fib levels", signal: summary };
+      }
+
+      const lower = Math.min(fibShallow, fibDeep);
+      const upper = Math.max(fibShallow, fibDeep);
+      const inZone = close >= lower && close <= upper;
+      const rsiOk = requireRsiBelow == null || rsi == null || rsi < requireRsiBelow;
+      const zoneText = `${lower}-${upper}`;
+
+      return {
+        confirmed: inZone && rsiOk,
+        reason: !inZone
+          ? `Price ${close} outside fib entry zone ${zoneText}`
+          : rsiOk
+            ? `Price ${close} within fib entry zone ${zoneText}, RSI ${rsi ?? "n/a"}`
+            : `Price ${close} within fib entry zone ${zoneText}, but RSI ${rsi} >= ${requireRsiBelow}`,
+        signal: summary,
+      };
+    }
     case "fibo_reclaim":
       return side === "entry"
         ? { confirmed: crossedUp(summary.fib618) || crossedUp(summary.fib50) || crossedUp(summary.fib786), reason: "Price reclaimed a key Fibonacci level", signal: summary }
@@ -509,6 +544,60 @@ export async function confirmEntrySupertrendBreak({ mint, refresh = true } = {})
     force: true,
     failClosed: true,
   });
+}
+
+export async function confirmFibEntryZone(mint, options = {}) {
+  const fibConfig = config.indicators.fibEntryConfig || {};
+  if (!fibConfig.enabled) {
+    return { enabled: false, confirmed: true, reason: "Fib entry zone disabled" };
+  }
+
+  if (!mint) {
+    return { enabled: true, confirmed: false, reason: "No mint provided" };
+  }
+
+  const interval = options.interval || fibConfig.interval || "5_MINUTE";
+
+  try {
+    const payload = await fetchIndicatorsFromGMGN(mint, {
+      interval,
+      candles: options.candles ?? config.indicators.candles ?? DEFAULT_CANDLES,
+      rsiLength: options.rsiLength ?? config.indicators.rsiLength ?? 2,
+      refresh: options.refresh ?? true,
+    });
+    const result = evaluatePreset("entry", "fibo_entry_zone", payload);
+
+    if (result.confirmed && fibConfig.requireBullishSupertrend) {
+      const direction = payload?.latest?.supertrend?.direction || "unknown";
+      if (direction !== "bullish") {
+        return {
+          enabled: true,
+          confirmed: false,
+          reason: `Fib zone OK but supertrend ${direction} not bullish`,
+          levels: payload?.latest?.fibonacci?.levels || null,
+          currentPrice: payload?.latest?.candle?.close ?? null,
+          signal: result.signal,
+        };
+      }
+    }
+
+    return {
+      enabled: true,
+      confirmed: !!result.confirmed,
+      reason: result.reason,
+      levels: payload?.latest?.fibonacci?.levels || null,
+      currentPrice: payload?.latest?.candle?.close ?? null,
+      signal: result.signal,
+    };
+  } catch (error) {
+    log("indicators_warn", `Fib entry zone check failed for ${mint.slice(0, 8)}: ${error.message}`);
+    return {
+      enabled: true,
+      confirmed: true,
+      skipped: true,
+      reason: `Fib zone check unavailable; fail-open: ${error.message}`,
+    };
+  }
 }
 
 // Keep for backward compat + other callers

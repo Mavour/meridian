@@ -115,7 +115,15 @@
     "candles": 298,
     "rsiOversold": 30,
     "rsiOverbought": 80,
-    "requireAllIntervals": false
+    "requireAllIntervals": false,
+    "fibEntryConfig": {
+      "enabled": false,
+      "interval": "5_MINUTE",
+      "requireRsiBelow": 70,
+      "requireBullishSupertrend": false,
+      "zoneMin": 0.236,
+      "zoneMax": 0.5
+    }
   },
   "bottomSpotLP": {
     "enabled": false,

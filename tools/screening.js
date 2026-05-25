@@ -4,7 +4,7 @@ import { isDevBlocked, getBlockedDevs } from "../dev-blocklist.js";
 import { log } from "../logger.js";
 import { isBaseMintOnCooldown, isPoolOnCooldown } from "../pool-memory.js";
 import { isTokenWaveBlocked } from "../state.js";
-import { confirmEntrySupertrendBreak } from "./chart-indicators.js";
+import { confirmEntrySupertrendBreak, confirmFibEntryZone } from "./chart-indicators.js";
 import { discoverGmgnPools, fetchGmgnPriceAction, fetchGmgnTokenFees } from "./gmgn.js";
 import { fetchDexScreenerBoosts } from "./dexscreener.js";
 
@@ -1009,6 +1009,29 @@ export async function getTopCandidates({ limit = 10 } = {}) {
         return true;
       }));
       if (eligible.length < before) log("screening", `DexScreener boost filter removed ${before - eligible.length} pool(s)`);
+    }
+  }
+
+  if (eligible.length > 0 && config.indicators.fibEntryConfig?.enabled) {
+    const fibChecks = await Promise.all(
+      eligible.map(async (pool) => {
+        const confirmation = await confirmFibEntryZone(pool.base?.mint);
+        return { pool: pool.pool, confirmation };
+      }),
+    );
+    const fibCheckByPool = new Map(fibChecks.map((entry) => [entry.pool, entry.confirmation]));
+    const before = eligible.length;
+    const fibEligible = eligible.filter((pool) => {
+      const confirmation = fibCheckByPool.get(pool.pool);
+      pool.fib_entry_confirmation = confirmation || null;
+      if (!confirmation || confirmation.confirmed) return true;
+      pushFilteredReason(filteredOut, pool, `fib entry zone reject: ${confirmation.reason}`);
+      log("screening", `Fib entry zone rejected ${pool.name} (${pool.pool.slice(0, 8)}): ${confirmation.reason}`);
+      return false;
+    });
+    eligible.splice(0, eligible.length, ...fibEligible);
+    if (eligible.length < before) {
+      log("screening", `Fib entry zone hard gate removed ${before - eligible.length} candidate(s)`);
     }
   }
 

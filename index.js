@@ -1217,6 +1217,9 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
       const pvpLine = pool.is_pvp
         ? `  pvp: HIGH — rival ${pool.pvp_rival_name || pool.pvp_symbol} (${pool.pvp_rival_mint?.slice(0, 8)}...) has pool ${pool.pvp_rival_pool?.slice(0, 8)}..., tvl=$${pool.pvp_rival_tvl}, holders=${pool.pvp_rival_holders}, fees=${pool.pvp_rival_fees}SOL`
         : null;
+      const fibLine = pool.fib_entry_confirmation
+        ? `  fib_entry_confirmation: ${pool.fib_entry_confirmation.confirmed ? "PASS" : "REJECT"} - ${pool.fib_entry_confirmation.reason}`
+        : null;
       let block;
       if (pool.gmgn) {
         block = [
@@ -1225,6 +1228,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
           `  fee_tvl_threshold: ${feeTvlStatus} (${Number.isFinite(feeTvl) ? feeTvl : "unknown"} >= ${minFeeTvl})`,
           `  recommended_strategy: ${strategyRec.strategy} (${strategyRec.reason})`,
           pvpLine,
+          fibLine,
           pool.single_side_entry?.reason ? `  single_side_sol_entry: ${pool.single_side_entry.reason}` : null,
           `  smart_wallets: ${sw?.in_pool?.length ?? 0} present${sw?.in_pool?.length ? ` → CONFIDENCE BOOST (${sw.in_pool.map(w => w.name).join(", ")})` : ""}`,
           activeBin != null ? `  active_bin: ${activeBin}` : null,
@@ -1250,6 +1254,7 @@ export async function runScreeningCycle({ silent = false, recentlyClosed = [] } 
           okxParts ? `  okx: ${okxParts}` : okxUnavailable ? `  okx: unavailable` : null,
           okxTags  ? `  tags: ${okxTags}` : null,
           pool.dex_boosts != null ? `  dex_boosts: ${pool.dex_boosts}` : null,
+          fibLine,
           pool.price_vs_ath_pct != null ? `  ath: price_vs_ath=${pool.price_vs_ath_pct}%${pool.top_cluster_trend ? `, top_cluster=${pool.top_cluster_trend}` : ""}` : null,
           // X Sentiment
           xs && xs.sentiment !== "DISABLED" && xs.sentiment !== "COOKIE_EXPIRED" && xs.sentiment !== "NO_ACCOUNTS" 

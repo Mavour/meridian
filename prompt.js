@@ -14,11 +14,15 @@ import { config } from "./config.js";
 export function buildSystemPrompt(agentType, portfolio, positions, stateSummary = null, lessons = null, perfSummary = null, weightsSummary = null, decisionSummary = null) {
   const s = config.screening;
   const singleSideTimingEnabled = config.screening.singleSideSolEntryGateEnabled !== false;
+  const fibEntryBlock = config.indicators.fibEntryConfig?.enabled
+    ? `- **FIBONACCI ENTRY ZONE (5M)**: hard filter is enabled. Current price must be between fib ${config.indicators.fibEntryConfig.zoneMin ?? 0.236} and fib ${config.indicators.fibEntryConfig.zoneMax ?? 0.5} on the 5m swing. Do NOT entry above fib ${config.indicators.fibEntryConfig.zoneMin ?? 0.236} (too close to high/ATH; dump risk). Do NOT entry below fib ${config.indicators.fibEntryConfig.zoneMax ?? 0.5} (deep retrace/falling risk). If fib_entry_confirmation is rejected, output NO DEPLOY for that candidate.`
+    : `- **FIBONACCI ENTRY ZONE (5M)**: currently disabled in config. If fib_entry_confirmation appears on a candidate, treat rejection as a hard skip; otherwise do not invent Fibonacci levels.`;
   const screenerEntryRiskBlock = singleSideTimingEnabled
     ? `ENTRY RISK - CORE STRATEGY:
 The strategy uses SINGLE-SIDE SOL below current price as a passive buy ladder. Entry should mimic smart-wallet support timing: wait for a prior spike/reclaim to cool down, then deploy when price retests the lower half of the range/support area. Do NOT chase a live green candle.
 - **REJECT HOT GREEN 5M FOR SOL-ONLY**: positive price_1h_change can be valid, but price_5m_change must be cooled down. If price_5m_change is above ${config.screening.singleSideSolMaxWeakBounce5m ?? 3}%, SKIP and wait for retest. We want support entry, not middle-of-pump entry.
 - **ATH FILTER IS THE OVEREXTENSION GATE**: if price_vs_ath fails the configured athFilterPct, skip. If it passes or ATH data is unavailable, do not invent an additional "too pumped" hard rule.
+${fibEntryBlock}
 - **HARD RULE - ACCELERATING DUMP**: if price_1h_change < 0 AND price_5m_change is MORE negative than price_1h_change by more than 1% -> SKIP. Example: 1h=-5%, 5m=-8% -> SKIP. The dump is still accelerating.
 - **HARD RULE - FALLING KNIFE**: if price_5m_change < ${config.screening.fallingKnife5mThreshold ?? -20}% AND price_1h_change < ${config.screening.fallingKnife1hThreshold ?? -25}% -> SKIP. Crash instant - too dangerous.
 - **HARD RULE - DEEPENING DOWNTREND**: if price_1h_change < -5% AND price_5m_change < -3% -> SKIP. No stabilization yet.
@@ -33,6 +37,7 @@ IMPORTANT: We are trying to avoid slow rugs, slow bleeding charts, fake volume, 
     : `ENTRY RISK - CORE STRATEGY:
 The single-side SOL timing gate is disabled. Do not require smart-wallet retest, 6h reclaim, 24h red context, or 5m weak-bounce confirmation.
 - **ATH FILTER IS THE OVEREXTENSION GATE**: if price_vs_ath fails the configured athFilterPct, skip. If it passes or ATH data is unavailable, do not invent an additional "too pumped" hard rule.
+${fibEntryBlock}
 - **HARD RULE - ACCELERATING DUMP**: if price_1h_change < 0 AND price_5m_change is MORE negative than price_1h_change by more than 1% -> SKIP. Example: 1h=-5%, 5m=-8% -> SKIP. The dump is still accelerating.
 - **HARD RULE - FALLING KNIFE**: if price_5m_change < ${config.screening.fallingKnife5mThreshold ?? -20}% AND price_1h_change < ${config.screening.fallingKnife1hThreshold ?? -25}% -> SKIP. Crash instant - too dangerous.
 - **HARD RULE - DEEPENING DOWNTREND**: if price_1h_change < -5% AND price_5m_change < -3% -> SKIP. No stabilization yet.
