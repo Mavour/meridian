@@ -454,6 +454,7 @@ app.get('/api/performance', (req, res) => {
         pnl_sol: pnlSol ?? null,
         pnl_sol_estimated: p.pnl_sol == null && pnlSol != null,
         pnl_pct: firstNumber(p.pnl_pct, p.pnl_percent, 0),
+        close_reason: p.close_reason || p.reason || null,
         is_win: (pnlDisplay ?? 0) > 0,
         hold_duration: firstNumber(p.minutes_held, p.hold_duration, p.minutes_in_range, 0),
         minutes_held: firstNumber(p.minutes_held, p.hold_duration, p.minutes_in_range, 0),
