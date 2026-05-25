@@ -154,9 +154,10 @@ export function getWaveHistory(maxWaves = null) {
  */
 export function isTokenWaveBlocked(tokenMintOrSymbol, maxWaves = null, narrative = null) {
   const { isPolitical, keyword } = isPoliticalNarrative(narrative);
-  const effectiveMax = isPolitical ? 1 : maxWaves;
+  const politicalNyopetEnabled = config?.screening?.politicalNyopetEnabled !== false;
+  const effectiveMax = isPolitical && politicalNyopetEnabled ? 1 : maxWaves;
 
-  if (isPolitical) {
+  if (isPolitical && politicalNyopetEnabled) {
     // NYOPET override applied silently
   }
 

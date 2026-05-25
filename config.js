@@ -91,6 +91,7 @@ export const config = {
     maxWavesPerToken:  u.maxWavesPerToken  ?? 3,   // block token after N wins in window
     maxLossesPerToken: u.maxLossesPerToken ?? 1,   // block token after N losses in window
     waveBlockHours:    u.waveBlockHours    ?? 48,  // how long wave block lasts (hours)
+    politicalNyopetEnabled: u.politicalNyopetEnabled ?? true, // political narratives block after 1 win
     minBinStep:        u.minBinStep        ?? 80,
     maxBinStep:        u.maxBinStep        ?? 125,
     timeframe:         u.timeframe         ?? "5m",

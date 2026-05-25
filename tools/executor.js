@@ -855,6 +855,7 @@ const toolMap = {
       maxVolatility: ["screening", "maxVolatility"],
       blockedSymbols: ["screening", "blockedSymbols"],
       cgBlockRank: ["screening", "cgBlockRank"],
+      politicalNyopetEnabled: ["screening", "politicalNyopetEnabled"],
       postCloseReentryCooldownMin: ["screening", "postCloseReentryCooldownMin"],
       maxWavesPerToken: ["screening", "maxWavesPerToken"],
       maxLossesPerToken: ["screening", "maxLossesPerToken"],

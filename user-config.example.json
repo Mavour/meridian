@@ -47,6 +47,7 @@
   "minTokenAgeHours": null,
   "maxTokenAgeHours": null,
   "athFilterPct": null,
+  "politicalNyopetEnabled": true,
   "screeningSource": "meteora",
 
   "minClaimAmount": 5,
